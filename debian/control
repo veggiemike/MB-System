@@ -1,0 +1,19 @@
+Package: mbsystem
+Version: __version__
+Section: science
+Priority: optional
+Architecture: __arch__
+Installed-Size: __size__
+Depends: perl, csh, gmt, libparallel-forkmanager-perl, __deplibs__
+Recommends: gv
+Suggests: proj-bin, gimp
+Maintainer: Michael D Labriola <veggiemike@sourceruckus.org>
+Homepage: https://www.mbari.org/technology/mb-system/
+Description: Processing tools for multibeam and sidescan sonar data
+ MB-System is an open source software package for the processing and
+ display of bathymetry and backscatter imagery data derived from
+ multibeam, interferometry, and sidescan sonars. It interacts with GMT
+ (The Generic Mapping Tools) and other GIS applications.
+ .
+ This package provides the entire installation (e.g., bin, data, dev,
+ docs) for MB-System.
