@@ -4,9 +4,10 @@ Section: science
 Priority: optional
 Architecture: __arch__
 Installed-Size: __size__
+Provides: mbsystem, mbsystem-dev, mbsystem-data, mbsystem-doc
 Depends: perl, csh, gmt, libparallel-forkmanager-perl, __deplibs__
-Recommends: gv
-Suggests: proj-bin, gimp
+Recommends: gv, proj-bin, geotiff-bin, gdal-bin, odbc-postgresql, tdsodbc, ogdi-bin, gmt-gshhg, netcdf-bin, hdf4-tools
+Suggests: gimp, grass-gui, e00compr, avce00, gnuplot, gpsbabel, gpstrans, grass, krb5-k5tls, gnutls-bin, libhwloc-contrib-plugins, idn, setserial, elpa-ess
 Maintainer: Michael D Labriola <veggiemike@sourceruckus.org>
 Homepage: https://www.mbari.org/technology/mb-system/
 Description: Processing tools for multibeam and sidescan sonar data
