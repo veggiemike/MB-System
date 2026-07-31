@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mbmosaic.c	2/10/97
  *
- *    Copyright (c) 1997-2020 by
+ *    Copyright (c) 1997-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * mbmosaic is an utility used to mosaic amplitude or sidescan
@@ -395,13 +405,13 @@ int mbmosaic_get_footprint(int verbose, int mode, double beamwidth_xtrack, doubl
 	return (status);
 }
 /*--------------------------------------------------------------------*/
-int mbmosaic_get_beamangles(int verbose, double sonardepth, int beams_bath, char *beamflag, double *bath, double *bathacrosstrack,
+int mbmosaic_get_beamangles(int verbose, double sensordepth, int beams_bath, char *beamflag, double *bath, double *bathacrosstrack,
                             double *bathalongtrack, double *gangles, int *error) {
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBmosaic function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       verbose:         %d\n", verbose);
-		fprintf(stderr, "dbg2       sonardepth:      %f\n", sonardepth);
+		fprintf(stderr, "dbg2       sensordepth:      %f\n", sensordepth);
 		fprintf(stderr, "dbg2       beams_bath:      %d\n", beams_bath);
 		fprintf(stderr, "dbg2       bathymetry:\n");
 		for (int i = 0; i < beams_bath; i++)
@@ -412,7 +422,7 @@ int mbmosaic_get_beamangles(int verbose, double sonardepth, int beams_bath, char
 	/* loop over all beams, calculate grazing angles for valid beams */
 	for (int i = 0; i < beams_bath; i++) {
 		if (mb_beam_ok(beamflag[i])) {
-			gangles[i] = RTD * atan(bathacrosstrack[i] / (bath[i] - sonardepth));
+			gangles[i] = RTD * atan(bathacrosstrack[i] / (bath[i] - sensordepth));
 		}
 	}
 
@@ -651,7 +661,7 @@ int mbmosaic_get_beamslopes(int verbose, int beams_bath, char *beamflag, double 
 	return (status);
 }
 /*--------------------------------------------------------------------*/
-int mbmosaic_bath_getangletable(int verbose, double sonardepth, int beams_bath, char *beamflag, double *bath,
+int mbmosaic_bath_getangletable(int verbose, double sensordepth, int beams_bath, char *beamflag, double *bath,
                                 double *bathacrosstrack, double *bathalongtrack, double angle_min, double angle_max, int nangle,
                                 double *table_angle, double *table_xtrack, double *table_ltrack, double *table_altitude,
                                 double *table_range, int *error) {
@@ -659,7 +669,7 @@ int mbmosaic_bath_getangletable(int verbose, double sonardepth, int beams_bath, 
 		fprintf(stderr, "\ndbg2  MBmosaic function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       verbose:         %d\n", verbose);
-		fprintf(stderr, "dbg2       sonardepth:      %f\n", sonardepth);
+		fprintf(stderr, "dbg2       sensordepth:      %f\n", sensordepth);
 		fprintf(stderr, "dbg2       beams_bath:      %d\n", beams_bath);
 		fprintf(stderr, "dbg2       bathymetry:\n");
 		for (int i = 0; i < beams_bath; i++)
@@ -702,13 +712,13 @@ int mbmosaic_bath_getangletable(int verbose, double sonardepth, int beams_bath, 
 				}
 
 				/* get the angle for beam j */
-				const double angle0 = RTD * atan(bathacrosstrack[j] / (bath[j] - sonardepth));
+				const double angle0 = RTD * atan(bathacrosstrack[j] / (bath[j] - sensordepth));
 				if (foundnext)
-					angle1 = RTD * atan(bathacrosstrack[jnext] / (bath[jnext] - sonardepth));
+					angle1 = RTD * atan(bathacrosstrack[jnext] / (bath[jnext] - sensordepth));
 
 				/* deal with angle to port of swath edge */
 				if (table_angle[i] <= angle0) {
-					table_altitude[i] = bath[j] - sonardepth;
+					table_altitude[i] = bath[j] - sensordepth;
 					table_xtrack[i] = table_altitude[i] * tan(DTR * table_angle[i]);
 					table_ltrack[i] = bathalongtrack[j];
 					table_range[i] = sqrt(table_altitude[i] * table_altitude[i] + table_xtrack[i] * table_xtrack[i] +
@@ -719,7 +729,7 @@ int mbmosaic_bath_getangletable(int verbose, double sonardepth, int beams_bath, 
 
 				/* deal with angle to starboard of swath edge */
 				else if (!foundnext) {
-					table_altitude[i] = bath[j] - sonardepth;
+					table_altitude[i] = bath[j] - sensordepth;
 					table_xtrack[i] = table_altitude[i] * tan(DTR * table_angle[i]);
 					table_ltrack[i] = bathalongtrack[j];
 					table_range[i] = sqrt(table_altitude[i] * table_altitude[i] + table_xtrack[i] * table_xtrack[i] +
@@ -731,7 +741,7 @@ int mbmosaic_bath_getangletable(int verbose, double sonardepth, int beams_bath, 
 				/* deal with angle to starboard of swath edge */
 				else if (foundnext && table_angle[i] > angle1) {
 					if (jnext == beams_bath - 1) {
-						table_altitude[i] = bath[j] - sonardepth;
+						table_altitude[i] = bath[j] - sensordepth;
 						table_xtrack[i] = table_altitude[i] * tan(DTR * table_angle[i]);
 						table_ltrack[i] = bathalongtrack[j];
 						table_range[i] = sqrt(table_altitude[i] * table_altitude[i] + table_xtrack[i] * table_xtrack[i] +
@@ -744,7 +754,7 @@ int mbmosaic_bath_getangletable(int verbose, double sonardepth, int beams_bath, 
 				/* deal with angle between the two valid beams */
 				else if (foundnext && table_angle[i] >= angle0 && table_angle[i] <= angle1) {
 					factor = (table_angle[i] - angle0) / (angle1 - angle0);
-					table_altitude[i] = (bath[j] - sonardepth) + factor * (bath[jnext] - bath[j]);
+					table_altitude[i] = (bath[j] - sensordepth) + factor * (bath[jnext] - bath[j]);
 					table_xtrack[i] = table_altitude[i] * tan(DTR * table_angle[i]);
 					table_ltrack[i] = bathalongtrack[j] + factor * (bathalongtrack[jnext] - bathalongtrack[j]);
 					table_range[i] = sqrt(table_altitude[i] * table_altitude[i] + table_xtrack[i] * table_xtrack[i] +
@@ -1256,6 +1266,15 @@ int main(int argc, char **argv) {
 							static_cast<int>(MBMOSAIC_PRIORITY_AZIMUTH));
 					}
 				}
+				else if (n >= 1) {
+					priority_azimuth = t1;
+					priority_azimuth_factor = 1.0;
+					if ((priority_mode & MBMOSAIC_PRIORITY_AZIMUTH) == 0) {
+						priority_mode = static_cast<priority_t>(
+							static_cast<int>(priority_mode) +
+							static_cast<int>(MBMOSAIC_PRIORITY_AZIMUTH));
+					}
+				}
 				break;
 			}
 			case 'V':
@@ -1506,7 +1525,7 @@ int main(int argc, char **argv) {
 		/* check for UTM with undefined zone */
 		if (strcmp(projection_pars, "UTM") == 0 || strcmp(projection_pars, "U") == 0 || strcmp(projection_pars, "utm") == 0 ||
 		    strcmp(projection_pars, "u") == 0) {
-			reference_lon = 0.5 * (gbnd[0] + gbnd[1]);
+			double reference_lon = 0.5 * (gbnd[0] + gbnd[1]);
 			if (reference_lon < 180.0)
 				reference_lon += 360.0;
 			if (reference_lon >= 180.0)
@@ -1517,6 +1536,20 @@ int main(int argc, char **argv) {
 				snprintf(projection_id, sizeof(projection_id), "UTM%2.2dN", utm_zone);
 			else
 				snprintf(projection_id, sizeof(projection_id), "UTM%2.2dS", utm_zone);
+		}
+		else if (strncmp(projection_pars, "LTM", 3) == 0 || strncmp(projection_pars, "ltm", 3) == 0 
+					|| strcmp(projection_pars, "L") == 0 || strcmp(projection_pars, "l") == 0) {
+		  double reference_lon;
+		  double reference_lat;
+		  if (sscanf(projection_pars, "LTM%lf/%lf", &reference_lon, &reference_lat) == 2
+				|| sscanf(projection_pars, "ltm%lf/%lf", &reference_lon, &reference_lat) == 2) {
+			strncpy(projection_id, projection_pars, sizeof(projection_id));
+		  }
+		  else {
+			reference_lon = 0.5 * (gbnd[0] + gbnd[1]);
+			reference_lat = 0.5 * (gbnd[2] + gbnd[3]);
+			snprintf(projection_id, sizeof(projection_id), "LTM%.5f/%.5f", reference_lon, reference_lat);
+		  }
 		}
 		else
 			strcpy(projection_id, projection_pars);
@@ -2139,7 +2172,7 @@ int main(int argc, char **argv) {
 	double heading;
 	double distance;
 	double altitude;
-	double sonardepth;
+	double sensordepth;
 	char comment[MB_COMMENT_MAXLINE];
 	double draft;
 	double roll;
@@ -2176,11 +2209,14 @@ int main(int argc, char **argv) {
 			exit(MB_ERROR_OPEN_FAIL);
 		}
 		int pstatus;
+  		int astatus = MB_ALTNAV_NONE;
 		mb_path path = "";
 		mb_path ppath = "";
+		mb_path apath = "";
 		mb_path dpath = "";
 		double file_weight = 1.0;
-		while (mb_datalist_read2(verbose, datalist, &pstatus, path, ppath, dpath, &format, &file_weight, &error) ==
+		while (mb_datalist_read3(verbose, datalist, &pstatus, path, ppath, 
+									&astatus, apath, dpath, &format, &file_weight, &error) ==
 		       MB_SUCCESS) {
 			int ndatafile = 0;
 
@@ -2227,12 +2263,13 @@ int main(int argc, char **argv) {
 					}
 
 					/* open the file */
-					if (mb_read_init(verbose, file, format, pings, lonflip, bounds, btime_i, etime_i, speedmin, timegap,
-					                           &mbio_ptr, &btime_d, &etime_d, &beams_bath, &beams_amp, &pixels_ss, &error) !=
+					if (mb_read_init_altnav(verbose, file, format, pings, lonflip, bounds, btime_i, etime_i, speedmin, timegap,
+					                           astatus, apath, &mbio_ptr, &btime_d, &etime_d, 
+					                           &beams_bath, &beams_amp, &pixels_ss, &error) !=
 					    MB_SUCCESS) {
 						char *message = nullptr;
 						mb_error(verbose, error, &message);
-						fprintf(outfp, "\nMBIO Error returned from function <mb_read_init>:\n%s\n", message);
+						fprintf(outfp, "\nMBIO Error returned from function <mb_read_init_altnav>:\n%s\n", message);
 						fprintf(outfp, "\nMultibeam File <%s> not initialized for reading\n", file);
 						fprintf(outfp, "\nProgram <%s> Terminated\n", program_name);
 						mb_memory_clear(verbose, &error);
@@ -2325,7 +2362,7 @@ int main(int argc, char **argv) {
 					while (error <= MB_ERROR_NO_ERROR) {
 						status =
 						    mb_get_all(verbose, mbio_ptr, &store_ptr, &kind, time_i, &time_d, &navlon, &navlat, &speed, &heading,
-						               &distance, &altitude, &sonardepth, &beams_bath, &beams_amp, &pixels_ss, beamflag, bath,
+						               &distance, &altitude, &sensordepth, &beams_bath, &beams_amp, &pixels_ss, beamflag, bath,
 						               amp, bathacrosstrack, bathalongtrack, ss, ssacrosstrack, ssalongtrack, comment, &error);
 
 						/* time gaps are not a problem here */
@@ -2345,8 +2382,11 @@ int main(int argc, char **argv) {
 						}
 
 						if (status == MB_SUCCESS && kind == MB_DATA_DATA) {
-							status = mb_extract_nav(verbose, mbio_ptr, store_ptr, &kind, time_i, &time_d, &navlon, &navlat,
-							                        &speed, &heading, &draft, &roll, &pitch, &heave, &error);
+							/* get attitude using mb_extract_nav(), but do not overwrite the navigation that 
+								may derive from an alternative navigation source */
+							double tnavlon, tnavlat, tspeed, theading;
+							status = mb_extract_nav(verbose, mbio_ptr, store_ptr, &kind, time_i, &time_d, &tnavlon, &tnavlat,
+							                        &tspeed, &theading, &draft, &roll, &pitch, &heave, &error);
 
 							/* get factors for lon lat calculations */
 							if (error == MB_ERROR_NO_ERROR) {
@@ -2373,7 +2413,7 @@ int main(int argc, char **argv) {
 
 										/* get footprints */
 										mbmosaic_get_footprint(verbose, MBMOSAIC_FOOTPRINT_REAL, beamwidth_xtrack,
-										                       beamwidth_ltrack, (bath[ib] - sonardepth), bathacrosstrack[ib],
+										                       beamwidth_ltrack, (bath[ib] - sensordepth), bathacrosstrack[ib],
 										                       bathalongtrack[ib], 0.0, &footprints[ib], &error);
 										for (int j = 0; j < 4; j++) {
 											xx = navlon + headingy * mtodeglon * footprints[ib].x[j] +
@@ -2387,7 +2427,7 @@ int main(int argc, char **argv) {
 								}
 
 								/* get beam angles */
-								mbmosaic_get_beamangles(verbose, sonardepth, beams_bath, beamflag, bath, bathacrosstrack,
+								mbmosaic_get_beamangles(verbose, sensordepth, beams_bath, beamflag, bath, bathacrosstrack,
 								                        bathalongtrack, gangles, &error);
 
 								/* get priorities */
@@ -2536,7 +2576,7 @@ int main(int argc, char **argv) {
 								int table_status = MB_SUCCESS;
 								if (usetopogrid) {
 									table_status = mb_topogrid_getangletable(verbose, topogrid_ptr, nangle, angle_min, angle_max,
-									                                         navlon, navlat, heading, altitude, sonardepth, pitch,
+									                                         navlon, navlat, heading, altitude, sensordepth, pitch,
 									                                         table_angle, table_xtrack, table_ltrack,
 									                                         table_altitude, table_range, &table_error);
 									if (table_status == MB_FAILURE) {
@@ -2559,7 +2599,7 @@ int main(int argc, char **argv) {
 								/* get angle vs acrosstrack distance table using bathymetry from the swath file with sidescan */
 								else {
 									table_status = mbmosaic_bath_getangletable(
-									    verbose, sonardepth, beams_bath, beamflag, bath, bathacrosstrack, bathalongtrack,
+									    verbose, sensordepth, beams_bath, beamflag, bath, bathacrosstrack, bathalongtrack,
 									    angle_min, angle_max, nangle, table_angle, table_xtrack, table_ltrack, table_altitude,
 									    table_range, &table_error);
 								}
@@ -2647,16 +2687,21 @@ int main(int argc, char **argv) {
 				}
 				if (verbose >= 2)
 					fprintf(outfp, "\n");
-				if (verbose > 0 || file_in_bounds)
+				if (verbose > 0 || file_in_bounds) {
+				  if (astatus == MB_ALTNAV_USE)
+					fprintf(outfp, "%d data points processed in %s using nav from %s\n", ndatafile, file, apath);
+				  else
 					fprintf(outfp, "%u data points processed in %s\n", ndatafile, file);
+				}
 
 				/* add to datalist if data actually contributed */
 				if (grid_mode != MBMOSAIC_AVERAGE && ndatafile > 0 && dfp != nullptr) {
-					if (pstatus == MB_PROCESSED_USE)
-						fprintf(dfp, "P:");
-					else
-						fprintf(dfp, "R:");
-					fprintf(dfp, "%s %d %f\n", path, format, file_weight);
+					if (pstatus == MB_PROCESSED_USE && astatus == MB_ALTNAV_USE)
+			          	fprintf(dfp, "A:%s %d %f %s\n", path, format, file_weight, apath);
+			        else if (pstatus == MB_PROCESSED_USE)
+			          	fprintf(dfp, "P:%s %d %f\n", path, format, file_weight);
+			        else
+			          	fprintf(dfp, "R:%s %d %f\n", path, format, file_weight);
 					fflush(dfp);
 				}
 			} /* end if (format > 0) */
@@ -2726,11 +2771,14 @@ int main(int argc, char **argv) {
 			exit(MB_ERROR_OPEN_FAIL);
 		}
 		int pstatus;
+		int astatus;
 		mb_path path = "";
 		mb_path ppath = "";
+		mb_path apath = "";
 		mb_path dpath = "";
 		double file_weight = 1.0;
-		while (mb_datalist_read2(verbose, datalist, &pstatus, path, ppath, dpath, &format, &file_weight, &error) ==
+		while (mb_datalist_read3(verbose, datalist, &pstatus, path, ppath, 
+									&astatus, apath, dpath, &format, &file_weight, &error) ==
 		       MB_SUCCESS) {
 			int ndatafile = 0;
 
@@ -2777,12 +2825,13 @@ int main(int argc, char **argv) {
 					}
 
 					/* open the file */
-					if (mb_read_init(verbose, file, format, pings, lonflip, bounds, btime_i, etime_i, speedmin, timegap,
-					                           &mbio_ptr, &btime_d, &etime_d, &beams_bath, &beams_amp, &pixels_ss, &error) !=
+					if (mb_read_init_altnav(verbose, file, format, pings, lonflip, bounds, btime_i, etime_i, speedmin, timegap,
+					                           astatus, apath, &mbio_ptr, &btime_d, &etime_d, 
+					                           &beams_bath, &beams_amp, &pixels_ss, &error) !=
 					    MB_SUCCESS) {
 						char *message = nullptr;
 						mb_error(verbose, error, &message);
-						fprintf(outfp, "\nMBIO Error returned from function <mb_read_init>:\n%s\n", message);
+						fprintf(outfp, "\nMBIO Error returned from function <mb_read_init_altnav>:\n%s\n", message);
 						fprintf(outfp, "\nMultibeam File <%s> not initialized for reading\n", file);
 						fprintf(outfp, "\nProgram <%s> Terminated\n", program_name);
 						mb_memory_clear(verbose, &error);
@@ -2872,7 +2921,7 @@ int main(int argc, char **argv) {
 					while (error <= MB_ERROR_NO_ERROR) {
 						status =
 						    mb_get_all(verbose, mbio_ptr, &store_ptr, &kind, time_i, &time_d, &navlon, &navlat, &speed, &heading,
-						               &distance, &altitude, &sonardepth, &beams_bath, &beams_amp, &pixels_ss, beamflag, bath,
+						               &distance, &altitude, &sensordepth, &beams_bath, &beams_amp, &pixels_ss, beamflag, bath,
 						               amp, bathacrosstrack, bathalongtrack, ss, ssacrosstrack, ssalongtrack, comment, &error);
 
 						/* time gaps are not a problem here */
@@ -2892,8 +2941,11 @@ int main(int argc, char **argv) {
 						}
 
 						if (status == MB_SUCCESS && kind == MB_DATA_DATA) {
-							status = mb_extract_nav(verbose, mbio_ptr, store_ptr, &kind, time_i, &time_d, &navlon, &navlat,
-							                        &speed, &heading, &draft, &roll, &pitch, &heave, &error);
+							/* get attitude using mb_extract_nav(), but do not overwrite the navigation that 
+								may derive from an alternative navigation source */
+							double tnavlon, tnavlat, tspeed, theading;
+							status = mb_extract_nav(verbose, mbio_ptr, store_ptr, &kind, time_i, &time_d, &tnavlon, &tnavlat,
+							                        &tspeed, &theading, &draft, &roll, &pitch, &heave, &error);
 
 							/* get factors for lon lat calculations */
 							if (error == MB_ERROR_NO_ERROR) {
@@ -2920,7 +2972,7 @@ int main(int argc, char **argv) {
 
 										/* get footprints */
 										mbmosaic_get_footprint(verbose, MBMOSAIC_FOOTPRINT_REAL, beamwidth_xtrack,
-										                       beamwidth_ltrack, (bath[ib] - sonardepth), bathacrosstrack[ib],
+										                       beamwidth_ltrack, (bath[ib] - sensordepth), bathacrosstrack[ib],
 										                       bathalongtrack[ib], 0.0, &footprints[ib], &error);
 										for (int j = 0; j < 4; j++) {
 											xx = navlon + headingy * mtodeglon * footprints[ib].x[j] +
@@ -2934,7 +2986,7 @@ int main(int argc, char **argv) {
 								}
 
 								/* get beam angles */
-								mbmosaic_get_beamangles(verbose, sonardepth, beams_bath, beamflag, bath, bathacrosstrack,
+								mbmosaic_get_beamangles(verbose, sensordepth, beams_bath, beamflag, bath, bathacrosstrack,
 								                        bathalongtrack, gangles, &error);
 
 								/* get priorities */
@@ -3095,7 +3147,7 @@ int main(int argc, char **argv) {
 								int table_status = MB_SUCCESS;
 								if (usetopogrid) {
 									table_status = mb_topogrid_getangletable(verbose, topogrid_ptr, nangle, angle_min, angle_max,
-									                                         navlon, navlat, heading, altitude, sonardepth, pitch,
+									                                         navlon, navlat, heading, altitude, sensordepth, pitch,
 									                                         table_angle, table_xtrack, table_ltrack,
 									                                         table_altitude, table_range, &table_error);
 									if (table_status == MB_FAILURE) {
@@ -3114,7 +3166,7 @@ int main(int argc, char **argv) {
 								/* get angle vs acrosstrack distance table using bathymetry from the swath file with sidescan */
 								else {
 									table_status = mbmosaic_bath_getangletable(
-									    verbose, sonardepth, beams_bath, beamflag, bath, bathacrosstrack, bathalongtrack,
+									    verbose, sensordepth, beams_bath, beamflag, bath, bathacrosstrack, bathalongtrack,
 									    angle_min, angle_max, nangle, table_angle, table_xtrack, table_ltrack, table_altitude,
 									    table_range, &table_error);
 								}
@@ -3211,15 +3263,21 @@ int main(int argc, char **argv) {
 				}
 				if (verbose >= 2)
 					fprintf(outfp, "\n");
-				if (verbose > 0 || file_in_bounds)
+				if (verbose > 0 || file_in_bounds) {
+				  if (astatus == MB_ALTNAV_USE)
+					fprintf(outfp, "%d data points processed in %s using nav from %s\n", ndatafile, file, apath);
+				  else
 					fprintf(outfp, "%u data points processed in %s\n", ndatafile, file);
+				}
 
 				/* add to datalist if data actually contributed */
 				if (ndatafile > 0 && dfp != nullptr) {
-					if (pstatus == MB_PROCESSED_USE)
-						fprintf(dfp, "P:");
-					else
-						fprintf(dfp, "R:");
+					if (pstatus == MB_PROCESSED_USE && astatus == MB_ALTNAV_USE)
+			          	fprintf(dfp, "A:%s %d %f %s\n", path, format, file_weight, apath);
+			        else if (pstatus == MB_PROCESSED_USE)
+			          	fprintf(dfp, "P:%s %d %f\n", path, format, file_weight);
+			        else
+			          	fprintf(dfp, "R:%s %d %f\n", path, format, file_weight);
 					fprintf(dfp, "%s %d %f\n", path, format, file_weight);
 					fflush(dfp);
 				}

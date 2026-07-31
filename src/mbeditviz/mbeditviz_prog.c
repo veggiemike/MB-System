@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:  mbeditviz_prog.c    5/1/2007
  *
- *    Copyright (c) 2007-2020 by
+ *    Copyright (c) 2007-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * MBeditviz is an interactive swath bathymetry editor and patch
@@ -216,7 +226,6 @@ int mbeditviz_init(int argc, char **argv,
   int errflg = 0;
   int c;
   int help = 0;
-  int flag = 0;
 
   while ((c = getopt(argc, argv, "VvHhF:f:GgI:i:Rr")) != -1)
     switch (c) {
@@ -231,23 +240,19 @@ int mbeditviz_init(int argc, char **argv,
     case 'F':
     case 'f':
       sscanf(optarg, "%d", &mbdef_format);
-      flag++;
       break;
     case 'G':
     case 'g':
       mbev_grid_algorithm = MBEV_GRID_ALGORITHM_SIMPLEMEAN;
-      flag++;
       break;
     case 'I':
     case 'i':
       sscanf(optarg, "%s", ifile);
       input_file_set = true;
-      flag++;
       break;
     case 'R':
     case 'r':
       delete_input_file = true;
-      flag++;
       break;
     case '?':
       errflg++;
@@ -726,7 +731,7 @@ int mbeditviz_load_file(int ifile, bool assertLock) {
     int sensorhead_error = MB_ERROR_NO_ERROR;
     int time_i[7];
     double mtodeglon, mtodeglat;
-    double heading, sonardepth;
+    double heading, sensordepth;
     double rolldelta, pitchdelta;
     int icenter, iport, istbd;
     double centerdistance, portdistance, stbddistance;
@@ -745,7 +750,7 @@ int mbeditviz_load_file(int ifile, bool assertLock) {
         /* read a ping of data */
         mbev_status = mb_get_all(mbev_verbose, imbio_ptr, &istore_ptr, &kind, ping->time_i, &ping->time_d, &ping->navlon,
                                  &ping->navlat, &ping->speed, &ping->heading, &ping->distance, &ping->altitude,
-                                 &ping->sonardepth, &ping->beams_bath, &beams_amp, &pixels_ss, beamflag, bath, amp,
+                                 &ping->sensordepth, &ping->beams_bath, &beams_amp, &pixels_ss, beamflag, bath, amp,
                                  bathacrosstrack, bathalongtrack, ss, ssacrosstrack, ssalongtrack, comment, &mbev_error);
 
         /* ignore minor errors */
@@ -890,7 +895,7 @@ int mbeditviz_load_file(int ifile, bool assertLock) {
         /* copy data into ping arrays */
         if (mbev_error == MB_ERROR_NO_ERROR && kind == MB_DATA_DATA) {
           mbeditviz_apply_biasesandtimelag(file, ping, mbev_rollbias, mbev_pitchbias, mbev_headingbias, mbev_timelag, &heading,
-                                  &sonardepth, &rolldelta, &pitchdelta);
+                                  &sensordepth, &rolldelta, &pitchdelta);
           mb_coor_scale(mbev_verbose, ping->navlat, &mtodeglon, &mtodeglat);
 
           for (ibeam = 0; ibeam < ping->beams_bath; ibeam++) {
@@ -919,8 +924,8 @@ int mbeditviz_load_file(int ifile, bool assertLock) {
 
               /* apply rotations and calculate position */
               mbeditviz_beam_position(ping->navlon, ping->navlat, mtodeglon, mtodeglat,
-                                      ping->bath[ibeam] - ping->sonardepth, ping->bathacrosstrack[ibeam],
-                                      ping->bathalongtrack[ibeam], sonardepth, rolldelta, pitchdelta, heading,
+                                      ping->bath[ibeam] - ping->sensordepth, ping->bathacrosstrack[ibeam],
+                                      ping->bathalongtrack[ibeam], sensordepth, rolldelta, pitchdelta, heading,
                                       &(ping->bathcorr[ibeam]), &(ping->bathlon[ibeam]), &(ping->bathlat[ibeam]));
             }
           }
@@ -1254,114 +1259,114 @@ int mbeditviz_load_file(int ifile, bool assertLock) {
           fprintf(stderr, "Loaded %d heading data from ping data of file %s\n", file->n_async_heading, file->path);
       }
 
-      /* try to load asynchronous sonardepth data from .bas file */
+      /* try to load asynchronous sensordepth data from .bas file */
       strcpy(asyncfile, file->path);
       strcat(asyncfile, ".bas");
       if (stat(asyncfile, &file_status) == 0 && (file_status.st_mode & S_IFMT) != S_IFDIR &&
           file_status.st_size > 0) {
-        /* allocate space for asynchronous sonardepth */
-        file->n_async_sonardepth = file_status.st_size / (sizeof(double) + sizeof(float));
-        file->n_async_sonardepth_alloc = 0;
-        if (file->n_async_sonardepth > 0) {
-          if ((file->async_sonardepth_time_d = (double *)malloc(sizeof(double) * (file->n_async_sonardepth))) != NULL &&
-              (file->async_sonardepth_sonardepth = (double *)malloc(sizeof(double) * (file->n_async_sonardepth))) !=
+        /* allocate space for asynchronous sensordepth */
+        file->n_async_sensordepth = file_status.st_size / (sizeof(double) + sizeof(float));
+        file->n_async_sensordepth_alloc = 0;
+        if (file->n_async_sensordepth > 0) {
+          if ((file->async_sensordepth_time_d = (double *)malloc(sizeof(double) * (file->n_async_sensordepth))) != NULL &&
+              (file->async_sensordepth_sensordepth = (double *)malloc(sizeof(double) * (file->n_async_sensordepth))) !=
                   NULL) {
-            file->n_async_sonardepth_alloc = file->n_async_sonardepth;
+            file->n_async_sensordepth_alloc = file->n_async_sensordepth;
           }
-          else if (file->async_sonardepth_time_d != NULL) {
-            free(file->async_sonardepth_time_d);
-            file->async_sonardepth_time_d = NULL;
+          else if (file->async_sensordepth_time_d != NULL) {
+            free(file->async_sensordepth_time_d);
+            file->async_sensordepth_time_d = NULL;
           }
         }
-        file->n_async_sonardepth = file->n_async_sonardepth_alloc;
+        file->n_async_sensordepth = file->n_async_sensordepth_alloc;
 
-        /* read the asynchronous sonardepth data */
+        /* read the asynchronous sensordepth data */
         if ((afp = fopen(asyncfile, "rb")) != NULL) {
           read_size = sizeof(double) + sizeof(float);
-          for (int i = 0; i < file->n_async_sonardepth; i++) {
+          for (int i = 0; i < file->n_async_sensordepth; i++) {
             fread(buffer, read_size, 1, afp);
             index = 0;
-            mb_get_binary_double(true, &buffer[index], &file->async_sonardepth_time_d[i]);
+            mb_get_binary_double(true, &buffer[index], &file->async_sensordepth_time_d[i]);
             index += 8;
             mb_get_binary_float(true, &buffer[index], &value_float);
             // index += 4;
-            file->async_sonardepth_sonardepth[i] = value_float;
+            file->async_sensordepth_sensordepth[i] = value_float;
           }
           fclose(afp);
         }
         if (mbev_verbose > 0)
-          fprintf(stderr, "Loaded %d sonardepth data from file %s\n", file->n_async_sonardepth, asyncfile);
+          fprintf(stderr, "Loaded %d sensordepth data from file %s\n", file->n_async_sensordepth, asyncfile);
       }
 
-      /* if necessary try to load sonardepth data from ats file */
+      /* if necessary try to load sensordepth data from ats file */
       if (file->n_async_heading <= 0) {
         strcpy(asyncfile, file->path);
         strcat(asyncfile, ".ats");
         if (stat(asyncfile, &file_status) == 0 && (file_status.st_mode & S_IFMT) != S_IFDIR) {
-          /* count the asynchronous sonardepth data */
-          file->n_async_sonardepth = 0;
-          file->n_async_sonardepth_alloc = 0;
+          /* count the asynchronous sensordepth data */
+          file->n_async_sensordepth = 0;
+          file->n_async_sensordepth_alloc = 0;
           if ((afp = fopen(asyncfile, "r")) != NULL) {
             while ((result = fgets(buffer, MBP_FILENAMESIZE, afp)) == buffer)
               if (buffer[0] != '#')
-                file->n_async_sonardepth++;
+                file->n_async_sensordepth++;
             fclose(afp);
           }
 
-          /* allocate space for asynchronous sonardepth */
-          if (file->n_async_sonardepth > 0) {
-            if ((file->async_sonardepth_time_d = (double *)malloc(sizeof(double) * (file->n_async_sonardepth))) !=
+          /* allocate space for asynchronous sensordepth */
+          if (file->n_async_sensordepth > 0) {
+            if ((file->async_sensordepth_time_d = (double *)malloc(sizeof(double) * (file->n_async_sensordepth))) !=
                 NULL) {
-              if ((file->async_sonardepth_sonardepth =
-                       (double *)malloc(sizeof(double) * (file->n_async_sonardepth))) != NULL) {
-                file->n_async_sonardepth_alloc = file->n_async_sonardepth;
+              if ((file->async_sensordepth_sensordepth =
+                       (double *)malloc(sizeof(double) * (file->n_async_sensordepth))) != NULL) {
+                file->n_async_sensordepth_alloc = file->n_async_sensordepth;
               }
-              else if (file->async_sonardepth_time_d != NULL) {
-                free(file->async_sonardepth_time_d);
-                file->async_sonardepth_time_d = NULL;
+              else if (file->async_sensordepth_time_d != NULL) {
+                free(file->async_sensordepth_time_d);
+                file->async_sensordepth_time_d = NULL;
               }
             }
           }
 
-          /* read the asynchronous sonardepth data */
-          file->n_async_sonardepth = 0;
+          /* read the asynchronous sensordepth data */
+          file->n_async_sensordepth = 0;
           if ((afp = fopen(asyncfile, "r")) != NULL) {
             while ((result = fgets(buffer, MBP_FILENAMESIZE, afp)) == buffer) {
               if (buffer[0] != '#') {
-                nread = sscanf(buffer, "%lf %lf", &(file->async_sonardepth_time_d[file->n_async_sonardepth]),
-                               &(file->async_sonardepth_sonardepth[file->n_async_sonardepth]));
+                nread = sscanf(buffer, "%lf %lf", &(file->async_sensordepth_time_d[file->n_async_sensordepth]),
+                               &(file->async_sensordepth_sensordepth[file->n_async_sensordepth]));
                 if (nread == 2)
-                  file->n_async_sonardepth++;
+                  file->n_async_sensordepth++;
               }
             }
             fclose(afp);
           }
         }
         if (mbev_verbose > 0)
-          fprintf(stderr, "Loaded %d sonardepth data from file %s\n", file->n_async_sonardepth, asyncfile);
+          fprintf(stderr, "Loaded %d sensordepth data from file %s\n", file->n_async_sensordepth, asyncfile);
       }
 
-      /* if sonardepth data not loaded from file extract from ping data */
-      if (file->n_async_sonardepth <= 0) {
+      /* if sensordepth data not loaded from file extract from ping data */
+      if (file->n_async_sensordepth <= 0) {
         if (file->num_pings > 0) {
-          if ((file->async_sonardepth_time_d = (double *)malloc(sizeof(double) * (file->num_pings))) != NULL) {
-            if ((file->async_sonardepth_sonardepth = (double *)malloc(sizeof(double) * (file->num_pings))) != NULL) {
-              file->n_async_sonardepth = file->num_pings;
-              file->n_async_sonardepth_alloc = file->n_async_sonardepth;
+          if ((file->async_sensordepth_time_d = (double *)malloc(sizeof(double) * (file->num_pings))) != NULL) {
+            if ((file->async_sensordepth_sensordepth = (double *)malloc(sizeof(double) * (file->num_pings))) != NULL) {
+              file->n_async_sensordepth = file->num_pings;
+              file->n_async_sensordepth_alloc = file->n_async_sensordepth;
             }
-            else if (file->async_sonardepth_time_d != NULL) {
-              free(file->async_sonardepth_time_d);
-              file->async_sonardepth_time_d = NULL;
+            else if (file->async_sensordepth_time_d != NULL) {
+              free(file->async_sensordepth_time_d);
+              file->async_sensordepth_time_d = NULL;
             }
           }
           for (iping = 0; iping < file->num_pings; iping++) {
             ping = &(file->pings[iping]);
-            file->async_sonardepth_time_d[iping] = ping->time_d;
-            file->async_sonardepth_sonardepth[iping] = ping->sonardepth;
+            file->async_sensordepth_time_d[iping] = ping->time_d;
+            file->async_sensordepth_sensordepth[iping] = ping->sensordepth;
           }
         }
         if (mbev_verbose > 0)
-          fprintf(stderr, "Loaded %d sonardepth data from ping data of file %s\n", file->n_async_sonardepth,
+          fprintf(stderr, "Loaded %d sensordepth data from ping data of file %s\n", file->n_async_sensordepth,
                   file->path);
       }
 
@@ -1684,7 +1689,7 @@ int mbeditviz_load_file(int ifile, bool assertLock) {
 }
 /*--------------------------------------------------------------------*/
 int mbeditviz_apply_biasesandtimelag(struct mbev_file_struct *file, struct mbev_ping_struct *ping, double rollbias, double pitchbias,
-                            double headingbias, double timelag, double *heading, double *sonardepth, double *rolldelta,
+                            double headingbias, double timelag, double *heading, double *sensordepth, double *rolldelta,
                             double *pitchdelta) {
   if (mbev_verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -1699,7 +1704,7 @@ int mbeditviz_apply_biasesandtimelag(struct mbev_file_struct *file, struct mbev_
 
   double time_d;
   int iheading = 0;
-  int isonardepth = 0;
+  int isensordepth = 0;
   int iattitude = 0;
   double rollasync, pitchasync, headingasync;
 
@@ -1708,14 +1713,14 @@ int mbeditviz_apply_biasesandtimelag(struct mbev_file_struct *file, struct mbev_
     /* get adjusted time for interpolation in asyncronous time series */
     time_d = ping->time_d + timelag;
 
-    /* if asyncronous sonardepth available, interpolate new value */
+    /* if asyncronous sensordepth available, interpolate new value */
     // int intstat;
-    if (timelag != 0.0 && file->n_async_sonardepth > 0) {
-      /* intstat = */ mb_linear_interp(mbev_verbose, file->async_sonardepth_time_d - 1, file->async_sonardepth_sonardepth - 1,
-                                 file->n_async_sonardepth, time_d, sonardepth, &isonardepth, &mbev_error);
+    if (timelag != 0.0 && file->n_async_sensordepth > 0) {
+      /* intstat = */ mb_linear_interp(mbev_verbose, file->async_sensordepth_time_d - 1, file->async_sensordepth_sensordepth - 1,
+                                 file->n_async_sensordepth, time_d, sensordepth, &isensordepth, &mbev_error);
     }
     else {
-      *sonardepth = ping->sonardepth;
+      *sensordepth = ping->sensordepth;
     }
 
     /* if asyncronous heading available, interpolate new value */
@@ -1748,7 +1753,7 @@ int mbeditviz_apply_biasesandtimelag(struct mbev_file_struct *file, struct mbev_
         &mbev_error);
 
     /*
-    fprintf(stderr,"sonardepth: %f %f   %f %d\n", *sonardepth, ping->sonardepth,*sonardepth-ping->sonardepth, isonardepth);
+    fprintf(stderr,"sensordepth: %f %f   %f %d\n", *sensordepth, ping->sensordepth,*sensordepth-ping->sensordepth, isensordepth);
     fprintf(stderr,"heading:    %f %f   %f  %f %d\n", *heading, headingasync, ping->heading, *heading-ping->heading,
     iheading); fprintf(stderr,"rolldelta:  %f %f   roll:%f %f   %d\n", *rolldelta, rollbias, rollasync, ping->roll,
     iattitude); fprintf(stderr,"pitchdelta: %f %f   pitch:%f %f   %d\n", *pitchdelta, pitchbias, pitchasync, ping->pitch,
@@ -1760,7 +1765,7 @@ int mbeditviz_apply_biasesandtimelag(struct mbev_file_struct *file, struct mbev_
     fprintf(stderr, "dbg2  Return values:\n");
     fprintf(stderr, "dbg2       error:      %d\n", mbev_error);
     fprintf(stderr, "dbg2       heading:    %f\n", *heading);
-    fprintf(stderr, "dbg2       sonardepth: %f\n", *sonardepth);
+    fprintf(stderr, "dbg2       sensordepth: %f\n", *sensordepth);
     fprintf(stderr, "dbg2       rolldelta:  %f\n", *rolldelta);
     fprintf(stderr, "dbg2       pitchdelta: %f\n", *pitchdelta);
     fprintf(stderr, "dbg2  Return status:\n");
@@ -1860,7 +1865,7 @@ int mbeditviz_snell_correction(double snell, double roll, double *beam_xtrack,
 /*--------------------------------------------------------------------*/
 
 int mbeditviz_beam_position(double navlon, double navlat, double mtodeglon, double mtodeglat, double rawbath, double acrosstrack,
-                            double alongtrack, double sonardepth, double rolldelta, double pitchdelta, double heading,
+                            double alongtrack, double sensordepth, double rolldelta, double pitchdelta, double heading,
                             double *bathcorr, double *lon, double *lat) {
   if (mbev_verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -1872,7 +1877,7 @@ int mbeditviz_beam_position(double navlon, double navlat, double mtodeglon, doub
     fprintf(stderr, "dbg2       rawbath:     %f\n", rawbath);
     fprintf(stderr, "dbg2       acrosstrack: %f\n", acrosstrack);
     fprintf(stderr, "dbg2       alongtrack:  %f\n", alongtrack);
-    fprintf(stderr, "dbg2       sonardepth:  %f\n", sonardepth);
+    fprintf(stderr, "dbg2       sensordepth:  %f\n", sensordepth);
     fprintf(stderr, "dbg2       rolldelta:   %f\n", rolldelta);
     fprintf(stderr, "dbg2       pitchdelta:  %f\n", pitchdelta);
     fprintf(stderr, "dbg2       heading:     %f\n", heading);
@@ -1890,7 +1895,7 @@ int mbeditviz_beam_position(double navlon, double navlat, double mtodeglon, doub
                                         &neweasting, &newnorthing, &newbath, &mbev_error);
 
   /* add sensordepth to get full corrected bathymetry */
-  *bathcorr = newbath + sonardepth;
+  *bathcorr = newbath + sensordepth;
 
   /* locate lon lat position */
   *lon = navlon + mtodeglon * neweasting;
@@ -1905,7 +1910,7 @@ int mbeditviz_beam_position(double navlon, double navlat, double mtodeglon, doub
     fprintf(stderr, "     bath:        %f\n", rawbath);
     fprintf(stderr, "     acrosstrack: %f\n", acrosstrack);
     fprintf(stderr, "     alongtrack:  %f\n", alongtrack);
-    fprintf(stderr, "     sonardepth:  %f\n", sonardepth);
+    fprintf(stderr, "     sensordepth:  %f\n", sensordepth);
     fprintf(stderr, "     rolldelta:   %f\n", rolldelta);
     fprintf(stderr, "     pitchdelta:  %f\n", pitchdelta);
     fprintf(stderr, "     heading:     %f\n", heading);
@@ -2033,15 +2038,15 @@ int mbeditviz_unload_file(int ifile, bool assertUnlock) {
         free(file->async_heading_heading);
         file->async_heading_heading = NULL;
       }
-      file->n_async_sonardepth = 0;
-      file->n_async_sonardepth_alloc = 0;
-      if (file->async_sonardepth_time_d != NULL) {
-        free(file->async_sonardepth_time_d);
-        file->async_sonardepth_time_d = NULL;
+      file->n_async_sensordepth = 0;
+      file->n_async_sensordepth_alloc = 0;
+      if (file->async_sensordepth_time_d != NULL) {
+        free(file->async_sensordepth_time_d);
+        file->async_sensordepth_time_d = NULL;
       }
-      if (file->async_sonardepth_sonardepth != NULL) {
-        free(file->async_sonardepth_sonardepth);
-        file->async_sonardepth_sonardepth = NULL;
+      if (file->async_sensordepth_sensordepth != NULL) {
+        free(file->async_sensordepth_sensordepth);
+        file->async_sensordepth_sensordepth = NULL;
       }
       file->n_async_attitude = 0;
       file->n_async_attitude_alloc = 0;
@@ -2795,14 +2800,14 @@ int mbeditviz_grid_beam(struct mbev_file_struct *file, struct mbev_ping_struct *
         foot_dyn = 0.0;
       }
       foot_range = sqrt(foot_lateral * foot_lateral + ping->altitude * ping->altitude);
-      foot_theta = RTD * atan2(foot_lateral, (ping->bathcorr[ibeam] - ping->sonardepth));
+      foot_theta = RTD * atan2(foot_lateral, (ping->bathcorr[ibeam] - ping->sensordepth));
       foot_dtheta = 0.5 * file->beamwidth_xtrack;
       foot_dphi = 0.5 * file->beamwidth_ltrack;
       if (foot_dtheta <= 0.0)
         foot_dtheta = 1.0;
       if (foot_dphi <= 0.0)
         foot_dphi = 1.0;
-      foot_hwidth = (ping->bathcorr[ibeam] - ping->sonardepth) * tan(DTR * (foot_theta + foot_dtheta)) - foot_lateral;
+      foot_hwidth = (ping->bathcorr[ibeam] - ping->sensordepth) * tan(DTR * (foot_theta + foot_dtheta)) - foot_lateral;
       foot_hlength = foot_range * tan(DTR * foot_dphi);
 
       /* get range of bins around footprint to examine */
@@ -3214,6 +3219,7 @@ int mbeditviz_destroy_grid() {
               action = MBP_EDIT_FLAG;
             else
               action = MBP_EDIT_ZERO;
+            
             /* save the edits to the esf stream */
             if (file->esf_open) {
               if (mbev_verbose > 0)
@@ -3360,11 +3366,11 @@ int mbeditviz_selectregion(size_t instance) {
         for (int iping = 0; iping < file->num_pings; iping++) {
           struct mbev_ping_struct *ping = &(file->pings[iping]);
           double heading;
-          double sonardepth;
+          double sensordepth;
           double rolldelta;
           double pitchdelta;
           mbeditviz_apply_biasesandtimelag(file, ping, mbev_rollbias, mbev_pitchbias, mbev_headingbias,
-                                  mbev_timelag, &heading, &sonardepth, &rolldelta, &pitchdelta);
+                                  mbev_timelag, &heading, &sensordepth, &rolldelta, &pitchdelta);
           double mtodeglon;
           double mtodeglat;
           mb_coor_scale(mbev_verbose, ping->navlat, &mtodeglon, &mtodeglat);
@@ -3392,7 +3398,7 @@ int mbeditviz_selectregion(size_t instance) {
                 /* get sounding relative to sonar */
                 double beam_xtrack = ping->bathacrosstrack[ibeam];
                 double beam_ltrack = ping->bathalongtrack[ibeam];
-                double beam_z = ping->bath[ibeam] - ping->sonardepth;
+                double beam_z = ping->bath[ibeam] - ping->sensordepth;
 
                 /* if beamforming sound speed correction to be applied */
                 if (mbev_snell != 1.0) {
@@ -3403,7 +3409,7 @@ int mbeditviz_selectregion(size_t instance) {
                 /* apply rotations and recalculate position */
                 mbeditviz_beam_position(
                     ping->navlon, ping->navlat, mtodeglon, mtodeglat, beam_z,
-                    beam_xtrack, beam_ltrack, sonardepth, rolldelta, pitchdelta,
+                    beam_xtrack, beam_ltrack, sensordepth, rolldelta, pitchdelta,
                     heading, &(ping->bathcorr[ibeam]), &(ping->bathlon[ibeam]), &(ping->bathlat[ibeam]));
                 mb_proj_forward(mbev_verbose, mbev_grid.pjptr, ping->bathlon[ibeam], ping->bathlat[ibeam],
                                 &ping->bathx[ibeam], &ping->bathy[ibeam], &mbev_error);
@@ -3518,7 +3524,7 @@ int mbeditviz_selectarea(size_t instance) {
 
     double zmin;
     double zmax;
-    // double heading, sonardepth;
+    // double heading, sensordepth;
     // double rolldelta, pitchdelta;
 
     /* loop over all files */
@@ -3528,11 +3534,11 @@ int mbeditviz_selectarea(size_t instance) {
         for (int iping = 0; iping < file->num_pings; iping++) {
           struct mbev_ping_struct *ping = &(file->pings[iping]);
           double heading;
-          double sonardepth;
+          double sensordepth;
           double rolldelta;
           double pitchdelta;
           mbeditviz_apply_biasesandtimelag(file, ping, mbev_rollbias, mbev_pitchbias, mbev_headingbias,
-                                  mbev_timelag, &heading, &sonardepth, &rolldelta, &pitchdelta);
+                                  mbev_timelag, &heading, &sensordepth, &rolldelta, &pitchdelta);
           double mtodeglon;
           double mtodeglat;
           mb_coor_scale(mbev_verbose, ping->navlat, &mtodeglon, &mtodeglat);
@@ -3564,7 +3570,7 @@ int mbeditviz_selectarea(size_t instance) {
                 /* get sounding relative to sonar */
                 double beam_xtrack = ping->bathacrosstrack[ibeam];
                 double beam_ltrack = ping->bathalongtrack[ibeam];
-                double beam_z = ping->bath[ibeam] - ping->sonardepth;
+                double beam_z = ping->bath[ibeam] - ping->sensordepth;
 
                 /* if beamforming sound speed correction to be applied */
                 if (mbev_snell != 1.0) {
@@ -3575,7 +3581,7 @@ int mbeditviz_selectarea(size_t instance) {
                 /* apply rotations and recalculate position */
                 mbeditviz_beam_position(
                     ping->navlon, ping->navlat, mtodeglon, mtodeglat, beam_z,
-                    beam_xtrack, beam_ltrack, sonardepth, rolldelta, pitchdelta,
+                    beam_xtrack, beam_ltrack, sensordepth, rolldelta, pitchdelta,
                     heading, &(ping->bathcorr[ibeam]), &(ping->bathlon[ibeam]), &(ping->bathlat[ibeam]));
                 mb_proj_forward(mbev_verbose, mbev_grid.pjptr, ping->bathlon[ibeam], ping->bathlat[ibeam],
                                 &ping->bathx[ibeam], &ping->bathy[ibeam], &mbev_error);
@@ -3683,7 +3689,7 @@ int mbeditviz_selectnav(size_t instance) {
     double ymax;
     double zmin;
     double zmax;
-    // double heading, sonardepth;
+    // double heading, sensordepth;
     // double rolldelta, pitchdelta;
 
     for (int ifile = 0; ifile < mbev_num_files; ifile++) {
@@ -3694,11 +3700,11 @@ int mbeditviz_selectnav(size_t instance) {
           if (navpts[iping].selected) {
             struct mbev_ping_struct *ping = &(file->pings[iping]);
             double heading;
-            double sonardepth;
+            double sensordepth;
             double rolldelta;
             double pitchdelta;
             mbeditviz_apply_biasesandtimelag(file, ping, mbev_rollbias, mbev_pitchbias, mbev_headingbias,
-                                    mbev_timelag, &heading, &sonardepth, &rolldelta, &pitchdelta);
+                                    mbev_timelag, &heading, &sensordepth, &rolldelta, &pitchdelta);
             double mtodeglon;
             double mtodeglat;
             mb_coor_scale(mbev_verbose, ping->navlat, &mtodeglon, &mtodeglat);
@@ -3724,7 +3730,7 @@ int mbeditviz_selectnav(size_t instance) {
               /* get sounding relative to sonar */
               double beam_xtrack = ping->bathacrosstrack[ibeam];
               double beam_ltrack = ping->bathalongtrack[ibeam];
-              double beam_z = ping->bath[ibeam] - ping->sonardepth;
+              double beam_z = ping->bath[ibeam] - ping->sensordepth;
 
               /* if beamforming sound speed correction to be applied */
               if (mbev_snell != 1.0) {
@@ -3735,7 +3741,7 @@ int mbeditviz_selectnav(size_t instance) {
               /* apply rotations and recalculate position */
               mbeditviz_beam_position(
                   ping->navlon, ping->navlat, mtodeglon, mtodeglat, beam_z,
-                  beam_xtrack, beam_ltrack, sonardepth, rolldelta, pitchdelta,
+                  beam_xtrack, beam_ltrack, sensordepth, rolldelta, pitchdelta,
                   heading, &(ping->bathcorr[ibeam]), &(ping->bathlon[ibeam]), &(ping->bathlat[ibeam]));
               mb_proj_forward(mbev_verbose, mbev_grid.pjptr, ping->bathlon[ibeam], ping->bathlat[ibeam],
                               &ping->bathx[ibeam], &ping->bathy[ibeam], &mbev_error);
@@ -3983,7 +3989,7 @@ void mbeditviz_mb3dsoundings_info(int ifile, int iping, int ibeam, char *infostr
           ibeam, ping->beams_bath, iping, file->num_pings, file->name, ping->time_i[0], ping->time_i[1], ping->time_i[2],
           ping->time_i[3], ping->time_i[4], ping->time_i[5], ping->time_i[6], ping->time_d, ping->bathlon[ibeam],
           ping->bathlat[ibeam], ping->bath[ibeam], ping->bathacrosstrack[ibeam], ping->bathalongtrack[ibeam], ping->amp[ibeam]);
-  //fprintf(stderr, "\nbathcorr:%f bath:%f sonardepth:%f", ping->bathcorr[ibeam], ping->bath[ibeam], ping->sonardepth);
+  //fprintf(stderr, "\nbathcorr:%f bath:%f sensordepth:%f", ping->bathcorr[ibeam], ping->bath[ibeam], ping->sensordepth);
 
   if (mbev_verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> completed\n", __func__);
@@ -4022,7 +4028,7 @@ void mbeditviz_mb3dsoundings_bias(double rollbias, double pitchbias, double head
   double zmax = 0.0;
 
   double heading = 0.0;
-  double sonardepth = 0.0;
+  double sensordepth = 0.0;
   double rolldelta = 0.0;
   double pitchdelta = 0.0;
   double mtodeglon = 0.0;
@@ -4038,7 +4044,7 @@ void mbeditviz_mb3dsoundings_bias(double rollbias, double pitchbias, double head
 
     if (ifile != ifilelast || iping != ipinglast) {
       mbeditviz_apply_biasesandtimelag(file, ping, mbev_rollbias, mbev_pitchbias, mbev_headingbias,
-                              mbev_timelag, &heading, &sonardepth, &rolldelta, &pitchdelta);
+                              mbev_timelag, &heading, &sensordepth, &rolldelta, &pitchdelta);
       mb_coor_scale(mbev_verbose, ping->navlat, &mtodeglon, &mtodeglat);
       ifilelast = ifile;
       ipinglast = iping;
@@ -4047,7 +4053,7 @@ void mbeditviz_mb3dsoundings_bias(double rollbias, double pitchbias, double head
     /* get sounding relative to sonar */
     double beam_xtrack = ping->bathacrosstrack[ibeam];
     double beam_ltrack = ping->bathalongtrack[ibeam];
-    double beam_z = ping->bath[ibeam] - ping->sonardepth;
+    double beam_z = ping->bath[ibeam] - ping->sensordepth;
 
     /* if beamforming sound speed correction to be applied */
     if (mbev_snell != 1.0) {
@@ -4057,7 +4063,7 @@ void mbeditviz_mb3dsoundings_bias(double rollbias, double pitchbias, double head
 
     /* apply rotations and recalculate position */
     mbeditviz_beam_position(ping->navlon, ping->navlat, mtodeglon, mtodeglat, beam_z,
-                            beam_xtrack, beam_ltrack, sonardepth, rolldelta, pitchdelta,
+                            beam_xtrack, beam_ltrack, sensordepth, rolldelta, pitchdelta,
                             heading, &(ping->bathcorr[ibeam]), &(ping->bathlon[ibeam]), &(ping->bathlat[ibeam]));
     mb_proj_forward(mbev_verbose, mbev_grid.pjptr, ping->bathlon[ibeam], ping->bathlat[ibeam], &ping->bathx[ibeam],
                     &ping->bathy[ibeam], &mbev_error);
@@ -4124,7 +4130,7 @@ void mbeditviz_mb3dsoundings_biasapply(double rollbias, double pitchbias, double
           mbev_timelag, mbev_snell);
   (*showMessage)(message);
 
-  // double heading, sonardepth;
+  // double heading, sensordepth;
   // double rolldelta, pitchdelta;
   // double mtodeglon, mtodeglat;
   // double beam_xtrack, beam_ltrack, beam_z;
@@ -4135,10 +4141,10 @@ void mbeditviz_mb3dsoundings_biasapply(double rollbias, double pitchbias, double
     if (file->load_status) {
       for (int iping = 0; iping < file->num_pings; iping++) {
         struct mbev_ping_struct *ping = &(file->pings[iping]);
-        double heading, sonardepth;
+        double heading, sensordepth;
         double rolldelta, pitchdelta;
         mbeditviz_apply_biasesandtimelag(file, ping, mbev_rollbias, mbev_pitchbias, mbev_headingbias,
-                                mbev_timelag, &heading, &sonardepth, &rolldelta, &pitchdelta);
+                                mbev_timelag, &heading, &sensordepth, &rolldelta, &pitchdelta);
         double mtodeglon, mtodeglat;
         mb_coor_scale(mbev_verbose, ping->navlat, &mtodeglon, &mtodeglat);
         for (int ibeam = 0; ibeam < ping->beams_bath; ibeam++) {
@@ -4146,7 +4152,7 @@ void mbeditviz_mb3dsoundings_biasapply(double rollbias, double pitchbias, double
             /* get sounding relative to sonar */
             double beam_xtrack = ping->bathacrosstrack[ibeam];
             double beam_ltrack = ping->bathalongtrack[ibeam];
-            double beam_z = ping->bath[ibeam] - ping->sonardepth;
+            double beam_z = ping->bath[ibeam] - ping->sensordepth;
 
             /* if beamforming sound speed correction to be applied */
             if (mbev_snell != 1.0) {
@@ -4156,7 +4162,7 @@ void mbeditviz_mb3dsoundings_biasapply(double rollbias, double pitchbias, double
 
             /* apply rotations and recalculate position */
             mbeditviz_beam_position(ping->navlon, ping->navlat, mtodeglon, mtodeglat,
-                        beam_z, beam_xtrack, beam_ltrack, sonardepth, rolldelta, pitchdelta, heading,
+                        beam_z, beam_xtrack, beam_ltrack, sensordepth, rolldelta, pitchdelta, heading,
                         &(ping->bathcorr[ibeam]), &(ping->bathlon[ibeam]), &(ping->bathlat[ibeam]));
             mb_proj_forward(mbev_verbose, mbev_grid.pjptr, ping->bathlon[ibeam], ping->bathlat[ibeam],
                     &ping->bathx[ibeam], &ping->bathy[ibeam], &mbev_error);
@@ -4480,10 +4486,10 @@ void mbeditviz_mb3dsoundings_colorsoundings(int color) {
   }
 }
 /*--------------------------------------------------------------------*/
-void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best, double *pitchbias_best, double *headingbias_best,
+void mbeditviz_mb3dsoundings_optimizebiasvaluesold(int mode, double *rollbias_best, double *pitchbias_best, double *headingbias_best,
                                                 double *timelag_best, double *snell_best) {
   if (mbev_verbose > 0)
-    fprintf(stderr, "mbeditviz_mb3dsoundings_optimizebiasvalues: %d\n", mode);
+    fprintf(stderr, "mbeditviz_mb3dsoundings_optimizebiasvaluesold: %d\n", mode);
 
   if (mbev_verbose >= 2) {
     fprintf(stderr, "\ndbg2  Function <%s> called\n", __func__);
@@ -4558,7 +4564,7 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
   mb_path message_string = "";
   double variance_total;
   double variance_total_best = 0.0;
-  int variance_total_num = 0;
+  int variance_num = 0;
   double rollbias;
   double pitchbias;
   double headingbias;
@@ -4593,19 +4599,20 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
       mbeditviz_mb3dsoundings_getbiasvariance(
           local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
           local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
-          pitchbias, headingbias, timelag, snell, &variance_total_num, &variance_total);
-      if (variance_total_num > 0 && (variance_total < variance_total_best || first)) {
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_total);
+      if (variance_num > 0 && (variance_total < variance_total_best || first)) {
         first = false;
         *rollbias_best = rollbias;
         variance_total_best = variance_total;
+	    
         marker = marker2;
       }
       else
         marker = marker1;
       fprintf(stderr, "COARSE ROLLBIAS:    | Best: r:%5.2f p:%5.2f h:%5.2f t:%5.2f s:%5.3f  var:%12.5f | Test: r:%5.2f  N:%d Var:%12.5f %s\n",
             *rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best, variance_total_best,
-            rollbias, variance_total_num, variance_total, marker);
-      snprintf(message_string, sizeof(message_string), "Optimizing Roll Bias:%.2f Variance: %.3f %.3f", rollbias, variance_total,
+            rollbias, variance_num, variance_total, marker);
+      snprintf(message_string, sizeof(message_string), "Optimizing Roll Bias:%.2f StdDev: %.3f %.3f", rollbias, variance_total,
               variance_total_best);
       (*showMessage)(message_string);
     }
@@ -4624,8 +4631,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
       mbeditviz_mb3dsoundings_getbiasvariance(
           local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
           local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
-          pitchbias, headingbias, timelag, snell, &variance_total_num, &variance_total);
-      if (variance_total_num > 0 && (variance_total < variance_total_best || first)) {
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_total);
+      if (variance_num > 0 && (variance_total < variance_total_best || first)) {
         first = false;
         *rollbias_best = rollbias;
         variance_total_best = variance_total;
@@ -4635,8 +4642,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
         marker = marker1;
       fprintf(stderr, "FINE ROLLBIAS:      | Best: r:%5.2f p:%5.2f h:%5.2f t:%5.2f s:%5.3f  var:%12.5f | Test: r:%5.2f  N:%d Var:%12.5f %s\n",
             *rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best, variance_total_best,
-            rollbias, variance_total_num, variance_total, marker);
-      snprintf(message_string, sizeof(message_string), "Optimizing biases: Roll Bias:%.2f Variance: %.3f %.3f", rollbias, variance_total,
+            rollbias, variance_num, variance_total, marker);
+      snprintf(message_string, sizeof(message_string), "Optimizing biases: Roll Bias:%.2f StdDev: %.3f %.3f", rollbias, variance_total,
               variance_total_best);
       (*showMessage)(message_string);
     }
@@ -4658,8 +4665,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
       mbeditviz_mb3dsoundings_getbiasvariance(
           local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
           local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
-          pitchbias, headingbias, timelag, snell, &variance_total_num, &variance_total);
-      if (variance_total_num > 0 && (variance_total < variance_total_best || first)) {
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_total);
+      if (variance_num > 0 && (variance_total < variance_total_best || first)) {
         first = false;
         *pitchbias_best = pitchbias;
         variance_total_best = variance_total;
@@ -4669,8 +4676,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
         marker = marker1;
       fprintf(stderr, "COARSE PITCHBIAS:     | Best: r:%5.2f p:%5.2f h:%5.2f t:%5.2f s:%5.3f  var:%12.5f | Test: p:%5.2f  N:%d Var:%12.5f %s\n",
             *rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best, variance_total_best,
-            pitchbias, variance_total_num, variance_total, marker);
-      snprintf(message_string, sizeof(message_string), "Optimizing biases: Pitch Bias:%.2f Variance: %.3f %.3f", pitchbias, variance_total,
+            pitchbias, variance_num, variance_total, marker);
+      snprintf(message_string, sizeof(message_string), "Optimizing biases: Pitch Bias:%.2f StdDev: %.3f %.3f", pitchbias, variance_total,
               variance_total_best);
       (*showMessage)(message_string);
     }
@@ -4689,8 +4696,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
       mbeditviz_mb3dsoundings_getbiasvariance(
           local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
           local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
-          pitchbias, headingbias, timelag, snell, &variance_total_num, &variance_total);
-      if (variance_total_num > 0 && (variance_total < variance_total_best || first)) {
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_total);
+      if (variance_num > 0 && (variance_total < variance_total_best || first)) {
         first = false;
         *pitchbias_best = pitchbias;
         variance_total_best = variance_total;
@@ -4700,8 +4707,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
         marker = marker1;
       fprintf(stderr, "FINE PITCHBIAS:     | Best: r:%5.2f p:%5.2f h:%5.2f t:%5.2f s:%5.3f  var:%12.5f | Test: p:%5.2f  N:%d Var:%12.5f %s\n",
             *rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best, variance_total_best,
-            pitchbias, variance_total_num, variance_total, marker);
-      snprintf(message_string, sizeof(message_string), "Optimizing biases: Pitch Bias:%.2f Variance: %.3f %.3f", pitchbias, variance_total,
+            pitchbias, variance_num, variance_total, marker);
+      snprintf(message_string, sizeof(message_string), "Optimizing biases: Pitch Bias:%.2f StdDev: %.3f %.3f", pitchbias, variance_total,
               variance_total_best);
       (*showMessage)(message_string);
     }
@@ -4723,8 +4730,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
       mbeditviz_mb3dsoundings_getbiasvariance(
           local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
           local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
-          pitchbias, headingbias, timelag, snell, &variance_total_num, &variance_total);
-      if (variance_total_num > 0 && (variance_total < variance_total_best || first)) {
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_total);
+      if (variance_num > 0 && (variance_total < variance_total_best || first)) {
         first = false;
         *headingbias_best = headingbias;
         variance_total_best = variance_total;
@@ -4734,8 +4741,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
         marker = marker1;
       fprintf(stderr, "COARSE HEADINGBIAS: | Best: r:%5.2f p:%5.2f h:%5.2f t:%5.2f s:%5.3f  var:%12.5f | Test: h:%5.2f  N:%d Var:%12.5f %s\n",
             *rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best, variance_total_best,
-            headingbias, variance_total_num, variance_total, marker);
-      snprintf(message_string, sizeof(message_string), "Optimizing Heading Bias:%.2f Variance: %.3f %.3f", headingbias, variance_total,
+            headingbias, variance_num, variance_total, marker);
+      snprintf(message_string, sizeof(message_string), "Optimizing Heading Bias:%.2f StdDev: %.3f %.3f", headingbias, variance_total,
               variance_total_best);
       (*showMessage)(message_string);
     }
@@ -4754,8 +4761,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
       mbeditviz_mb3dsoundings_getbiasvariance(
           local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
           local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
-          pitchbias, headingbias, timelag, snell, &variance_total_num, &variance_total);
-      if (variance_total_num > 0 && (variance_total < variance_total_best || first)) {
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_total);
+      if (variance_num > 0 && (variance_total < variance_total_best || first)) {
         first = false;
         *headingbias_best = headingbias;
         variance_total_best = variance_total;
@@ -4765,8 +4772,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
         marker = marker1;
       fprintf(stderr, "FINE HEADINGBIAS:   | Best: r:%5.2f p:%5.2f h:%5.2f t:%5.2f s:%5.3f  var:%12.5f | Test: h:%5.2f  N:%d Var:%12.5f %s\n",
             *rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best, variance_total_best,
-            headingbias, variance_total_num, variance_total, marker);
-      snprintf(message_string, sizeof(message_string), "Optimizing biases: Heading Bias:%.2f Variance: %.3f %.3f", headingbias, variance_total,
+            headingbias, variance_num, variance_total, marker);
+      snprintf(message_string, sizeof(message_string), "Optimizing biases: Heading Bias:%.2f StdDev: %.3f %.3f", headingbias, variance_total,
               variance_total_best);
       (*showMessage)(message_string);
     }
@@ -4788,8 +4795,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
       mbeditviz_mb3dsoundings_getbiasvariance(
           local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
           local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
-          pitchbias, headingbias, timelag, snell, &variance_total_num, &variance_total);
-      if (variance_total_num > 0 && (variance_total < variance_total_best || first)) {
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_total);
+      if (variance_num > 0 && (variance_total < variance_total_best || first)) {
         first = false;
         *rollbias_best = rollbias;
         variance_total_best = variance_total;
@@ -4799,8 +4806,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
         marker = marker1;
       fprintf(stderr, "FINE ROLLBIAS:      | Best: r:%5.2f p:%5.2f h:%5.2f t:%5.2f s:%5.3f  var:%12.5f | Test: r:%5.2f  N:%d Var:%12.5f %s\n",
             *rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best, variance_total_best,
-            rollbias, variance_total_num, variance_total, marker);
-      snprintf(message_string, sizeof(message_string), "Optimizing biases: Roll Bias:%.2f Variance: %.3f %.3f", rollbias, variance_total,
+            rollbias, variance_num, variance_total, marker);
+      snprintf(message_string, sizeof(message_string), "Optimizing biases: Roll Bias:%.2f StdDev: %.3f %.3f", rollbias, variance_total,
               variance_total_best);
       (*showMessage)(message_string);
     }
@@ -4822,8 +4829,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
       mbeditviz_mb3dsoundings_getbiasvariance(
           local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
           local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
-          pitchbias, headingbias, timelag, snell, &variance_total_num, &variance_total);
-      if (variance_total_num > 0 && (variance_total < variance_total_best || first)) {
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_total);
+      if (variance_num > 0 && (variance_total < variance_total_best || first)) {
         first = false;
         *pitchbias_best = pitchbias;
         variance_total_best = variance_total;
@@ -4833,8 +4840,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
         marker = marker1;
       fprintf(stderr, "FINE PITCHBIAS:     | Best: r:%5.2f p:%5.2f h:%5.2f t:%5.2f s:%5.3f  var:%12.5f | Test: p:%5.2f  N:%d Var:%12.5f %s\n",
             *rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best, variance_total_best,
-            pitchbias, variance_total_num, variance_total, marker);
-      snprintf(message_string, sizeof(message_string), "Optimizing biases: Pitch Bias:%.2f Variance: %.3f %.3f", pitchbias, variance_total,
+            pitchbias, variance_num, variance_total, marker);
+      snprintf(message_string, sizeof(message_string), "Optimizing biases: Pitch Bias:%.2f StdDev: %.3f %.3f", pitchbias, variance_total,
               variance_total_best);
       (*showMessage)(message_string);
     }
@@ -4856,8 +4863,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
       mbeditviz_mb3dsoundings_getbiasvariance(
           local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
           local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
-          pitchbias, headingbias, timelag, snell, &variance_total_num, &variance_total);
-      if (variance_total_num > 0 && (variance_total < variance_total_best || first)) {
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_total);
+      if (variance_num > 0 && (variance_total < variance_total_best || first)) {
         first = false;
         *headingbias_best = headingbias;
         variance_total_best = variance_total;
@@ -4867,8 +4874,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
         marker = marker1;
       fprintf(stderr, "FINE HEADINGBIAS:   | Best: r:%5.2f p:%5.2f h:%5.2f t:%5.2f s:%5.3f  var:%12.5f | Test: h:%5.2f  N:%d Var:%12.5f %s\n",
             *rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best, variance_total_best,
-            headingbias, variance_total_num, variance_total, marker);
-      snprintf(message_string, sizeof(message_string), "Optimizing biases: Heading Bias:%.2f Variance: %.3f %.3f", headingbias, variance_total,
+            headingbias, variance_num, variance_total, marker);
+      snprintf(message_string, sizeof(message_string), "Optimizing biases: Heading Bias:%.2f StdDev: %.3f %.3f", headingbias, variance_total,
               variance_total_best);
       (*showMessage)(message_string);
     }
@@ -4891,8 +4898,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
       mbeditviz_mb3dsoundings_getbiasvariance(
           local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
           local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
-          pitchbias, headingbias, timelag, snell, &variance_total_num, &variance_total);
-      if (variance_total_num > 0 && (variance_total < variance_total_best || first)) {
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_total);
+      if (variance_num > 0 && (variance_total < variance_total_best || first)) {
         first = false;
         *timelag_best = timelag;
         variance_total_best = variance_total;
@@ -4902,8 +4909,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
         marker = marker1;
       fprintf(stderr, "COARSE TIME LAG:    | Best: r:%5.2f p:%5.2f h:%5.2f t:%5.2f s:%5.3f  var:%12.5f | Test: t:%5.2f  N:%d Var:%12.5f %s\n",
             *rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best, variance_total_best,
-            timelag, variance_total_num, variance_total, marker);
-      snprintf(message_string, sizeof(message_string), "Optimizing biases: Time Lag:%.2f Variance: %.3f %.3f", timelag, variance_total,
+            timelag, variance_num, variance_total, marker);
+      snprintf(message_string, sizeof(message_string), "Optimizing biases: Time Lag:%.2f StdDev: %.3f %.3f", timelag, variance_total,
               variance_total_best);
       (*showMessage)(message_string);
     }
@@ -4923,8 +4930,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
       mbeditviz_mb3dsoundings_getbiasvariance(
           local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
           local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
-          pitchbias, headingbias, timelag, snell, &variance_total_num, &variance_total);
-      if (variance_total_num > 0 && (variance_total < variance_total_best || first)) {
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_total);
+      if (variance_num > 0 && (variance_total < variance_total_best || first)) {
         first = false;
         *timelag_best = timelag;
         variance_total_best = variance_total;
@@ -4934,8 +4941,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
         marker = marker1;
       fprintf(stderr, "FINE TIME LAG:      | Best: r:%5.2f p:%5.2f h:%5.2f t:%5.2f s:%5.3f  var:%12.5f | Test: t:%5.2f  N:%d Var:%12.5f %s\n",
             *rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best, variance_total_best,
-            timelag, variance_total_num, variance_total, marker);
-      snprintf(message_string, sizeof(message_string), "Optimizing biases: Time Lag:%.2f Variance: %.3f %.3f", timelag, variance_total,
+            timelag, variance_num, variance_total, marker);
+      snprintf(message_string, sizeof(message_string), "Optimizing biases: Time Lag:%.2f StdDev: %.3f %.3f", timelag, variance_total,
               variance_total_best);
       (*showMessage)(message_string);
     }
@@ -4958,8 +4965,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
       mbeditviz_mb3dsoundings_getbiasvariance(
           local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
           local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
-          pitchbias, headingbias, timelag, snell, &variance_total_num, &variance_total);
-      if (variance_total_num > 0 && (variance_total < variance_total_best || first)) {
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_total);
+      if (variance_num > 0 && (variance_total < variance_total_best || first)) {
         first = false;
         *snell_best = snell;
         variance_total_best = variance_total;
@@ -4969,8 +4976,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
         marker = marker1;
       fprintf(stderr, "COARSE SNELL:       | Best: r:%5.2f p:%5.2f h:%5.2f t:%5.2f s:%5.3f  var:%12.5f | Test: s:%5.3f  N:%d Var:%12.5f %s\n",
             *rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best, variance_total_best,
-            snell, variance_total_num, variance_total, marker);
-      snprintf(message_string, sizeof(message_string), "Optimizing biases: Snell correction:%.4f Variance: %.3f %.3f", snell, variance_total,
+            snell, variance_num, variance_total, marker);
+      snprintf(message_string, sizeof(message_string), "Optimizing biases: Snell correction:%.4f StdDev: %.3f %.3f", snell, variance_total,
               variance_total_best);
       (*showMessage)(message_string);
     }
@@ -4990,8 +4997,8 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
       mbeditviz_mb3dsoundings_getbiasvariance(
           local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
           local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
-          pitchbias, headingbias, timelag, snell, &variance_total_num, &variance_total);
-      if (variance_total_num > 0 && (variance_total < variance_total_best || first)) {
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_total);
+      if (variance_num > 0 && (variance_total < variance_total_best || first)) {
         first = false;
         *snell_best = snell;
         variance_total_best = variance_total;
@@ -5001,11 +5008,1064 @@ void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best,
         marker = marker1;
       fprintf(stderr, "FINE SNELL:         | Best: r:%5.2f p:%5.2f h:%5.2f t:%5.2f s:%5.3f  var:%12.5f | Test: s:%5.3f  N:%d Var:%12.5f %s\n",
             *rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best, variance_total_best,
-            snell, variance_total_num, variance_total, marker);
-      snprintf(message_string, sizeof(message_string), "Optimizing biases: Snell correction:%.4f Variance: %.3f %.3f", timelag, variance_total,
+            snell, variance_num, variance_total, marker);
+      snprintf(message_string, sizeof(message_string), "Optimizing biases: Snell correction:%.4f StdDev: %.3f %.3f", timelag, variance_total,
               variance_total_best);
       (*showMessage)(message_string);
     }
+  }
+
+  /* turn off message dialog */
+  (*hideMessage)();
+
+  /* deallocate arrays for calculating variance */
+  mbev_status = mb_freed(mbev_verbose, __FILE__, __LINE__, (void **)&local_grid_first, &mbev_error);
+  mbev_status = mb_freed(mbev_verbose, __FILE__, __LINE__, (void **)&local_grid_sum, &mbev_error);
+  mbev_status = mb_freed(mbev_verbose, __FILE__, __LINE__, (void **)&local_grid_sum2, &mbev_error);
+  mbev_status = mb_freed(mbev_verbose, __FILE__, __LINE__, (void **)&local_grid_num, &mbev_error);
+  mbev_status = mb_freed(mbev_verbose, __FILE__, __LINE__, (void **)&local_grid_variance, &mbev_error);
+
+  mbeditviz_mb3dsoundings_bias(*rollbias_best, *pitchbias_best, *headingbias_best, *timelag_best, *snell_best);
+
+  if (mbev_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> completed\n", __func__);
+    fprintf(stderr, "dbg2  Return values:\n");
+    fprintf(stderr, "dbg2       error:              %d\n", mbev_error);
+    fprintf(stderr, "dbg2       rollbias_best:      %f\n", *rollbias_best);
+    fprintf(stderr, "dbg2       pitchbias_best:     %f\n", *pitchbias_best);
+    fprintf(stderr, "dbg2       headingbias_best:   %f\n", *headingbias_best);
+    fprintf(stderr, "dbg2       timelag_best:       %f\n", *timelag_best);
+    fprintf(stderr, "dbg2       snell_best:         %f\n", *snell_best);
+    fprintf(stderr, "dbg2  Return status:\n");
+    fprintf(stderr, "dbg2       mbev_status:        %d\n", mbev_status);
+  }
+}
+/*--------------------------------------------------------------------*/
+void mbeditviz_mb3dsoundings_optimizebiasvalues(int mode, double *rollbias_best, double *pitchbias_best, double *headingbias_best,
+                                                double *timelag_best, double *snell_best) {
+  if (mbev_verbose > 0)
+    fprintf(stderr, "mbeditviz_mb3dsoundings_optimizebiasvalues: %d\n", mode);
+
+  if (mbev_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  Function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2  Input arguments:\n");
+    fprintf(stderr, "dbg2       mode:       %d\n", mode);
+    fprintf(stderr, "dbg2       rollbias_best:       %f\n", *rollbias_best);
+    fprintf(stderr, "dbg2       pitchbias_best:      %f\n", *pitchbias_best);
+    fprintf(stderr, "dbg2       headingbias_best:    %f\n", *headingbias_best);
+    fprintf(stderr, "dbg2       timelag_best:        %f\n", *timelag_best);
+    fprintf(stderr, "dbg2       snell_best:          %f\n", *snell_best);
+  }
+
+  /* get and save initial bias values */
+  // const double rollbias_org = *rollbias_best;
+  // const double pitchbias_org = *pitchbias_best;
+  // const double headingbias_org = *headingbias_best;
+  // const double timelag_org = *timelag_best;
+  // const double snell_org = *snell_best;
+
+  /* create grid of bins to calculate variance */
+  const double local_grid_dx = 2 * mbev_grid.dx;
+  const double local_grid_dy = 2 * mbev_grid.dy;
+  const double local_grid_xmin = mbev_selected.xmin - 0.25 * (mbev_selected.xmax - mbev_selected.xmin);
+  double local_grid_xmax = mbev_selected.xmax + 0.25 * (mbev_selected.xmax - mbev_selected.xmin);
+  const double local_grid_ymin = mbev_selected.ymin - 0.25 * (mbev_selected.ymax - mbev_selected.ymin);
+  double local_grid_ymax = mbev_selected.ymax + 0.25 * (mbev_selected.ymax - mbev_selected.ymin);
+  const int local_grid_n_columns = (local_grid_xmax - local_grid_xmin) / local_grid_dx + 1;
+  const int local_grid_n_rows = (local_grid_ymax - local_grid_ymin) / local_grid_dy + 1;
+  local_grid_xmax = local_grid_xmin + local_grid_n_columns * local_grid_dx;
+  local_grid_ymax = local_grid_ymin + local_grid_n_rows * local_grid_dy;
+
+  /* allocate arrays for calculating variance */
+  const size_t size_double = local_grid_n_columns * local_grid_n_rows * sizeof(double);
+  const size_t size_int = local_grid_n_columns * local_grid_n_rows * sizeof(int);
+  double *local_grid_first = NULL;
+  mbev_status = mb_mallocd(mbev_verbose, __FILE__, __LINE__, size_double, (void **)&local_grid_first, &mbev_error);
+  double *local_grid_sum = NULL;
+  mbev_status = mb_mallocd(mbev_verbose, __FILE__, __LINE__, size_double, (void **)&local_grid_sum, &mbev_error);
+  double *local_grid_sum2 = NULL;
+  mbev_status = mb_mallocd(mbev_verbose, __FILE__, __LINE__, size_double, (void **)&local_grid_sum2, &mbev_error);
+  double *local_grid_variance = NULL;
+  mbev_status = mb_mallocd(mbev_verbose, __FILE__, __LINE__, size_double, (void **)&local_grid_variance, &mbev_error);
+  int *local_grid_num = NULL;
+  mbev_status = mb_mallocd(mbev_verbose, __FILE__, __LINE__, size_int, (void **)&local_grid_num, &mbev_error);
+
+  /* now loop over all different values of bias parameters looking for the
+   * combination that minimizes the overall variance
+   * - if a good set of values is found (measured by variace reduction)
+   * then set the values and apply them before returning */
+  fprintf(stderr,"\nMBeditviz: Optimizing Bias Parameters\n");
+  fprintf(stderr,"  Number of selected soundings: %d\n", mbev_selected.num_soundings);
+if (mode == MB3DSDG_OPTIMIZEBIASVALUES_R)
+    fprintf(stderr,"  Mode: Roll Bias\n");
+  else if (mode == MB3DSDG_OPTIMIZEBIASVALUES_P)
+    fprintf(stderr,"  Mode: Pitch Bias\n");
+  else if (mode == MB3DSDG_OPTIMIZEBIASVALUES_H)
+    fprintf(stderr,"  Mode: Heading Bias\n");
+  else if (mode == MB3DSDG_OPTIMIZEBIASVALUES_RP)
+    fprintf(stderr,"  Mode: Roll Bias and Pitch Bias\n");
+  else if (mode == MB3DSDG_OPTIMIZEBIASVALUES_RPH)
+    fprintf(stderr,"  Mode: Roll Bias and Pitch Bias and Heading Bias\n");
+  else if (mode == MB3DSDG_OPTIMIZEBIASVALUES_T)
+    fprintf(stderr,"  Mode: Time Lag\n");
+  else if (mode == MB3DSDG_OPTIMIZEBIASVALUES_S)
+    fprintf(stderr,"  Mode: Snell Correction\n");
+  fprintf(stderr,"------------------------\n");
+
+  bool first = true;
+  mb_path message_string = "";
+  double variance_best = 0.0;
+  char *marker1 = "  ";
+  char *marker2 = "**";
+  char *marker = NULL;
+
+  /* Roll bias */
+  if (mode & MB3DSDG_OPTIMIZEBIASVALUES_R) {
+  	/* define starting values and initial search width */
+  	double drollbias = 1.0;
+  	double target_width = 0.01;
+  	double rollbias = *rollbias_best;
+  	double rollbias_a = *rollbias_best - drollbias;
+  	double rollbias_b = *rollbias_best;
+  	double rollbias_c = *rollbias_best + drollbias;
+  	double pitchbias = *pitchbias_best;
+    double headingbias = *headingbias_best;
+    double timelag = *timelag_best;
+    double snell = *snell_best;
+    int variance_num = 0;
+    double variance = 0.0;
+    double variance_a = 0.0;
+    double variance_b = 0.0;
+    double variance_c = 0.0;
+    bool done = false;
+    
+    /* look for an initial bracket of a minimum */
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias_a,
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_a);
+	*rollbias_best = rollbias_a;
+	variance_best = variance_a;
+	marker = marker2;
+	fprintf(stderr, "ROLLBIAS:    | %6.3f  N:%d StDev:%6.3f %s |\n", rollbias_a, variance_num, sqrt(variance_a), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Roll Bias:%.2f StdDev: %.3f %.3f", 
+			rollbias_a, sqrt(variance_a), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias_b,
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_b);
+	if (variance_num > 0 && (variance_b < variance_best)) {
+	  *rollbias_best = rollbias_b;
+	  variance_best = variance_b;
+	  marker = marker2;
+	}
+	else
+	  marker = marker1;
+	fprintf(stderr, "ROLLBIAS:    | %6.3f  N:%d StDev:%6.3f %s |\n", rollbias_b, variance_num, sqrt(variance_b), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Roll Bias:%.2f StdDev: %.3f %.3f", 
+			rollbias_b, sqrt(variance_b), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias_c,
+          pitchbias, headingbias, timelag, snell, &variance_num, &variance_c);
+	if (variance_num > 0 && (variance_c < variance_best)) {
+	  *rollbias_best = rollbias_c;
+	  variance_best = variance_c;
+	  marker = marker2;
+	}
+	else
+	  marker = marker1;
+	fprintf(stderr, "ROLLBIAS:    | %6.3f  N:%d StDev:%6.3f %s |\n", rollbias_c, variance_num, sqrt(variance_c), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Roll Bias:%.2f StdDev: %.3f %.3f", rollbias_c, variance_c,
+			variance_best);
+	(*showMessage)(message_string);
+
+    if (variance_num > 0) {
+      if (variance_a > variance_b && variance_b < variance_c) {
+      	done = true;
+      }
+      while (!done) {
+        if (variance_a < variance_b) {
+          rollbias_c = rollbias_b;
+          variance_c = variance_b;
+          rollbias_b = rollbias_a;
+          variance_b = variance_a;
+          rollbias_a = rollbias_b - drollbias;
+		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias_a,
+				pitchbias, headingbias, timelag, snell, &variance_num, &variance_a);
+		  rollbias = rollbias_a;
+		  variance = variance_a;
+		  if (variance_num > 0 && (variance_a < variance_best)) {
+			*rollbias_best = rollbias_a;
+			variance_best = variance_a;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+        }
+        else { // variance_b > variance_c
+          rollbias_a = rollbias_b;
+          variance_a = variance_b;
+          rollbias_b = rollbias_c;
+          variance_b = variance_c;
+          rollbias_c = rollbias_b + drollbias;
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias_c,
+				pitchbias, headingbias, timelag, snell, &variance_num, &variance_c);
+		  rollbias = rollbias_c;
+		  variance = variance_c;
+		  if (variance_num > 0 && (variance_c < variance_best)) {
+			*rollbias_best = rollbias_c;
+			variance_best = variance_c;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+        }
+		fprintf(stderr, "ROLLBIAS:    | %6.3f  N:%d StDev:%6.3f %s | R: < %6.3f %6.3f %6.3f > | StDev: < %6.3f  %6.3f %6.3f > |\n", 
+				rollbias, variance_num, sqrt(variance), marker, 
+				rollbias_a, rollbias_b, rollbias_c, 
+				sqrt(variance_a), sqrt(variance_b), sqrt(variance_c));
+		snprintf(message_string, sizeof(message_string), "Optimizing Roll Bias:%.2f StdDev: %.3f %.3f", 
+		  			rollbias, sqrt(variance), sqrt(variance_best));
+        if (variance_a > variance_b && variance_b < variance_c) {
+      	  done = true;
+        }
+      }
+
+	  /* Now iterate on reducing the bracket size */
+	  done = false;
+	  while (!done) {
+	  	if (variance_a > variance_c) {
+	  	  rollbias = rollbias_a + GOLDEN_MEAN_LARGE * (rollbias_b - rollbias_a);
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+				pitchbias, headingbias, timelag, snell, &variance_num, &variance);
+		  if (variance_num > 0 && (variance < variance_best)) {
+			*rollbias_best = rollbias;
+			variance_best = variance;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+		  if (variance < variance_b) {
+		    rollbias_c = rollbias_b;
+		    variance_c = variance_b;
+		    rollbias_b = rollbias;
+		    variance_b = variance;
+		  }
+		  else {
+		    rollbias_a = rollbias;
+		    variance_a = variance;
+		  }
+	  	}
+	  	else {
+	  	  rollbias = rollbias_b + GOLDEN_MEAN_SMALL * (rollbias_c - rollbias_b);
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+				pitchbias, headingbias, timelag, snell, &variance_num, &variance);
+		  if (variance_num > 0 && (variance < variance_best)) {
+			*rollbias_best = rollbias;
+			variance_best = variance;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+		  if (variance < variance_b) {
+		    rollbias_a = rollbias_b;
+		    variance_a = variance_b;
+		    rollbias_b = rollbias;
+		    variance_b = variance;
+		  }
+		  else {
+		    rollbias_c = rollbias;
+		    variance_c = variance;
+		  }
+	  	}
+		fprintf(stderr, "ROLLBIAS:    | %6.3f  N:%d StDev:%6.3f %s | R: < %6.3f %6.3f %6.3f > | StDev: < %6.3f  %6.3f %6.3f > |\n",
+				rollbias, variance_num, sqrt(variance), marker, 
+				rollbias_a, rollbias_b, rollbias_c, 
+				sqrt(variance_a), sqrt(variance_b), sqrt(variance_c));
+		snprintf(message_string, sizeof(message_string), "Optimizing Roll Bias:%.2f StdDev: %.3f %.3f", 
+		  			rollbias, sqrt(variance), sqrt(variance_best));
+		(*showMessage)(message_string);
+	  	if (rollbias_c - rollbias_a < target_width) {
+	  	  done = true;
+	  	}
+	  }
+	}
+  fprintf(stderr, "------------------------\n");
+  fprintf(stderr, " Best: H:%5.2f R:%5.2f P:%5.2f T:%6.3f S:%6.3f  StDev:%6.3f\n",
+  					*headingbias_best, *rollbias_best, *pitchbias_best, *timelag_best, *snell_best, sqrt(variance_best));
+  fprintf(stderr, "------------------------\n");
+  }
+
+  /* Pitch bias */
+  if (mode & MB3DSDG_OPTIMIZEBIASVALUES_P) {
+  	/* define starting values and initial search width */
+  	double dpitchbias = 1.0;
+  	double target_width = 0.01;
+  	double rollbias = *rollbias_best;
+    double pitchbias = *pitchbias_best;
+  	double pitchbias_a = *pitchbias_best - dpitchbias;
+  	double pitchbias_b = *pitchbias_best;
+  	double pitchbias_c = *pitchbias_best + dpitchbias;
+    double headingbias = *headingbias_best;
+    double timelag = *timelag_best;
+    double snell = *snell_best;
+    int variance_num = 0;
+    double variance = 0.0;
+    double variance_a = 0.0;
+    double variance_b = 0.0;
+    double variance_c = 0.0;
+    bool done = false;
+    
+    /* look for an initial bracket of a minimum */
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          pitchbias_a, headingbias, timelag, snell, &variance_num, &variance_a);
+	*pitchbias_best = pitchbias_a;
+	variance_best = variance_a;
+	marker = marker2;
+	fprintf(stderr, "PITCHBIAS:   | %6.3f  N:%d StDev:%6.3f %s |\n", pitchbias_a, variance_num, sqrt(variance_a), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Pitch Bias:%.2f StdDev: %.3f %.3f", 
+			pitchbias_a, sqrt(variance_a), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          pitchbias_b, headingbias, timelag, snell, &variance_num, &variance_b);
+	if (variance_num > 0 && (variance_b < variance_best)) {
+	  *pitchbias_best = pitchbias_b;
+	  variance_best = variance_b;
+	  marker = marker2;
+	}
+	else
+	  marker = marker1;
+	fprintf(stderr, "PITCHBIAS:   | %6.3f  N:%d StDev:%6.3f %s |\n", pitchbias_b, variance_num, sqrt(variance_b), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Pitch Bias:%.2f StdDev: %.3f %.3f", 
+			pitchbias_b, sqrt(variance_b), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          pitchbias_c, headingbias, timelag, snell, &variance_num, &variance_c);
+	if (variance_num > 0 && (variance_c < variance_best)) {
+	  *pitchbias_best = pitchbias_c;
+	  variance_best = variance_c;
+	  marker = marker2;
+	}
+	else
+	  marker = marker1;
+	fprintf(stderr, "PITCHBIAS:   | %6.3f  N:%d StDev:%6.3f %s |\n", pitchbias_c, variance_num, sqrt(variance_c), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Pitch Bias:%.2f StdDev: %.3f %.3f", 
+			pitchbias_c, sqrt(variance_c), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    if (variance_num > 0) {
+      if (variance_a > variance_b && variance_b < variance_c) {
+      	done = true;
+      }
+      while (!done) {
+        if (variance_a < variance_b) {
+          pitchbias_c = pitchbias_b;
+          variance_c = variance_b;
+          pitchbias_b = pitchbias_a;
+          variance_b = variance_a;
+          pitchbias_a = pitchbias_b - dpitchbias;
+		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+				pitchbias_a, headingbias, timelag, snell, &variance_num, &variance_a);
+		  pitchbias = pitchbias_a;
+		  variance = variance_a;
+		  if (variance_num > 0 && (variance_a < variance_best)) {
+			*pitchbias_best = pitchbias_a;
+			variance_best = variance_a;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+        }
+        else { // variance_b > variance_c
+          pitchbias_a = pitchbias_b;
+          variance_a = variance_b;
+          pitchbias_b = pitchbias_c;
+          variance_b = variance_c;
+          pitchbias_c = pitchbias_b + dpitchbias;
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+				pitchbias_c, headingbias, timelag, snell, &variance_num, &variance_c);
+		  pitchbias = pitchbias_c;
+		  variance = variance_c;
+		  if (variance_num > 0 && (variance_c < variance_best)) {
+			*pitchbias_best = pitchbias_c;
+			variance_best = variance_c;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+        }
+		fprintf(stderr, "PITCHBIAS:   | %6.3f  N:%d StDev:%6.3f %s | P: < %6.3f %6.3f %6.3f > | StDev: < %6.3f  %6.3f %6.3f > |\n", 
+				pitchbias, variance_num, sqrt(variance), marker, 
+				pitchbias_a, pitchbias_b, pitchbias_c, 
+				sqrt(variance_a), sqrt(variance_b), sqrt(variance_c));
+		snprintf(message_string, sizeof(message_string), "Optimizing Pitch Bias:%.2f StdDev: %.3f %.3f", 
+		  			pitchbias, sqrt(variance), sqrt(variance_best));
+        if (variance_a > variance_b && variance_b < variance_c) {
+      	  done = true;
+        }
+      }
+
+	  /* Now iterate on reducing the bracket size */
+	  done = false;
+	  while (!done) {
+	  	if (variance_a > variance_c) {
+	  	  pitchbias = pitchbias_a + GOLDEN_MEAN_LARGE * (pitchbias_b - pitchbias_a);
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+				pitchbias, headingbias, timelag, snell, &variance_num, &variance);
+		  if (variance_num > 0 && (variance < variance_best)) {
+			*pitchbias_best = pitchbias;
+			variance_best = variance;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+		  if (variance < variance_b) {
+		    pitchbias_c = pitchbias_b;
+		    variance_c = variance_b;
+		    pitchbias_b = pitchbias;
+		    variance_b = variance;
+		  }
+		  else {
+		    pitchbias_a = pitchbias;
+		    variance_a = variance;
+		  }
+	  	}
+	  	else {
+	  	  pitchbias = pitchbias_b + GOLDEN_MEAN_SMALL * (pitchbias_c - pitchbias_b);
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+				pitchbias, headingbias, timelag, snell, &variance_num, &variance);
+		  if (variance_num > 0 && (variance < variance_best)) {
+			*pitchbias_best = pitchbias;
+			variance_best = variance;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+		  if (variance < variance_b) {
+		    pitchbias_a = pitchbias_b;
+		    variance_a = variance_b;
+		    pitchbias_b = pitchbias;
+		    variance_b = variance;
+		  }
+		  else {
+		    pitchbias_c = pitchbias;
+		    variance_c = variance;
+		  }
+	  	}
+		fprintf(stderr, "PITCHBIAS:   | %6.3f  N:%d StDev:%6.3f %s | P: < %6.3f %6.3f %6.3f > | StDev: < %6.3f  %6.3f %6.3f > |\n",
+				pitchbias, variance_num, sqrt(variance), marker, 
+				pitchbias_a, pitchbias_b, pitchbias_c, 
+				sqrt(variance_a), sqrt(variance_b), sqrt(variance_c));
+		snprintf(message_string, sizeof(message_string), "Optimizing Pitch Bias:%.2f StdDev: %.3f %.3f", 
+		  			pitchbias, sqrt(variance), sqrt(variance_best));
+		(*showMessage)(message_string);
+	  	if (pitchbias_c - pitchbias_a < target_width) {
+	  	  done = true;
+	  	}
+	  }
+	}
+  fprintf(stderr, "------------------------\n");
+  fprintf(stderr, " Best: H:%5.2f R:%5.2f P:%5.2f T:%6.3f S:%6.3f  StDev:%6.3f\n",
+  					*headingbias_best, *rollbias_best, *pitchbias_best, *timelag_best, *snell_best, sqrt(variance_best));
+  fprintf(stderr, "------------------------\n");
+  }
+
+  /* Heading bias */
+  if (mode & MB3DSDG_OPTIMIZEBIASVALUES_H) {
+  	/* define starting values and initial search width */
+  	double rollbias = *rollbias_best;
+    double pitchbias = *pitchbias_best;
+  	double dheadingbias = 1.0;
+  	double target_width = 0.05;
+  	double headingbias = *headingbias_best;
+  	double headingbias_a = *headingbias_best - dheadingbias;
+  	double headingbias_b = *headingbias_best;
+  	double headingbias_c = *headingbias_best + dheadingbias;
+    double timelag = *timelag_best;
+    double snell = *snell_best;
+    int variance_num = 0;
+    double variance = 0.0;
+    double variance_a = 0.0;
+    double variance_b = 0.0;
+    double variance_c = 0.0;
+    bool done = false;
+        
+    /* look for an initial bracket of a minimum */
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          pitchbias, headingbias_a, timelag, snell, &variance_num, &variance_a);
+	*headingbias_best = headingbias_a;
+	variance_best = variance_a;
+	marker = marker2;
+	fprintf(stderr, "HEADINGBIAS: | %6.3f  N:%d StDev:%6.3f %s |\n", headingbias_a, variance_num, sqrt(variance_a), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Heading Bias:%.2f StdDev: %.3f %.3f", 
+			headingbias_a, sqrt(variance_a), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          pitchbias, headingbias_b, timelag, snell, &variance_num, &variance_b);
+	if (variance_num > 0 && (variance_b < variance_best)) {
+	  *headingbias_best = headingbias_b;
+	  variance_best = variance_b;
+	  marker = marker2;
+	}
+	else
+	  marker = marker1;
+	fprintf(stderr, "HEADINGBIAS: | %6.3f  N:%d StDev:%6.3f %s |\n", headingbias_b, variance_num, sqrt(variance_b), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Heading Bias:%.2f StdDev: %.3f %.3f", 
+			headingbias_b, sqrt(variance_b), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          pitchbias, headingbias_c, timelag, snell, &variance_num, &variance_c);
+	if (variance_num > 0 && (variance_c < variance_best)) {
+	  *headingbias_best = headingbias_c;
+	  variance_best = variance_c;
+	  marker = marker2;
+	}
+	else
+	  marker = marker1;
+	fprintf(stderr, "HEADINGBIAS: | %6.3f  N:%d StDev:%6.3f %s |\n", headingbias_c, variance_num, sqrt(variance_c), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Heading Bias:%.2f StdDev: %.3f %.3f", 
+			headingbias_c, sqrt(variance_c), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    if (variance_num > 0) {
+      if (variance_a > variance_b && variance_b < variance_c) {
+      	done = true;
+      }
+      while (!done) {
+        if (variance_a < variance_b) {
+          headingbias_c = headingbias_b;
+          variance_c = variance_b;
+          headingbias_b = headingbias_a;
+          variance_b = variance_a;
+          headingbias_a = headingbias_b - dheadingbias;
+		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+				pitchbias, headingbias_a, timelag, snell, &variance_num, &variance_a);
+		  headingbias = headingbias_a;
+		  variance = variance_a;
+		  if (variance_num > 0 && (variance_a < variance_best)) {
+			*headingbias_best = headingbias_a;
+			variance_best = variance_a;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+        }
+        else { // variance_b > variance_c
+          headingbias_a = headingbias_b;
+          variance_a = variance_b;
+          headingbias_b = headingbias_c;
+          variance_b = variance_c;
+          headingbias_c = headingbias_b + dheadingbias;
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+				pitchbias, headingbias_c, timelag, snell, &variance_num, &variance_c);
+		  headingbias = headingbias_c;
+		  variance = variance_c;
+		  if (variance_num > 0 && (variance_c < variance_best)) {
+			*headingbias_best = headingbias_c;
+			variance_best = variance_c;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+        }
+		fprintf(stderr, "HEADINGBIAS: | %6.3f  N:%d StDev:%6.3f %s | H: < %6.3f %6.3f %6.3f > | StDev: < %6.3f  %6.3f %6.3f > |\n", 
+				headingbias, variance_num, sqrt(variance), marker, 
+				headingbias_a, headingbias_b, headingbias_c, 
+				sqrt(variance_a), sqrt(variance_b), sqrt(variance_c));
+		snprintf(message_string, sizeof(message_string), "Optimizing Heading Bias:%.2f StdDev: %.3f %.3f", 
+		  			headingbias, sqrt(variance), sqrt(variance_best));
+        if (variance_a > variance_b && variance_b < variance_c) {
+      	  done = true;
+        }
+      }
+
+	  /* Now iterate on reducing the bracket size */
+	  done = false;
+	  while (!done) {
+	  	if (variance_a > variance_c) {
+	  	  headingbias = headingbias_a + GOLDEN_MEAN_LARGE * (headingbias_b - headingbias_a);
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+				pitchbias, headingbias, timelag, snell, &variance_num, &variance);
+		  if (variance_num > 0 && (variance < variance_best)) {
+			*headingbias_best = headingbias;
+			variance_best = variance;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+		  if (variance < variance_b) {
+		    headingbias_c = headingbias_b;
+		    variance_c = variance_b;
+		    headingbias_b = headingbias;
+		    variance_b = variance;
+		  }
+		  else {
+		    headingbias_a = headingbias;
+		    variance_a = variance;
+		  }
+	  	}
+	  	else {
+	  	  headingbias = headingbias_b + GOLDEN_MEAN_SMALL * (headingbias_c - headingbias_b);
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+				pitchbias, headingbias, timelag, snell, &variance_num, &variance);
+		  if (variance_num > 0 && (variance < variance_best)) {
+			*headingbias_best = headingbias;
+			variance_best = variance;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+		  if (variance < variance_b) {
+		    headingbias_a = headingbias_b;
+		    variance_a = variance_b;
+		    headingbias_b = headingbias;
+		    variance_b = variance;
+		  }
+		  else {
+		    headingbias_c = headingbias;
+		    variance_c = variance;
+		  }
+	  	}
+		fprintf(stderr, "HEADINGBIAS: | %6.3f  N:%d StDev:%6.3f %s | h: < %5.3f %5.3f %5.3f > | stdev: < %6.3f  %6.3f %6.3f > |\n",
+				headingbias, variance_num, sqrt(variance), marker, 
+				headingbias_a, headingbias_b, headingbias_c, 
+				sqrt(variance_a), sqrt(variance_b), sqrt(variance_c));
+		snprintf(message_string, sizeof(message_string), "Optimizing Heading Bias:%.2f StdDev: %.3f %.3f", 
+		  			headingbias, sqrt(variance), sqrt(variance_best));
+		(*showMessage)(message_string);
+	  	if (headingbias_c - headingbias_a < target_width) {
+	  	  done = true;
+	  	}
+	  }
+	}
+  fprintf(stderr, "------------------------\n");
+  fprintf(stderr, " Best: H:%5.2f R:%5.2f P:%5.2f T:%6.3f S:%6.3f  StDev:%6.3f\n",
+  					*headingbias_best, *rollbias_best, *pitchbias_best, *timelag_best, *snell_best, sqrt(variance_best));
+  fprintf(stderr, "------------------------\n");
+  }
+
+  /* Time Lag */
+  if (mode & MB3DSDG_OPTIMIZEBIASVALUES_T) {
+  	/* define starting values and initial search width */
+  	double rollbias = *rollbias_best;
+    double pitchbias = *pitchbias_best;
+  	double headingbias = *headingbias_best;
+  	double dtimelag = 1.0;
+  	double target_width = 0.05;
+  	double timelag_a = *timelag_best - dtimelag;
+  	double timelag_b = *timelag_best;
+  	double timelag_c = *timelag_best + dtimelag;
+    double timelag = *timelag_best;
+    double snell = *snell_best;
+    int variance_num = 0;
+    double variance = 0.0;
+    double variance_a = 0.0;
+    double variance_b = 0.0;
+    double variance_c = 0.0;
+    bool done = false;
+    
+    /* look for an initial bracket of a minimum */
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          pitchbias, headingbias, timelag_a, snell, &variance_num, &variance_a);
+	*timelag_best = timelag_a;
+	variance_best = variance_a;
+	marker = marker2;
+	fprintf(stderr, "TIMELAG:     | %6.3f  N:%d StDev:%6.3f %s |\n", timelag_a, variance_num, sqrt(variance_a), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Time Lag:%.2f StdDev: %.3f %.3f", 
+			timelag_a, sqrt(variance_a), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          pitchbias, headingbias, timelag_b, snell, &variance_num, &variance_b);
+	if (variance_num > 0 && (variance_b < variance_best)) {
+	  *timelag_best = timelag_b;
+	  variance_best = variance_b;
+	  marker = marker2;
+	}
+	else
+	  marker = marker1;
+	fprintf(stderr, "TIMELAG:     | %6.3f  N:%d StDev:%6.3f %s |\n", timelag_b, variance_num, sqrt(variance_b), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Time Lag:%.2f StdDev: %.3f %.3f", 
+			timelag_b, sqrt(variance_b), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          pitchbias, headingbias, timelag_c, snell, &variance_num, &variance_c);
+	if (variance_num > 0 && (variance_c < variance_best)) {
+	  *timelag_best = timelag_c;
+	  variance_best = variance_c;
+	}
+	else
+	  marker = marker1;
+	fprintf(stderr, "TIMELAG:     | %6.3f  N:%d StDev:%6.3f %s |\n", timelag_c, variance_num, sqrt(variance_c), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Time Lag:%.2f StdDev: %.3f %.3f", 
+			timelag_c, sqrt(variance_c), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    if (variance_num > 0) {
+      if (variance_a > variance_b && variance_b < variance_c) {
+      	done = true;
+      }
+      while (!done) {
+        if (variance_a < variance_b) {
+          timelag_c = timelag_b;
+          variance_c = variance_b;
+          timelag_b = timelag_a;
+          variance_b = variance_a;
+          timelag_a = timelag_b - dtimelag;
+		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          		pitchbias, headingbias, timelag_a, snell, &variance_num, &variance_a);
+		  timelag = timelag_a;
+		  variance = variance_a;
+		  if (variance_num > 0 && (variance_a < variance_best)) {
+			*timelag_best = timelag_a;
+			variance_best = variance_a;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+        }
+        else { // variance_b > variance_c
+          timelag_a = timelag_b;
+          variance_a = variance_b;
+          timelag_b = timelag_c;
+          variance_b = variance_c;
+          timelag_c = timelag_b + dtimelag;
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          		pitchbias, headingbias, timelag_c, snell, &variance_num, &variance_c);
+		  timelag = timelag_c;
+		  variance = variance_c;
+		  if (variance_num > 0 && (variance_c < variance_best)) {
+			*timelag_best = timelag_c;
+			variance_best = variance_c;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+        }
+		fprintf(stderr, "TIMELAG:     | %6.3f  N:%d StDev:%6.3f %s | T: < %6.3f %6.3f %6.3f > | StDev: < %6.3f  %6.3f %6.3f > |\n", 
+				timelag, variance_num, sqrt(variance), marker, 
+				timelag_a, timelag_b, timelag_c, 
+				sqrt(variance_a), sqrt(variance_b), sqrt(variance_c));
+		snprintf(message_string, sizeof(message_string), "Optimizing Time Lag:%.2f StdDev: %.3f %.3f", 
+		  			timelag, sqrt(variance), sqrt(variance_best));
+        if (variance_a > variance_b && variance_b < variance_c) {
+      	  done = true;
+        }
+      }
+
+	  /* Now iterate on reducing the bracket size */
+	  done = false;
+	  while (!done) {
+	  	if (variance_a > variance_c) {
+	  	  timelag = timelag_a + GOLDEN_MEAN_LARGE * (timelag_b - timelag_a);
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          		pitchbias, headingbias, timelag, snell, &variance_num, &variance);
+		  if (variance_num > 0 && (variance < variance_best)) {
+			*timelag_best = timelag;
+			variance_best = variance;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+		  if (variance < variance_b) {
+		    timelag_c = timelag_b;
+		    variance_c = variance_b;
+		    timelag_b = timelag;
+		    variance_b = variance;
+		  }
+		  else {
+		    timelag_a = timelag;
+		    variance_a = variance;
+		  }
+	  	}
+	  	else {
+	  	  timelag = timelag_b + GOLDEN_MEAN_SMALL * (timelag_c - timelag_b);
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          		pitchbias, headingbias, timelag, snell, &variance_num, &variance);
+		  if (variance_num > 0 && (variance < variance_best)) {
+			*timelag_best = timelag;
+			variance_best = variance;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+		  if (variance < variance_b) {
+		    timelag_a = timelag_b;
+		    variance_a = variance_b;
+		    timelag_b = timelag;
+		    variance_b = variance;
+		  }
+		  else {
+		    timelag_c = timelag;
+		    variance_c = variance;
+		  }
+	  	}
+		fprintf(stderr, "TIMELAG:     | %6.3f  N:%d StDev:%6.3f %s | T: < %6.3f %6.3f %6.3f > | StDev: < %6.3f  %6.3f %6.3f > |\n",
+				timelag, variance_num, sqrt(variance), marker, 
+				timelag_a, timelag_b, timelag_c, 
+				sqrt(variance_a), sqrt(variance_b), sqrt(variance_c));
+		snprintf(message_string, sizeof(message_string), "Optimizing Time Lag:%.2f StdDev: %.3f %.3f", 
+		  			timelag, sqrt(variance), sqrt(variance_best));
+		(*showMessage)(message_string);
+	  	if (timelag_c - timelag_a < target_width) {
+	  	  done = true;
+	  	}
+	  }
+	}
+  fprintf(stderr, "------------------------\n");
+  fprintf(stderr, " Best: H:%5.2f R:%5.2f P:%5.2f T:%6.3f S:%6.3f  StDev:%6.3f\n",
+  					*headingbias_best, *rollbias_best, *pitchbias_best, *timelag_best, *snell_best, sqrt(variance_best));
+  fprintf(stderr, "------------------------\n");
+  }
+
+  /* Snell */
+  if (mode & MB3DSDG_OPTIMIZEBIASVALUES_S) {
+  	/* define starting values and initial search width */
+  	double rollbias = *rollbias_best;
+    double pitchbias = *pitchbias_best;
+  	double headingbias = *headingbias_best;
+    double timelag = *timelag_best;
+  	double dsnell = 0.01;
+  	double target_width = 0.001;
+  	double snell_a = *snell_best - dsnell;
+  	double snell_b = *snell_best;
+  	double snell_c = *snell_best + dsnell;
+    double snell = *snell_best;
+    int variance_num = 0;
+    double variance = 0.0;
+    double variance_a = 0.0;
+    double variance_b = 0.0;
+    double variance_c = 0.0;
+    bool done = false;
+    
+    /* look for an initial bracket of a minimum */
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          pitchbias, headingbias, timelag, snell_a, &variance_num, &variance_a);
+	*snell_best = snell_a;
+	variance_best = variance_a;
+	marker = marker2;
+	fprintf(stderr, "SNELL:       | %6.3f  N:%d StDev:%6.3f %s |\n", snell_a, variance_num, sqrt(variance_a), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Snell Factor:%.2f StdDev: %.3f %.3f", 
+			snell_a, sqrt(variance_a), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          pitchbias, headingbias, timelag, snell_b, &variance_num, &variance_b);
+	if (variance_num > 0 && (variance_b < variance_best)) {
+	  *snell_best = snell_b;
+	  variance_best = variance_b;
+	  marker = marker2;
+	}
+	else
+	  marker = marker1;
+	fprintf(stderr, "SNELL:       | %6.3f  N:%d StDev:%6.3f %s |\n", snell_b, variance_num, sqrt(variance_b), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Snell Factor:%.2f StdDev: %.3f %.3f", 
+			snell_b, sqrt(variance_b), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    mbeditviz_mb3dsoundings_getbiasvariance(
+          local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+          local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          pitchbias, headingbias, timelag, snell_c, &variance_num, &variance_c);
+	if (variance_num > 0 && (variance_c < variance_best)) {
+	  *snell_best = snell_c;
+	  variance_best = variance_c;
+	  marker = marker2;
+	}
+	else
+	  marker = marker1;
+	fprintf(stderr, "SNELL:       | %6.3f  N:%d StDev:%6.3f %s |\n", snell_c, variance_num, sqrt(variance_c), marker);
+	snprintf(message_string, sizeof(message_string), "Optimizing Snell Factor:%.2f StdDev: %.3f %.3f", 
+			snell_c, sqrt(variance_c), sqrt(variance_best));
+	(*showMessage)(message_string);
+
+    if (variance_num > 0) {
+      if (variance_a > variance_b && variance_b < variance_c) {
+      	done = true;
+      }
+      while (!done) {
+        if (variance_a < variance_b) {
+          snell_c = snell_b;
+          variance_c = variance_b;
+          snell_b = snell_a;
+          variance_b = variance_a;
+          snell_a = snell_b - dsnell;
+		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          		pitchbias, headingbias, timelag, snell_a, &variance_num, &variance_a);
+		  snell = snell_a;
+		  variance = variance_a;
+		  if (variance_num > 0 && (variance_a < variance_best)) {
+			*snell_best = snell_a;
+			variance_best = variance_a;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+        }
+        else { // variance_b > variance_c
+          snell_a = snell_b;
+          variance_a = variance_b;
+          snell_b = snell_c;
+          variance_b = variance_c;
+          snell_c = snell_b + dsnell;
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          		pitchbias, headingbias, timelag, snell_c, &variance_num, &variance_c);
+		  snell = snell_c;
+		  variance = variance_c;
+		  if (variance_num > 0 && (variance_c < variance_best)) {
+			*snell_best = snell_c;
+			variance_best = variance_c;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+        }
+		fprintf(stderr, "SNELL:       | %6.3f  N:%d StDev:%6.3f %s | S: < %6.3f %6.3f %6.3f > | StDev: < %6.3f  %6.3f %6.3f > |\n", 
+				snell, variance_num, sqrt(variance), marker, 
+				snell_a, snell_b, snell_c, 
+				sqrt(variance_a), sqrt(variance_b), sqrt(variance_c));
+		snprintf(message_string, sizeof(message_string), "Optimizing Snell Factor:%.2f StdDev: %.3f %.3f", 
+		  			snell, sqrt(variance), sqrt(variance_best));
+        if (variance_a > variance_b && variance_b < variance_c) {
+      	  done = true;
+        }
+      }
+
+	  /* Now iterate on reducing the bracket size */
+	  done = false;
+	  while (!done) {
+	  	if (variance_a > variance_c) {
+	  	  snell = snell_a + GOLDEN_MEAN_LARGE * (snell_b - snell_a);
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          		pitchbias, headingbias, timelag, snell, &variance_num, &variance);
+		  if (variance_num > 0 && (variance < variance_best)) {
+			*snell_best = snell;
+			variance_best = variance;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+		  if (variance < variance_b) {
+		    snell_c = snell_b;
+		    variance_c = variance_b;
+		    snell_b = snell;
+		    variance_b = variance;
+		  }
+		  else {
+		    snell_a = snell;
+		    variance_a = variance;
+		  }
+	  	}
+	  	else {
+	  	  snell = snell_b + GOLDEN_MEAN_SMALL * (snell_c - snell_b);
+ 		  mbeditviz_mb3dsoundings_getbiasvariance(
+				local_grid_xmin, local_grid_xmax, local_grid_ymin, local_grid_ymax, local_grid_n_columns, local_grid_n_rows, local_grid_dx,
+				local_grid_dy, local_grid_first, local_grid_sum, local_grid_sum2, local_grid_variance, local_grid_num, rollbias,
+          		pitchbias, headingbias, timelag, snell, &variance_num, &variance);
+		  if (variance_num > 0 && (variance < variance_best)) {
+			*snell_best = snell;
+			variance_best = variance;
+			marker = marker2;
+		  }
+		  else
+			marker = marker1;
+		  if (variance < variance_b) {
+		    snell_a = snell_b;
+		    variance_a = variance_b;
+		    snell_b = snell;
+		    variance_b = variance;
+		  }
+		  else {
+		    snell_c = snell;
+		    variance_c = variance;
+		  }
+	  	}
+		fprintf(stderr, "SNELL:       | %6.3f  N:%d StDev:%6.3f %s | S: < %6.3f %6.3f %6.3f > | StDev: < %6.3f  %6.3f %6.3f > |\n",
+				snell, variance_num, sqrt(variance), marker, 
+				snell_a, snell_b, snell_c, 
+				sqrt(variance_a), sqrt(variance_b), sqrt(variance_c));
+		snprintf(message_string, sizeof(message_string), "Optimizing Snell Factor:%.2f StdDev: %.3f %.3f", 
+		  			snell, sqrt(variance), sqrt(variance_best));
+		(*showMessage)(message_string);
+	  	if (snell_c - snell_a < target_width) {
+	  	  done = true;
+	  	}
+	  }
+	}
+  fprintf(stderr, "------------------------\n");
+  fprintf(stderr, " Best: H:%5.2f R:%5.2f P:%5.2f T:%6.3f S:%6.3f  StDev:%6.3f\n",
+  					*headingbias_best, *rollbias_best, *pitchbias_best, *timelag_best, *snell_best, sqrt(variance_best));
+  fprintf(stderr, "------------------------\n");
   }
 
   /* turn off message dialog */
@@ -5039,7 +6099,7 @@ void mbeditviz_mb3dsoundings_getbiasvariance(double local_grid_xmin, double loca
                                              double local_grid_dy, double *local_grid_first, double *local_grid_sum,
                                              double *local_grid_sum2, double *local_grid_variance, int *local_grid_num,
                                              double rollbias, double pitchbias, double headingbias, double timelag, double snell,
-                                             int *variance_total_num, double *variance_total) {
+                                             int *variance_num, double *variance_total) {
   if (mbev_verbose >= 2) {
     fprintf(stderr, "\ndbg2  Function <%s> called\n", __func__);
     fprintf(stderr, "dbg2  Input arguments:\n");
@@ -5068,7 +6128,7 @@ void mbeditviz_mb3dsoundings_getbiasvariance(double local_grid_xmin, double loca
 
   /* initialize variance */
   *variance_total = 0.0;
-  *variance_total_num = 0;
+  *variance_num = 0;
   const size_t size_double = local_grid_n_columns * local_grid_n_rows * sizeof(double);
   const size_t size_int = local_grid_n_columns * local_grid_n_rows * sizeof(int);
   memset(local_grid_first, 0, size_double);
@@ -5100,20 +6160,20 @@ void mbeditviz_mb3dsoundings_getbiasvariance(double local_grid_xmin, double loca
       if (local_grid_num[k] > 0) {
         local_grid_variance[k] =
             (local_grid_sum2[k] - (local_grid_sum[k] * local_grid_sum[k] / local_grid_num[k])) / local_grid_num[k];
-        (*variance_total_num)++;
+        (*variance_num)++;
         (*variance_total) += local_grid_variance[k];
       }
     }
   }
-  if (*variance_total_num > 0)
-    (*variance_total) /= (*variance_total_num);
-  // fprintf(stderr,"variance_total_num:%d variance_total:%f\n",*variance_total_num,*variance_total);
+  if (*variance_num > 0)
+    (*variance_total) /= (*variance_num);
+  // fprintf(stderr,"variance_num:%d variance_total:%f\n",*variance_num,*variance_total);
 
   if (mbev_verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> completed\n", __func__);
     fprintf(stderr, "dbg2  Return values:\n");
     fprintf(stderr, "dbg2       error:               %d\n", mbev_error);
-    fprintf(stderr, "dbg2       variance_total_num:  %d\n", *variance_total_num);
+    fprintf(stderr, "dbg2       variance_num:  %d\n", *variance_num);
     fprintf(stderr, "dbg2       variance_total:      %f\n", *variance_total);
     fprintf(stderr, "dbg2  Return status:\n");
     fprintf(stderr, "dbg2       mbev_status:         %d\n", mbev_status);

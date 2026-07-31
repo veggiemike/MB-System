@@ -1,21 +1,32 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mb_swap.h	6/21/94
  *
- *    Copyright (c) 1993-2020 by
+ *    Copyright (c) 1993-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /**
-   @file
- * mb_swap.h is an include file with macro definitions
- * used to swap bytes for 2 and 4 byte integer values to deal with the
- * differences between "big endian" and "little endian" machines.
+ * @file
+ * @brief Macro definitions to swap 2-byte and 4-byte integers between big-endian and
+ * little-endian machines. 
+ * @details Macro definitions used to swap bytes for 2 and 4 byte integer values to 
+ * deal with the differences between "big endian" and "little endian" machines.
  * The two macros mb_swap_short and mb_swap_long come courtesy of
  * Paul Cohen of Sonatech.
  *

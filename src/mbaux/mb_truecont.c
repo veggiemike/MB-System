@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:  mb_truecont.c  4/21/94
  *
- *    Copyright (c) 1994-2020 by
+ *    Copyright (c) 1994-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * mb_truecontour.c contours a block of multibeam bathymetry data,
@@ -232,8 +242,9 @@ int mb_contour_init(int verbose, struct swath **data, int npings_max, int beams_
   dataptr->isave = NULL;
   dataptr->jsave = NULL;
   if (contour_algorithm == MB_CONTOUR_TRIANGLES) {
-    status &= mb_mallocd(verbose, __FILE__, __LINE__, (4 * ntri_max + 1) * sizeof(double), (void **)&(dataptr->xsave), error);
-    status &= mb_mallocd(verbose, __FILE__, __LINE__, (4 * ntri_max + 1) * sizeof(double), (void **)&(dataptr->ysave), error);
+  	dataptr->nsave_alloc = (4 * ntri_max + 1);
+    status &= mb_mallocd(verbose, __FILE__, __LINE__, dataptr->nsave_alloc * sizeof(double), (void **)&(dataptr->xsave), error);
+    status &= mb_mallocd(verbose, __FILE__, __LINE__, dataptr->nsave_alloc * sizeof(double), (void **)&(dataptr->ysave), error);
   }
   else {
     dataptr->npts = 0;
@@ -668,6 +679,12 @@ int mb_triangulate(int verbose, struct swath *data, int *error) {
     status &= mb_reallocd(verbose, __FILE__, __LINE__, data->npts_alloc * sizeof(double), (void **)&data->x, error);
     status &= mb_reallocd(verbose, __FILE__, __LINE__, data->npts_alloc * sizeof(double), (void **)&data->y, error);
     status &= mb_reallocd(verbose, __FILE__, __LINE__, data->npts_alloc * sizeof(double), (void **)&data->z, error);
+    memset(data->edge, 0, data->npts_alloc * sizeof(int));
+    memset(data->pingid, 0, data->npts_alloc * sizeof(int));
+    memset(data->beamid, 0, data->npts_alloc * sizeof(int));
+    memset(data->x, 0, data->npts_alloc * sizeof(double));
+    memset(data->y, 0, data->npts_alloc * sizeof(double));
+    memset(data->z, 0, data->npts_alloc * sizeof(double));
   }
   if (ntri_cnt > data->ntri_alloc) {
     data->ntri_alloc = ntri_cnt;
@@ -677,6 +694,11 @@ int mb_triangulate(int verbose, struct swath *data, int *error) {
       status &= mb_reallocd(verbose, __FILE__, __LINE__, ntri_cnt * sizeof(int), (void **)&(data->cs[i]), error);
       status &= mb_reallocd(verbose, __FILE__, __LINE__, ntri_cnt * sizeof(int), (void **)&(data->ed[i]), error);
       status &= mb_reallocd(verbose, __FILE__, __LINE__, ntri_cnt * sizeof(int), (void **)&(data->flag[i]), error);
+      memset(data->iv[i], 0, ntri_cnt * sizeof(int));
+      memset(data->ct[i], 0, ntri_cnt * sizeof(int));
+      memset(data->cs[i], 0, ntri_cnt * sizeof(int));
+      memset(data->ed[i], 0, ntri_cnt * sizeof(int));
+      memset(data->flag[i], 0, ntri_cnt * sizeof(int));
     }
     status &= mb_reallocd(verbose, __FILE__, __LINE__, ntri_cnt * sizeof(double), (void **)&(data->v1), error);
     status &= mb_reallocd(verbose, __FILE__, __LINE__, ntri_cnt * sizeof(double), (void **)&(data->v2), error);
@@ -684,8 +706,17 @@ int mb_triangulate(int verbose, struct swath *data, int *error) {
     status &= mb_reallocd(verbose, __FILE__, __LINE__, ntri_cnt * sizeof(int), (void **)&(data->istack), error);
     status &= mb_reallocd(verbose, __FILE__, __LINE__, 3 * ntri_cnt * sizeof(int), (void **)&(data->kv1), error);
     status &= mb_reallocd(verbose, __FILE__, __LINE__, 3 * ntri_cnt * sizeof(int), (void **)&(data->kv2), error);
-    status &= mb_reallocd(verbose, __FILE__, __LINE__, (4 * ntri_cnt + 1) * sizeof(double), (void **)&(data->xsave), error);
-    status &= mb_reallocd(verbose, __FILE__, __LINE__, (4 * ntri_cnt + 1) * sizeof(double), (void **)&(data->ysave), error);
+    data->nsave_alloc = (4 * ntri_cnt + 1);
+    status &= mb_reallocd(verbose, __FILE__, __LINE__, data->nsave_alloc * sizeof(double), (void **)&(data->xsave), error);
+    status &= mb_reallocd(verbose, __FILE__, __LINE__, data->nsave_alloc * sizeof(double), (void **)&(data->ysave), error);
+    memset(data->v1, 0, ntri_cnt * sizeof(double));
+    memset(data->v2, 0, ntri_cnt * sizeof(double));
+    memset(data->v3, 0, ntri_cnt * sizeof(double));
+    memset(data->istack, 0, ntri_cnt * sizeof(int));
+    memset(data->kv1, 0, 3 * ntri_cnt * sizeof(int));
+    memset(data->kv2, 0, 3 * ntri_cnt * sizeof(int));
+    memset(data->xsave, 0, data->nsave_alloc * sizeof(double));
+    memset(data->ysave, 0, data->nsave_alloc * sizeof(double));
   }
 
   /* construct list of good soundings */
@@ -755,6 +786,7 @@ int mb_triangulate(int verbose, struct swath *data, int *error) {
       rr_threshold = data->triangle_scale;
     } else {
       rr_threshold = MAX(0.01 * (xmax - xmin) / mtodeglon, 0.01 * (ymax - ymin) / mtodeglat);
+// fprintf(stderr, "%s:%d:%s: rr_threshold: %f m\n", __FILE__, __LINE__, __FUNCTION__, rr_threshold);
     }
     dlon = rr_threshold * mtodeglon;
     dlat = rr_threshold * mtodeglat;
@@ -969,7 +1001,7 @@ int mb_tcontour(int verbose, struct swath *data, int *error) {
 
       else {
         const double ratio = data->level_list[i] / data->tick_int;
-        if (fabs(ROUND(ratio) - ratio) < 0.005 * data->contour_int)
+        if (fabs(round(ratio) - ratio) < 0.005 * data->contour_int)
           data->tick_list[i] = 1;
         else
           data->tick_list[i] = 0;
@@ -978,7 +1010,7 @@ int mb_tcontour(int verbose, struct swath *data, int *error) {
         data->label_list[i] = 0;
       else {
         const double ratio = data->level_list[i] / data->label_int;
-        if (fabs(ROUND(ratio) - ratio) < 0.005 * data->contour_int)
+        if (fabs(round(ratio) - ratio) < 0.005 * data->contour_int)
           data->label_list[i] = 1;
         else
           data->label_list[i] = 0;
@@ -1056,6 +1088,14 @@ int mb_tcontour(int verbose, struct swath *data, int *error) {
       int iside2;
       int closed;
       while (get_start_tri(data, &itri, &iside1, &iside2, &closed)) {
+        
+        /* check that large enough xsave and ysave arrays have been allocated */
+        if (data->nsave >= data->nsave_alloc - 4) {
+			data->nsave_alloc += 8192;
+			status &= mb_reallocd(2, __FILE__, __LINE__, data->nsave_alloc * sizeof(double), (void **)&(data->xsave), error);
+			status &= mb_reallocd(2, __FILE__, __LINE__, data->nsave_alloc * sizeof(double), (void **)&(data->ysave), error);
+        }
+
         /* if not closed remove flags */
         data->flag[iside1][itri] = -1;
         data->flag[iside2][itri] = -1;
@@ -1075,6 +1115,14 @@ int mb_tcontour(int verbose, struct swath *data, int *error) {
 
         /* look for next segment */
         while (get_next_tri(data, &itri, &iside1, &iside2, &closed, &itristart, &isidestart)) {
+		  
+		  /* check that large enough xsave and ysave arrays have been allocated */
+		  if (data->nsave >= data->nsave_alloc - 4) {
+			  data->nsave_alloc += 8192;
+			  status &= mb_reallocd(verbose, __FILE__, __LINE__, data->nsave_alloc * sizeof(double), (void **)&(data->xsave), error);
+			  status &= mb_reallocd(verbose, __FILE__, __LINE__, data->nsave_alloc * sizeof(double), (void **)&(data->ysave), error);
+		  }
+
           /* get position */
           double x;
           double y;
@@ -1443,22 +1491,22 @@ int mb_ocontour(int verbose, struct swath *data, int *error) {
 
 
   /* count number of points and verify that enough memory is allocated */
-  int npt_cnt = 0;
+  int nsave_cnt = 0;
   for (int i = 0; i < data->npings; i++) {
     struct ping *ping = &data->pings[i];
     for (int j = 0; j < ping->beams_bath; j++) {
       if (mb_beam_ok(ping->beamflag[j]))
-        npt_cnt++;
+        nsave_cnt++;
     }
   }
 
   int status = MB_SUCCESS;
-  if (npt_cnt > data->npts_alloc) {
-    data->npts_alloc = npt_cnt;
-    status &= mb_reallocd(verbose, __FILE__, __LINE__, data->npts_alloc * sizeof(double), (void **)&(data->xsave), error);
-    status &= mb_reallocd(verbose, __FILE__, __LINE__, data->npts_alloc * sizeof(double), (void **)&(data->ysave), error);
-    status &= mb_reallocd(verbose, __FILE__, __LINE__, data->npts_alloc * sizeof(int), (void **)&(data->isave), error);
-    status &= mb_reallocd(verbose, __FILE__, __LINE__, data->npts_alloc * sizeof(int), (void **)&(data->jsave), error);
+  if (nsave_cnt > data->nsave_alloc) {
+    data->nsave_alloc = nsave_cnt;
+    status &= mb_reallocd(verbose, __FILE__, __LINE__, data->nsave_alloc * sizeof(double), (void **)&(data->xsave), error);
+    status &= mb_reallocd(verbose, __FILE__, __LINE__, data->nsave_alloc * sizeof(double), (void **)&(data->ysave), error);
+    status &= mb_reallocd(verbose, __FILE__, __LINE__, data->nsave_alloc * sizeof(int), (void **)&(data->isave), error);
+    status &= mb_reallocd(verbose, __FILE__, __LINE__, data->nsave_alloc * sizeof(int), (void **)&(data->jsave), error);
   }
 
   /* zero flags */
@@ -1519,7 +1567,7 @@ int mb_ocontour(int verbose, struct swath *data, int *error) {
         data->tick_list[i] = 0;
       else {
         const double ratio = data->level_list[i] / data->tick_int;
-        if (fabs(ROUND(ratio) - ratio) < 0.005 * data->contour_int)
+        if (fabs(round(ratio) - ratio) < 0.005 * data->contour_int)
           data->tick_list[i] = 1;
         else
           data->tick_list[i] = 0;
@@ -1528,7 +1576,7 @@ int mb_ocontour(int verbose, struct swath *data, int *error) {
         data->label_list[i] = 0;
       else {
         const double ratio = data->level_list[i] / data->label_int;
-        if (fabs(ROUND(ratio) - ratio) < 0.005 * data->contour_int)
+        if (fabs(round(ratio) - ratio) < 0.005 * data->contour_int)
           data->label_list[i] = 1;
         else
           data->label_list[i] = 0;
@@ -1636,6 +1684,14 @@ int mb_ocontour(int verbose, struct swath *data, int *error) {
         int nj;
         int nd;
         while (get_next_old(data, &nk, &ni, &nj, &nd, k, i, j, d, kbeg, ibeg, jbeg, dbeg, &closed)) {
+		  
+		  /* check that large enough xsave and ysave arrays have been allocated */
+		  if (data->nsave >= data->nsave_alloc - 4) {
+			  data->nsave_alloc += 8192;
+			  status &= mb_reallocd(verbose, __FILE__, __LINE__, data->nsave_alloc * sizeof(double), (void **)&(data->xsave), error);
+			  status &= mb_reallocd(verbose, __FILE__, __LINE__, data->nsave_alloc * sizeof(double), (void **)&(data->ysave), error);
+		  }
+
           /* get position */
           get_pos_old(data, eps, &x, &y, nk, ni, nj, value);
           get_hand_old(data, &hand, k, i, j, d);

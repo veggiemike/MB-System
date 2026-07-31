@@ -1,7 +1,7 @@
 lib_LTLIBRARIES = libmbio.la
 
 if BUILD_MBTRN
-  MBTRNINCDIR = -I${top_srcdir}/src/mbtrn/r7kr -I${top_srcdir}/src/mbtrn/utils -I${top_srcdir}/src/mbtrnframe/usr -I${top_srcdir}/src/mbtrnframe/mframe/src
+  MBTRNINCDIR = -I${top_srcdir}/src/mbtrn/r7kr -I${top_srcdir}/src/mbtrn/utils -I${top_srcdir}/src/mbtrnframe
   MBTRNLIB = ${top_builddir}/src/mbtrn/libr7kr.la
 endif
 
@@ -51,7 +51,8 @@ include_HEADERS += mbf_sbsioswb.h
 include_HEADERS += mbf_sburicen.h
 include_HEADERS += mbf_xtfr8101.h
 include_HEADERS += mbsys_3datdepthlidar.h
-include_HEADERS += mbsys_3ddwissl.h
+include_HEADERS += mbsys_3ddwissl1.h
+include_HEADERS += mbsys_3ddwissl2.h
 include_HEADERS += mbsys_atlas.h
 include_HEADERS += mbsys_benthos.h
 include_HEADERS += mbsys_dsl.h
@@ -98,6 +99,7 @@ AM_CPPFLAGS =
 AM_CPPFLAGS += -I${top_srcdir}/src/mbaux
 AM_CPPFLAGS += -I@top_srcdir@/src/bsio
 AM_CPPFLAGS += -I@top_srcdir@/src/surf
+AM_CPPFLAGS += -I@top_srcdir@/src/mbbitpack
 AM_CPPFLAGS += $(MBTRNINCDIR)
 if BUILD_GSF
 AM_CPPFLAGS += -I@top_srcdir@/src/gsf
@@ -146,6 +148,7 @@ libmbio_la_SOURCES += mb_write_ping.c
 libmbio_la_SOURCES += mbr_3ddepthp.c
 libmbio_la_SOURCES += mbr_3dwisslp.c
 libmbio_la_SOURCES += mbr_3dwisslr.c
+libmbio_la_SOURCES += mbr_3dwissl2.c
 libmbio_la_SOURCES += mbr_asciixyz.c
 libmbio_la_SOURCES += mbr_bchrtunb.c
 libmbio_la_SOURCES += mbr_bchrxunb.c
@@ -215,13 +218,16 @@ libmbio_la_SOURCES += mbr_sbsioswb.c
 libmbio_la_SOURCES += mbr_sburicen.c
 libmbio_la_SOURCES += mbr_sburivax.c
 libmbio_la_SOURCES += mbr_segysegy.c
+libmbio_la_SOURCES += mbr_soirovnv.c
+libmbio_la_SOURCES += mbr_soiusbln.c
 libmbio_la_SOURCES += mbr_swplssxi.c
 libmbio_la_SOURCES += mbr_swplssxp.c
 libmbio_la_SOURCES += mbr_wasspenl.c
 libmbio_la_SOURCES += mbr_xtfb1624.c
 libmbio_la_SOURCES += mbr_xtfr8101.c
 libmbio_la_SOURCES += mbsys_3datdepthlidar.c
-libmbio_la_SOURCES += mbsys_3ddwissl.c
+libmbio_la_SOURCES += mbsys_3ddwissl1.c
+libmbio_la_SOURCES += mbsys_3ddwissl2.c
 libmbio_la_SOURCES += mbsys_atlas.c
 libmbio_la_SOURCES += mbsys_benthos.c
 libmbio_la_SOURCES += mbsys_dsl.c
@@ -267,6 +273,7 @@ endif
 libmbio_la_LIBADD =
 libmbio_la_LIBADD += $(top_builddir)/src/bsio/libmbbsio.la
 libmbio_la_LIBADD += $(top_builddir)/src/surf/libmbsapi.la
+libmbio_la_LIBADD += $(top_builddir)/src/mbbitpack/libmbbitpack.la
 if BUILD_GSF
 libmbio_la_LIBADD += $(top_builddir)/src/gsf/libmbgsf.la
 endif

@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:  mbsys_reson7k.c  3.00  1/8/2019
  *
- *    Copyright (c) 2019-2020 by
+ *    Copyright (c) 2019-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * mbsys_reson7k3.c contains the MBIO functions for handling data from
@@ -1178,7 +1188,7 @@ int mbsys_reson7k3_print_Attitude(int verbose, s7k3_Attitude *Attitude, int *err
   fprintf(stderr, "%s     n:                          %d\n", first, Attitude->n);
   fprintf(stderr, "%s     nalloc:                     %d\n", first, Attitude->nalloc);
   for (int i = 0; i < Attitude->n; i++)
-    fprintf(stderr, "%s     i:%d delta_time:%d roll:%f pitch:%f heading:%f heave:%f\n", first, i, Attitude->delta_time[i],
+    fprintf(stderr, "%s     i:%d delta_time:%d roll:%f pitch:%f heave:%f heading:%f\n", first, i, Attitude->delta_time[i],
             Attitude->roll[i], Attitude->pitch[i], Attitude->heave[i], Attitude->heading[i]);
 
   const int status = MB_SUCCESS;
@@ -1480,7 +1490,7 @@ int mbsys_reson7k3_print_ProcessedSideScan(int verbose, s7k3_ProcessedSideScan *
   fprintf(stderr, "%s     ss_source:                  %u\n", first, ProcessedSideScan->ss_source);
   fprintf(stderr, "%s     number_pixels:              %u\n", first, ProcessedSideScan->number_pixels);
   fprintf(stderr, "%s     pixelwidth:                 %f\n", first, ProcessedSideScan->pixelwidth);
-  fprintf(stderr, "%s     sonardepth:                 %f\n", first, ProcessedSideScan->sonardepth);
+  fprintf(stderr, "%s     sensordepth:                 %f\n", first, ProcessedSideScan->sensordepth);
   fprintf(stderr, "%s     altitude:                   %f\n", first, ProcessedSideScan->altitude);
   for (unsigned int i = 0; i < ProcessedSideScan->number_pixels; i++)
     fprintf(stderr, "%s     pixel[%d]:  sidescan:%f alongtrack:%f\n", first, i, ProcessedSideScan->sidescan[i],
@@ -2473,51 +2483,84 @@ int mbsys_reson7k3_print_BITE(int verbose, s7k3_BITE *BITE, int *error) {
   }
 
   /* print Reson 7k data record header information */
-  mbsys_reson7k3_print_header(verbose, &BITE->header, error);
+  if (verbose > 0)
+  	mbsys_reson7k3_print_header(verbose, &BITE->header, error);
 
   /* Reson 7k BITE (record 7021) */
   const char *first;
-  if (verbose >= 2)
+  if (verbose >= 2) {
     first = debug_str;
-  else {
+  }
+  else if (verbose == 1) {
     first = nodebug_str;
     fprintf(stderr, "\n%sMBIO function <%s> called\n", first, __func__);
+  	fprintf(stderr, "%sBITE Structure Contents:\n", first);
+  	fprintf(stderr, "%s     number_reports:             %u\n", first, BITE->number_reports);
+  	for (int i = 0; i < BITE->number_reports; i++) {
+    	s7k3_bitereport *bitereport = &(BITE->bitereports[i]);
+    	fprintf(stderr, "%s     source_name:                %s\n", first, bitereport->source_name);
+    	fprintf(stderr, "%s     source_address:             %u\n", first, bitereport->source_address);
+    	fprintf(stderr, "%s     frequency:                  %f\n", first, bitereport->reserved);
+    	fprintf(stderr, "%s     enumerator:                 %u\n", first, bitereport->reserved2);
+    	s7k3_time *s7kTime = &(bitereport->downlink_time);
+    	fprintf(stderr, "%s     downlink_time:              %4.4d/%3.3d %2.2d:%2.2d:%9.6f\n",
+            first, s7kTime->Year, s7kTime->Day,
+            s7kTime->Hours, s7kTime->Minutes, s7kTime->Seconds);
+    	s7kTime = &(bitereport->uplink_time);
+    	fprintf(stderr, "%s     uplink_time:                %4.4d/%3.3d %2.2d:%2.2d:%9.6f\n",
+            first, s7kTime->Year, s7kTime->Day,
+            s7kTime->Hours, s7kTime->Minutes, s7kTime->Seconds);
+    	s7kTime = &(bitereport->bite_time);
+    	fprintf(stderr, "%s     bite_time:                  %4.4d/%3.3d %2.2d:%2.2d:%9.6f\n",
+            first, s7kTime->Year, s7kTime->Day,
+            s7kTime->Hours, s7kTime->Minutes, s7kTime->Seconds);
+    	fprintf(stderr, "%s     status:                     %u\n", first, bitereport->status);
+    	fprintf(stderr, "%s     number_bite:                %u\n", first, bitereport->number_bite);
+    	fprintf(stderr, "%s     bite_status:                ", first);
+    	for (int j = 0; j < 4; j++)
+      	  fprintf(stderr, "%llu ", (long long unsigned) bitereport->bite_status[j]);
+    	  fprintf(stderr, "\n");
+    	  for (int j = 0; j < bitereport->number_bite; j++) {
+      		s7k3_bitefield *bitefield = &(bitereport->bitefield[j]);
+      		fprintf(stderr, "%s     field[%2d]:                  %u\n", first, j, bitefield->field);
+      		fprintf(stderr, "%s     name[%2d]:                   %s\n", first, j, bitefield->name);
+      		fprintf(stderr, "%s     device_type[%2d]:            %d\n", first, j, bitefield->device_type);
+      		fprintf(stderr, "%s     minimum[%2d]:                %f\n", first, j, bitefield->minimum);
+      		fprintf(stderr, "%s     maximum[%2d]:                %f\n", first, j, bitefield->maximum);
+      		fprintf(stderr, "%s     value[%2d]:                  %f\n", first, j, bitefield->value);
+    	  }
+  	  }
   }
-  fprintf(stderr, "%sStructure Contents:\n", first);
-  fprintf(stderr, "%s     number_reports:             %u\n", first, BITE->number_reports);
-  for (int i = 0; i < BITE->number_reports; i++) {
-    s7k3_bitereport *bitereport = &(BITE->bitereports[i]);
-    fprintf(stderr, "%s     source_name:                %s\n", first, bitereport->source_name);
-    fprintf(stderr, "%s     source_address:             %u\n", first, bitereport->source_address);
-    fprintf(stderr, "%s     frequency:                  %f\n", first, bitereport->reserved);
-    fprintf(stderr, "%s     enumerator:                 %u\n", first, bitereport->reserved2);
-    s7k3_time *s7kTime = &(bitereport->downlink_time);
-    fprintf(stderr, "%s     downlink_time:              %4.4d/%3.3d %2.2d:%2.2d:%9.6f\n",
-            first, s7kTime->Year, s7kTime->Day,
+  else {
+  	fprintf(stdout, "\n");
+  	for (int i = 0; i < BITE->number_reports; i++) {
+    	s7k3_bitereport *bitereport = &(BITE->bitereports[i]);
+    	s7k3_time *s7kTime = &(bitereport->bite_time);
+  		fprintf(stdout, "BITE %d of %d: %2u %16s  %4.4d/%3.3d %2.2d:%2.2d:%9.6f ",
+  			i, BITE->number_reports, bitereport->source_address, bitereport->source_name, 
+            s7kTime->Year, s7kTime->Day,
             s7kTime->Hours, s7kTime->Minutes, s7kTime->Seconds);
-    s7kTime = &(bitereport->uplink_time);
-    fprintf(stderr, "%s     uplink_time:                %4.4d/%3.3d %2.2d:%2.2d:%9.6f\n",
-            first, s7kTime->Year, s7kTime->Day,
-            s7kTime->Hours, s7kTime->Minutes, s7kTime->Seconds);
-    s7kTime = &(bitereport->bite_time);
-    fprintf(stderr, "%s     bite_time:                  %4.4d/%3.3d %2.2d:%2.2d:%9.6f\n",
-            first, s7kTime->Year, s7kTime->Day,
-            s7kTime->Hours, s7kTime->Minutes, s7kTime->Seconds);
-    fprintf(stderr, "%s     status:                     %u\n", first, bitereport->status);
-    fprintf(stderr, "%s     number_bite:                %u\n", first, bitereport->number_bite);
-    fprintf(stderr, "%s     bite_status:                ", first);
-    for (int j = 0; j < 4; j++)
-      fprintf(stderr, "%llu ", (long long unsigned) bitereport->bite_status[j]);
-    fprintf(stderr, "\n");
-    for (int j = 0; j < bitereport->number_bite; j++) {
-      s7k3_bitefield *bitefield = &(bitereport->bitefield[j]);
-      fprintf(stderr, "%s     field[%2d]:                  %u\n", first, j, bitefield->field);
-      fprintf(stderr, "%s     name[%2d]:                   %s\n", first, j, bitefield->name);
-      fprintf(stderr, "%s     device_type[%2d]:            %d\n", first, j, bitefield->device_type);
-      fprintf(stderr, "%s     minimum[%2d]:                %f\n", first, j, bitefield->minimum);
-      fprintf(stderr, "%s     maximum[%2d]:                %f\n", first, j, bitefield->maximum);
-      fprintf(stderr, "%s     value[%2d]:                  %f\n", first, j, bitefield->value);
-    }
+        if (bitereport->status & 0x01)
+        	fprintf(stdout, "Uplink Error   ");
+        else
+        	fprintf(stdout, "Uplink Ok      ");
+        if (bitereport->status & 0x02)
+        	fprintf(stdout, "Downlink Error ");
+        else
+        	fprintf(stdout, "Downlink Ok    ");
+        if (bitereport->status & 0x04)
+        	fprintf(stdout, "BITE Error     ");
+        else
+        	fprintf(stdout, "BITE Ok        ");
+        if ((bitereport->status & 0x18) == 0)
+        	fprintf(stdout, "-Status Ok\n");
+        else if ((bitereport->status & 0x18) == 0x8)
+        	fprintf(stdout, "-Status Warning\n");
+        else if ((bitereport->status & 0x18) == 0x10)
+        	fprintf(stdout, "-Status Error\n");
+        else if ((bitereport->status & 0x18) == 0x18)
+        	fprintf(stdout, "-Status Fatal\n");
+    	}
   }
 
   const int status = MB_SUCCESS;
@@ -3650,7 +3693,7 @@ int mbsys_reson7k3_print_FileHeader(int verbose, s7k3_FileHeader *FileHeader, in
     fprintf(stderr, "%llx", (long long unsigned) FileHeader->session_identifier[i]);
   fprintf(stderr, "\n");
   fprintf(stderr, "%s     record_data_size:           %d\n", first, FileHeader->record_data_size);
-  fprintf(stderr, "%s     number_subsystems:          %d\n", first, FileHeader->number_devices);
+  fprintf(stderr, "%s     number_devices:             %d\n", first, FileHeader->number_devices);
   fprintf(stderr, "%s     recording_name:             %s\n", first, FileHeader->recording_name);
   fprintf(stderr, "%s     recording_version:          %s\n", first, FileHeader->recording_version);
   fprintf(stderr, "%s     user_defined_name:          %s\n", first, FileHeader->user_defined_name);
@@ -3707,7 +3750,7 @@ int mbsys_reson7k3_print_FileCatalog(int verbose, s7k3_FileCatalog *FileCatalog,
   fprintf(stderr, "%s     list of data records (size offset type device system time count 8*reserved):\n", first);
   for (unsigned int i = 0; i < FileCatalog->n; i++) {
     filecatalogdata = &FileCatalog->filecatalogdata[i];
-    fprintf(stderr, "%s     %7d %7d %8u %llu %5u %4u %2u %4u-%3.3u-%2.2u:%2.2u:%9.6f %.6f %u %u %u %u %u %u %u %u %u\n",
+    fprintf(stderr, "%s     %6d %6d %8u %12llu %5u %4u %2u %4u-%3.3u-%2.2u:%2.2u:%9.6f %.6f %u %u %u %u %u %u %u %u %u\n",
           first, i, filecatalogdata->sequence,
           filecatalogdata->size, (long long unsigned) filecatalogdata->offset,
           filecatalogdata->record_type, filecatalogdata->device_id,
@@ -4864,15 +4907,21 @@ int mbsys_reson7k3_preprocess(int verbose,     /* in: verbosity level set on com
   double *swath_width = (double *)&mb_io_ptr->saved2;
 
   /* kluge parameters */
-  double kluge_beampatternsnellfactor = 1.0;
-  double kluge_soundspeedsnellfactor = 1.0;
+  bool kluge_fix7ktimestamps = false;
+  double kluge_fix7ktimestamps_targetoffset = 0.0;
   bool kluge_beampatternsnell = false;
+  double kluge_beampatternsnellfactor = 1.0;
   bool kluge_soundspeedsnell = false;
+  double kluge_soundspeedsnellfactor = 1.0;
   bool kluge_zeroAttitudecorrection = false;
   bool kluge_zeroalongtrackangles = false;
 
   /* get kluges */
   for (int i = 0; i < pars->n_kluge; i++) {
+  	if (pars->kluge_id[i] == MB_PR_KLUGE_FIX7KTIMESTAMPS) {
+  	  kluge_fix7ktimestamps = true;
+  	  kluge_fix7ktimestamps_targetoffset = *((double *)&pars->kluge_pars[i * MB_PR_KLUGE_PAR_SIZE]);
+  	}
     if (pars->kluge_id[i] == MB_PR_KLUGE_BEAMTWEAK) {
       kluge_beampatternsnell = true;
       kluge_beampatternsnellfactor = *((double *)&pars->kluge_pars[i * MB_PR_KLUGE_PAR_SIZE]);
@@ -4921,20 +4970,24 @@ int mbsys_reson7k3_preprocess(int verbose,     /* in: verbosity level set on com
     fprintf(stderr, "dbg2       ignore_water_column:           %d\n", pars->ignore_water_column);
     fprintf(stderr, "dbg2       n_kluge:                       %d\n", pars->n_kluge);
     for (int i = 0; i < pars->n_kluge; i++) {
-      fprintf(stderr, "dbg2       kluge_id[%d]:                    %d\n", i, pars->kluge_id[i]);
-      if (pars->kluge_id[i] == MB_PR_KLUGE_BEAMTWEAK) {
-        fprintf(stderr, "dbg2       kluge_beampatternsnell:        %d\n", kluge_beampatternsnell);
-        fprintf(stderr, "dbg2       kluge_beampatternsnellfactor:  %f\n", kluge_beampatternsnellfactor);
+      fprintf(stderr, "dbg2       kluge_id[%d]:                         %d\n", i, pars->kluge_id[i]);
+      if (pars->kluge_id[i] == MB_PR_KLUGE_FIX7KTIMESTAMPS) {
+        fprintf(stderr, "dbg2       kluge_fix7ktimestamps:              %d\n", kluge_fix7ktimestamps);
+        fprintf(stderr, "dbg2       kluge_fix7ktimestamps_targetoffset: %f\n", kluge_fix7ktimestamps_targetoffset);
+      }
+      else if (pars->kluge_id[i] == MB_PR_KLUGE_BEAMTWEAK) {
+        fprintf(stderr, "dbg2       kluge_beampatternsnell:             %d\n", kluge_beampatternsnell);
+        fprintf(stderr, "dbg2       kluge_beampatternsnellfactor:       %f\n", kluge_beampatternsnellfactor);
       }
       else if (pars->kluge_id[i] == MB_PR_KLUGE_SOUNDSPEEDTWEAK) {
-        fprintf(stderr, "dbg2       kluge_soundspeedsnell:         %d\n", kluge_soundspeedsnell);
-        fprintf(stderr, "dbg2       kluge_soundspeedsnellfactor:   %f\n", kluge_soundspeedsnellfactor);
+        fprintf(stderr, "dbg2       kluge_soundspeedsnell:              %d\n", kluge_soundspeedsnell);
+        fprintf(stderr, "dbg2       kluge_soundspeedsnellfactor:        %f\n", kluge_soundspeedsnellfactor);
       }
       else if (pars->kluge_id[i] == MB_PR_KLUGE_ZEROATTITUDECORRECTION) {
-        fprintf(stderr, "dbg2       kluge_zeroAttitudecorrection:  %d\n", kluge_zeroAttitudecorrection);
+        fprintf(stderr, "dbg2       kluge_zeroAttitudecorrection:       %d\n", kluge_zeroAttitudecorrection);
       }
       else if (pars->kluge_id[i] == MB_PR_KLUGE_ZEROALONGTRACKANGLES) {
-        fprintf(stderr, "dbg2       kluge_zeroalongtrackangles:    %d\n", kluge_zeroalongtrackangles);
+        fprintf(stderr, "dbg2       kluge_zeroalongtrackangles:         %d\n", kluge_zeroalongtrackangles);
       }
     }
   }
@@ -4995,7 +5048,8 @@ int mbsys_reson7k3_preprocess(int verbose,     /* in: verbosity level set on com
       any data are read - for some formats this allows kluge options to set special
       reading conditions/behaviors */
   if (store_ptr == NULL) {
-
+  	  mb_io_ptr->save21 = kluge_fix7ktimestamps;
+  	  mb_io_ptr->saved3 = kluge_fix7ktimestamps_targetoffset;
   }
 
   /* deal with a survey record */
@@ -5337,8 +5391,11 @@ int mbsys_reson7k3_preprocess(int verbose,     /* in: verbosity level set on com
     /* if requested ignore water column data
      * (will not be included in any output file) */
     if (pars->ignore_water_column) {
+      store->read_WaterColumn = false;
+      store->read_Image = false;
       store->read_Beamformed = false;
       store->read_CompressedBeamformedMagnitude = false;
+      store->read_CompressedWaterColumn = false;
     }
 
     /*--------------------------------------------------------------*/
@@ -5405,6 +5462,11 @@ int mbsys_reson7k3_preprocess(int verbose,     /* in: verbosity level set on com
     /*--------------------------------------------------------------*/
     /* interpolate ancillary values  */
     /*--------------------------------------------------------------*/
+	bool dprint = false;
+	if (store->time_i[2]== 12 && store->time_i[3]==16 && store->time_i[4]==0 && store->time_i[5]==17)
+		dprint = true;
+	if (store->time_i[2]== 12 && store->time_i[3]==16 && store->time_i[4]==3 && store->time_i[5]==45)
+		dprint = true;
 
     int interp_status = mb_linear_interp_longitude(verbose, pars->nav_time_d - 1, pars->nav_lon - 1, pars->n_nav, time_d,
                                                &navlon, &jnav, &interp_error);
@@ -5821,6 +5883,14 @@ int mbsys_reson7k3_preprocess(int verbose,     /* in: verbosity level set on com
           bathydata->depth = zz + sensordepth - heave;
           bathydata->pointing_angle = DTR * theta;
           bathydata->azimuth_angle = DTR * beamAzimuth;
+if (dprint && i == RawDetection->number_beams/2) {
+fprintf(stderr, "\nPing time: %d/%2.2d/%2.2d-%2.2d:%2.2d:%2.2d.%6.6d\n", 
+store->time_i[0], store->time_i[1], store->time_i[2], store->time_i[3], store->time_i[4], store->time_i[5], store->time_i[6]);
+fprintf(stderr, "Heading:%f Roll:%f Pitch:%f Heave:%f Sensordepth:%f\n",
+heading, roll, pitch, heave, sensordepth);
+fprintf(stderr, "Bathy calc: rx_sign:%d tx_sign:%d beamAzimuth:%f beamDepression:%f rr:%f zz:%f xt:%f lt:%f  depth:%f\n",
+rx_sign, tx_sign, beamAzimuth, beamDepression, rr, zz, bathydata->acrosstrack, bathydata->alongtrack, bathydata->depth);
+}
         }
 
         /* set flag */
@@ -6763,16 +6833,16 @@ int mbsys_reson7k3_insert(int verbose, void *mbio_ptr, void *store_ptr, int kind
         ProcessedSideScan->serial_number = RawDetection->serial_number;
         ProcessedSideScan->ping_number = RawDetection->ping_number;
         ProcessedSideScan->multi_ping = RawDetection->multi_ping;
-        ProcessedSideScan->sonardepth = RawDetection->vehicle_depth;
-        ProcessedSideScan->altitude = bath[nbath/2] - ProcessedSideScan->sonardepth;
+        ProcessedSideScan->sensordepth = RawDetection->vehicle_depth;
+        ProcessedSideScan->altitude = bath[nbath/2] - ProcessedSideScan->sensordepth;
       }
       else if (store->read_SegmentedRawDetection) {
         ProcessedSideScan->header = SegmentedRawDetection->header;
         ProcessedSideScan->serial_number = SegmentedRawDetection->serial_number;
         ProcessedSideScan->ping_number = SegmentedRawDetection->ping_number;
         ProcessedSideScan->multi_ping = SegmentedRawDetection->multi_ping;
-        ProcessedSideScan->sonardepth = SegmentedRawDetection->vehicle_depth;
-        ProcessedSideScan->altitude = bath[nbath/2] - ProcessedSideScan->sonardepth;
+        ProcessedSideScan->sensordepth = SegmentedRawDetection->vehicle_depth;
+        ProcessedSideScan->altitude = bath[nbath/2] - ProcessedSideScan->sensordepth;
       }
       ProcessedSideScan->header.Offset = 60;
       ProcessedSideScan->header.Size =
@@ -7530,7 +7600,7 @@ int mbsys_reson7k3_extract_nav(int verbose, void *mbio_ptr, void *store_ptr, int
     }
 
     /* get draft  */
-    if (mb_io_ptr->nsonardepth > 0) {
+    if (mb_io_ptr->nsensordepth > 0) {
       mb_depint_interp(verbose, mbio_ptr, store->time_d, draft, error);
       *heave = 0.0;
     }
@@ -7564,7 +7634,7 @@ int mbsys_reson7k3_extract_nav(int verbose, void *mbio_ptr, void *store_ptr, int
     }
 
     /* get draft  */
-    if (mb_io_ptr->nsonardepth > 0) {
+    if (mb_io_ptr->nsensordepth > 0) {
       mb_depint_interp(verbose, mbio_ptr, store->time_d, draft, error);
       *heave = 0.0;
     }
@@ -7597,7 +7667,7 @@ int mbsys_reson7k3_extract_nav(int verbose, void *mbio_ptr, void *store_ptr, int
     *heave = (double)(Attitude->heave[0]);
 
     /* get draft  */
-    if (mb_io_ptr->nsonardepth > 0) {
+    if (mb_io_ptr->nsensordepth > 0) {
       mb_depint_interp(verbose, mbio_ptr, store->time_d, draft, error);
       *heave = 0.0;
     }
@@ -7631,7 +7701,7 @@ int mbsys_reson7k3_extract_nav(int verbose, void *mbio_ptr, void *store_ptr, int
     *heave = (double)(RollPitchHeave->heave);
 
     /* get draft  */
-    if (mb_io_ptr->nsonardepth > 0) {
+    if (mb_io_ptr->nsensordepth > 0) {
       mb_depint_interp(verbose, mbio_ptr, store->time_d, draft, error);
       *heave = 0.0;
     }
@@ -7664,7 +7734,7 @@ int mbsys_reson7k3_extract_nav(int verbose, void *mbio_ptr, void *store_ptr, int
     *heave = (double)(CustomAttitude->heave[0]);
 
     /* get draft  */
-    if (mb_io_ptr->nsonardepth > 0) {
+    if (mb_io_ptr->nsensordepth > 0) {
       mb_depint_interp(verbose, mbio_ptr, store->time_d, draft, error);
       *heave = 0.0;
     }
@@ -7697,7 +7767,7 @@ int mbsys_reson7k3_extract_nav(int verbose, void *mbio_ptr, void *store_ptr, int
     }
 
     /* get draft  */
-    if (mb_io_ptr->nsonardepth > 0) {
+    if (mb_io_ptr->nsensordepth > 0) {
       mb_depint_interp(verbose, mbio_ptr, store->time_d, draft, error);
       *heave = 0.0;
     }
@@ -7710,7 +7780,7 @@ int mbsys_reson7k3_extract_nav(int verbose, void *mbio_ptr, void *store_ptr, int
   }
 
   /* extract data from attitude structure */
-  else if (*kind == MB_DATA_SONARDEPTH) {
+  else if (*kind == MB_DATA_SENSORDEPTH) {
     /* get time */
     for (int i = 0; i < 7; i++)
       time_i[i] = store->time_i[i];
@@ -7825,7 +7895,7 @@ int mbsys_reson7k3_extract_nnav(int verbose, void *mbio_ptr, void *store_ptr,
     // loop over available data, up to the max that can be stored
     for (int inav = 0; inav < MIN(nmax, *n); inav++) {
       // get time - note time_i is dimensioned time_i[7*nmax]
-      time_d[inav] = store->time_d + Attitude->delta_time[inav];
+      time_d[inav] = store->time_d + 0.001 * Attitude->delta_time[inav];
       mb_get_date(verbose, time_d[inav], &time_i[7*inav]);
 
       // get attitude from the Attitude record
@@ -7845,7 +7915,7 @@ int mbsys_reson7k3_extract_nnav(int verbose, void *mbio_ptr, void *store_ptr,
       }
 
       // get draft from buffered time series
-      if (mb_io_ptr->nsonardepth > 0)
+      if (mb_io_ptr->nsensordepth > 0)
         mb_depint_interp(verbose, mbio_ptr, time_d[inav], &(draft[inav]), error);
       else
         draft[inav] = 0.0;
@@ -7885,7 +7955,7 @@ int mbsys_reson7k3_extract_nnav(int verbose, void *mbio_ptr, void *store_ptr,
       }
 
       // get draft from buffered time series
-      if (mb_io_ptr->nsonardepth > 0)
+      if (mb_io_ptr->nsensordepth > 0)
         mb_depint_interp(verbose, mbio_ptr, time_d[inav], &(draft[inav]), error);
       else
         draft[inav] = 0.0;
@@ -9684,9 +9754,9 @@ int mbsys_reson7k3_makess_source(
       ProcessedSideScan->ping_number = RawDetection->ping_number;
       ProcessedSideScan->multi_ping = RawDetection->multi_ping;
       ProcessedSideScan->pixelwidth = *pixel_size;
-      ProcessedSideScan->sonardepth = RawDetection->vehicle_depth;
+      ProcessedSideScan->sensordepth = RawDetection->vehicle_depth;
       ProcessedSideScan->altitude = RawDetection->bathydata[iminxtrack].depth
-                                    - ProcessedSideScan->sonardepth;
+                                    - ProcessedSideScan->sensordepth;
     }
     else if (store->read_SegmentedRawDetection) {
       ProcessedSideScan->header = SegmentedRawDetection->header;
@@ -9694,9 +9764,9 @@ int mbsys_reson7k3_makess_source(
       ProcessedSideScan->ping_number = SegmentedRawDetection->ping_number;
       ProcessedSideScan->multi_ping = SegmentedRawDetection->multi_ping;
       ProcessedSideScan->pixelwidth = *pixel_size;
-      ProcessedSideScan->sonardepth = SegmentedRawDetection->vehicle_depth;
+      ProcessedSideScan->sensordepth = SegmentedRawDetection->vehicle_depth;
       ProcessedSideScan->altitude = SegmentedRawDetection->bathydata[iminxtrack].depth
-                                    - ProcessedSideScan->sonardepth;
+                                    - ProcessedSideScan->sensordepth;
     }
     ProcessedSideScan->header.Offset = 60;
     ProcessedSideScan->header.Size = MBSYS_RESON7K_RECORDHEADER_SIZE
@@ -9753,9 +9823,9 @@ int mbsys_reson7k3_makess_source(
       ProcessedSideScan->number_pixels = MIN(2 * BeamGeometry->number_beams, MBSYS_RESON7K_MAX_PIXELS);
       ProcessedSideScan->ss_type = MB_SIDESCAN_LINEAR;
       ProcessedSideScan->pixelwidth = *pixel_size;
-      ProcessedSideScan->sonardepth = RawDetection->vehicle_depth;
+      ProcessedSideScan->sensordepth = RawDetection->vehicle_depth;
       ProcessedSideScan->altitude = RawDetection->bathydata[iminxtrack].depth
-                                    - ProcessedSideScan->sonardepth;
+                                    - ProcessedSideScan->sensordepth;
 
     }
     else if (store->read_SegmentedRawDetection) {
@@ -9783,9 +9853,9 @@ int mbsys_reson7k3_makess_source(
       ProcessedSideScan->number_pixels = MBSYS_RESON7K_MAX_PIXELS / 2;
       ProcessedSideScan->ss_type = MB_SIDESCAN_LINEAR;
       ProcessedSideScan->pixelwidth = *pixel_size;
-      ProcessedSideScan->sonardepth = SegmentedRawDetection->vehicle_depth;
+      ProcessedSideScan->sensordepth = SegmentedRawDetection->vehicle_depth;
       ProcessedSideScan->altitude = SegmentedRawDetection->bathydata[iminxtrack].depth
-                                    - ProcessedSideScan->sonardepth;
+                                    - ProcessedSideScan->sensordepth;
     }
     ProcessedSideScan->header.Offset = 60;
     ProcessedSideScan->header.Size = MBSYS_RESON7K_RECORDHEADER_SIZE

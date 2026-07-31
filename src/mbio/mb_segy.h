@@ -1,19 +1,31 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mb_io.h	1/19/93
  *
- *    Copyright (c) 2004-2020 by
+ *    Copyright (c) 2004-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /**
-   @file
- * mb_segy.h defines the SEG-Y trace header used by MB-System when
+ * @file
+ * @brief Defines SEG-Y trace header used when extracting seismic reflection
+ * or subbottom profiler data from swath data files.
+ * @details Defines the SEG-Y trace header used by MB-System when
  * extracting seismic reflection or subbottom profiler data from
  * swath mapping data files. The SIOSEIS implementation of the
  * trace header is used because it incorporates a deep water delay
@@ -161,7 +173,8 @@ struct mb_segytraceheader_struct {
 	float dummy1;             /* bytes 204-207 */
 	float dummy2;             /* bytes 208-211 */
 	float dummy3;             /* bytes 212-215 */
-	float dummy4;             /* bytes 216-219 */
+	float sensordepthtime;    /* bytes 216-219, sensor depth expressed in TWTT equivalent using soundspeed,
+												- this amounts to trace start delay time relative to sea surface */
 	float soundspeed;         /* bytes 220-223, water sound speed in m/sec (MB-System only) */
 	float distance;           /* bytes 224-227, distance from previous shot along track in meters (MB-System only) */
 	float roll;               /* bytes 228-231, roll in degrees (MB-System only) */

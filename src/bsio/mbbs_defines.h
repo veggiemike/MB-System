@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mbbs_defines.h	3/3/2014
  *
- *    Copyright (c) 2014-2020 by
+ *    Copyright (c) 2014-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /* This source code is part of the mbbsio library used to read and write
  * swath sonar data in the bsio format devised and used by the
@@ -33,25 +43,47 @@
 #define __MBBS_DEFINES__
 
 #include <time.h>
-#ifndef _WIN32
-#include <sys/time.h>
-#endif
 
-#include <mb_config.h>
+/* CMake build system section */
+#ifdef CMAKE_BUILD_SYSTEM
 
-/* XDR i/o include file */
-#ifdef HAVE_RPC_RPC_H
-#include <rpc/rpc.h>
-#endif
-#ifdef HAVE_RPC_TYPES_H
-#include <rpc/types.h>
-#include <rpc/xdr.h>
-#endif
+  #include <stdint.h>
 
-#ifdef _WIN32
-#include <float.h>
-#define isnan _isnan
-#endif
+  #include <rpc/rpc.h>
+  #include <rpc/types.h>
+  #include <rpc/xdr.h>
+
+#else // Begin Autotools section supporting legacy OS's
+
+  #ifndef _WIN32
+    #include <sys/time.h>
+  #endif
+
+  #include <mb_config.h>
+
+	#ifdef _WIN32
+		#include <stdint.h> /* To get INT32_MIN, INT32_MAX, etc ... */
+	#else
+		#ifdef HAVE_STDINT_H
+			#include <stdint.h>
+		#endif
+	#endif
+
+  /* XDR i/o include file */
+  #ifdef HAVE_RPC_RPC_H
+    #include <rpc/rpc.h>
+  #endif
+  #ifdef HAVE_RPC_TYPES_H
+    #include <rpc/types.h>
+    #include <rpc/xdr.h>
+  #endif
+
+  #ifdef _WIN32
+    #include <float.h>
+    #define isnan _isnan
+  #endif
+
+#endif // End Autotools section
 
 /* Some type definitions given here are in a separate
  * header file unixversion.h in the original HMRG codebase */

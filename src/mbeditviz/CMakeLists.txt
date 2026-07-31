@@ -1,73 +1,46 @@
+#------------------------------------------------------------------------------
+#    The MB-system:  CMakeLists.txt   27 June 2023
 #
-# Gets variables from root CMakeLists
+#    Copyright (c) 2023-2024 by
+#    David W. Caress (caress@mbari.org)
+#      Monterey Bay Aquarium Research Institute
+#      Moss Landing, California, USA
+#    Dale N. Chayes 
+#      Center for Coastal and Ocean Mapping
+#      University of New Hampshire
+#      Durham, New Hampshire, USA
+#    Christian dos Santos Ferreira
+#      MARUM
+#      University of Bremen
+#      Bremen Germany
+#      
+#    MB-System was created by Caress and Chayes in 1992 at the
+#      Lamont-Doherty Earth Observatory
+#      Columbia University
+#      Palisades, NY 10964
 #
+#    See README.md file for copying and redistribution conditions.
+#------------------------------------------------------------------------------
 
-message("in mbeditviz")
+message("In src/mbeditviz")
 
-add_executable(mbeditviz
-	       mbeditviz_main.c
-               mbeditviz_creation.c
-	       mbeditviz_prog.c
-	       mbeditviz_callbacks.c)
+find_package(X11 REQUIRED)
+find_package(Motif REQUIRED)
 
+add_library(mbeditvizlib mbeditviz_creation.c mbeditviz_prog.c
+                         mbeditviz_callbacks.c)
+target_include_directories(mbeditvizlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(mbeditvizlib PRIVATE mbaux mbxgr mbview
+  			    ${MOTIF_LIBRARIES}
+			    ${X11_LIBRARIES}
+			    ${X11_Xt_LIB})
 
-# Build library just containing non-GUI functions
-add_library(mbev
-            mbeditviz_prog.c)
+add_executable(mbeditviz mbeditviz_main.c mbeditviz_creation.c mbeditviz_prog.c
+                         mbeditviz_callbacks.c)
+target_include_directories(mbeditviz PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(mbeditviz PRIVATE mbaux mbxgr mbview
+  			    ${MOTIF_LIBRARIES}
+			    ${X11_LIBRARIES}
+			    ${X11_Xt_LIB})
 
-IF (APPLE)
-  # Resolve missing symbols at runtime
-  set_target_properties(mbev PROPERTIES LINK_FLAGS
-                  "-undefined dynamic_lookup -flat_namespace")
-ENDIF (APPLE)
-
-
-target_include_directories(mbeditviz
-                           PUBLIC
-                           .
-                           ${CMAKE_SOURCE_DIR}/src/mbio
-                           ${CMAKE_SOURCE_DIR}/src/mbaux
-                           ${CMAKE_SOURCE_DIR}/src/gsf
-			   ${NETCDF_INCLUDE_DIRS}
-                           ${PROJ_INCLUDE_DIRS}
-			   ${X11_INCLUDE_DIRS})
-
-target_include_directories(mbev
-                           PUBLIC
-                           .
-                           ${CMAKE_SOURCE_DIR}/src/mbio
-                           ${CMAKE_SOURCE_DIR}/src/mbaux
-                           ${CMAKE_SOURCE_DIR}/src/gsf
-                           ${CMAKE_SOURCE_DIR}/src/mbview
-                           ${PROJ_INCLUDE_DIRS}                           
-			   ${NETCDF_INCLUDE_DIRS}
-			   ${X11_INCLUDE_DIRS})
-
-# link_directories($GMT_LIBRARIES)
-target_link_libraries(mbeditviz
-                      PRIVATE
-                      mbio
-                      mbaux
-		      mbxgr
-                      mbview
-                      mbbsio
-                      mbsapi
-                      ${GSF_LIB}
-		      ${R7KR_LIB}
-		      ${MFRAME_LIB}
-		      ${GMT_LIBRARIES}
-		      ${NETCDF_LIBRARIES}
-		      ${MOTIF_LIBRARIES}
-		      ${X11_LIBRARIES}
-		      ${X11_XT_LIBRARIES}		      
-		      ${GDAL_LIBRARIES}
-		      ${PROJ_LIBRARIES}
-		      ${OPENGL_LIBRARIES}
-                      m
-                      pthread)
-                           
-                           
-
-
-install(TARGETS mbeditviz
-	DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS mbeditviz DESTINATION ${CMAKE_INSTALL_BINDIR})

@@ -1,51 +1,53 @@
+#------------------------------------------------------------------------------
+#    The MB-system:  CMakeLists.txt   27 June 2023
 #
-# Gets variables from root CMakeLists
+#    Copyright (c) 2023-2024 by
+#    David W. Caress (caress@mbari.org)
+#      Monterey Bay Aquarium Research Institute
+#      Moss Landing, California, USA
+#    Dale N. Chayes 
+#      Center for Coastal and Ocean Mapping
+#      University of New Hampshire
+#      Durham, New Hampshire, USA
+#    Christian dos Santos Ferreira
+#      MARUM
+#      University of Bremen
+#      Bremen Germany
+#      
+#    MB-System was created by Caress and Chayes in 1992 at the
+#      Lamont-Doherty Earth Observatory
+#      Columbia University
+#      Palisades, NY 10964
 #
+#    See README.md file for copying and redistribution conditions.
+#------------------------------------------------------------------------------
 
-message("in deprecated")
+message("In src/deprecated")
 
 set(executables
-    mb7k2jstar mb7k2ss mb7kpreprocess mbauvnavusbl
-    mbhsdump mbhysweeppreprocess mbinsreprocess
-    mbkongsbergpreprocess mbneptune2esf
-    mbrollbias mbrphsbias mbstripnan
-    mbswplspreprocess
-    )
+    mb7k2ss
+    mb7kpreprocess
+    mbauvnavusbl
+    mbhsdump
+    mbhysweeppreprocess
+    mbinsreprocess
+    mbkongsbergpreprocess
+    mbneptune2esf
+    mbrollbias
+    mbrphsbias
+    mbstripnan
+    mbswplspreprocess)
 
 foreach(executable ${executables})
-  add_executable(${executable}
-                 ${executable}.cc)
-
-  target_include_directories(${executable}
-                             PUBLIC
-                             .
-                             ${GMT_INCLUDE_DIRS}
-                             ${NETCDF_INCLUDE_DIRS}                           
-                             ${CMAKE_SOURCE_DIR}/src/mbio
-                             ${CMAKE_SOURCE_DIR}/src/mbaux
-                             ${CMAKE_SOURCE_DIR}/src/gsf)
-
-
-  target_link_libraries(${executable}
-                        PRIVATE
-                        mbio
-                        mbbsio
-                        mbaux
-                        mbsapi
-                        ${GSF_LIB}
-			${R7KR_LIB}
-			${MFRAME_LIB}
-	                ${GMT_LIBRARIES}
-                        ${NETCDF_LIBRARIES}
-                        ${GDAL_LIBRARIES}
-                        ${PROJ_LIBRARIES}
-                        ${FFTW_LIBRARIES}
-                        m
-                        pthread)
-
+  add_executable(${executable} ${executable}.cc)
+  target_link_libraries(${executable} mbio mbaux)
 endforeach()
-                           
-                           
-install(TARGETS ${executables}
-        DESTINATION ${CMAKE_INSTALL_BINDIR})
-	
+
+install(TARGETS ${executables} DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+set(macros
+    mbm_fmtvel
+    mbm_grd2geovrml
+    mbm_grid)
+
+install(PROGRAMS ${macros} DESTINATION ${CMAKE_INSTALL_BINDIR})

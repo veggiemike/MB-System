@@ -1,49 +1,69 @@
+#------------------------------------------------------------------------------
+#    The MB-system:  CMakeLists.txt   27 June 2023
 #
-# Gets variables from root CMakeLists
+#    Copyright (c) 2023-2024 by
+#    David W. Caress (caress@mbari.org)
+#      Monterey Bay Aquarium Research Institute
+#      Moss Landing, California, USA
+#    Dale N. Chayes 
+#      Center for Coastal and Ocean Mapping
+#      University of New Hampshire
+#      Durham, New Hampshire, USA
+#    Christian dos Santos Ferreira
+#      MARUM
+#      University of Bremen
+#      Bremen Germany
+#      
+#    MB-System was created by Caress and Chayes in 1992 at the
+#      Lamont-Doherty Earth Observatory
+#      Columbia University
+#      Palisades, NY 10964
 #
+#    See README.md file for copying and redistribution conditions.
+#------------------------------------------------------------------------------
 
-message("in mbnavadjust")
+message("In src/mbnavadjust")
 
-add_executable(mbnavadjust
-	       mbnavadjust_callbacks.c
-               mbnavadjust_creation.c
-               mbnavadjust_io.c
-	       mbnavadjust_prog.c
-	       mbnavadjust_util.c
-	       mbnavadjustmerge.c)
+find_package(X11 REQUIRED)
+find_package(Motif REQUIRED)
 
-target_include_directories(mbnavadjust
-                           PUBLIC
-                           .
-                           ${CMAKE_SOURCE_DIR}/src/mbio
-                           ${CMAKE_SOURCE_DIR}/src/mbaux
-                           ${CMAKE_SOURCE_DIR}/src/gsf
-			   ${NETCDF_INCLUDE_DIRS}
-			   ${X11_INCLUDE_DIRS})
-			   
-# link_directories($GMT_LIBRARIES)
-target_link_libraries(mbnavadjust
-                      PRIVATE
-                      mbio
-                      mbaux
-		      mbxgr
-                      mbview
-                      mbbsio
-                      mbsapi
-                      ${GSF_LIB}
-		      ${R7KR_LIB}
-		      ${MFRAME_LIB}
-		      ${GMT_LIBRARIES}
-		      ${NETCDF_LIBRARIES}
-		      ${MOTIF_LIBRARIES}
-		      ${X11_LIBRARIES}
-		      ${X11_XT_LIBRARIES}		      
-		      ${GDAL_LIBRARIES}
-		      ${PROJ_LIBRARIES}
-		      ${OPENGL_LIBRARIES}
-                      m
-                      pthread)
-                           
+add_executable(mbnavadjust 
+                mbnavadjust.c
+                mbnavadjust_callbacks.c 
+                mbnavadjust_creation.c 
+                mbnavadjust_io.c
+                mbnavadjust_prog.c 
+                mbnavadjust_util.c)
+	      
+	      target_link_libraries(mbnavadjust PRIVATE mbview mbaux mbxgr
+		 	${MOTIF_LIBRARIES}
+			${X11_LIBRARIES}
+			${X11_Xt_LIB})
 
-install(TARGETS mbnavadjust
-        DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+
+add_executable(mbnavadjustmerge mbnavadjustmerge.c mbnavadjust_io.c)
+target_link_libraries(mbnavadjustmerge PRIVATE mbaux )
+
+install(TARGETS mbnavadjust mbnavadjustmerge DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+if(buildPCL)
+  find_package(PCL REQUIRED)
+  find_package(LibPROJ REQUIRED)
+
+  if(LibPROJ_VERSION VERSION_LESS 5)
+    message("mbnavadjustfine requires modern PROJ4")
+  else()
+    add_executable(mbnavadjustfine mbnavadjust_fine.cc mbnavadjust_icp.cc
+                                   mbnavadjust_io.c)
+    target_link_libraries(mbnavadjustfine PRIVATE mbaux LibPROJ::LibPROJ
+                                                  pthread)
+
+    target_link_directories(mbnavadjustfine PRIVATE ${PCL_LIBRARY_DIRS})
+    target_include_directories(mbnavadjustfine PRIVATE ${PCL_INCLUDE_DIRS})
+    target_compile_definitions(mbnavadjustfine PRIVATE ${PCL_DEFINITIONS})
+    target_link_libraries(mbnavadjustfine PRIVATE ${PCL_LIBRARIES})
+
+    install(TARGETS mbnavadjustfine DESTINATION ${CMAKE_INSTALL_BINDIR})
+  endif()
+endif()

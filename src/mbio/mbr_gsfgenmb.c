@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mbr_gsfgenmb.c	2/27/98
  *
- *    Copyright (c) 1998-2020 by
+ *    Copyright (c) 1998-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * mbr_gsfgenmb.c contains the functions for reading and writing
@@ -221,7 +231,32 @@ int mbr_rt_gsfgenmb(int verbose, void *mbio_ptr, void *store_ptr, int *error) {
 
 	/* else deal with data */
 	else {
-
+/*
+if (dataID->recordID == GSF_RECORD_HEADER)
+fprintf(stderr, "dataID->recordID: %d  Read GSF_RECORD_HEADER\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SWATH_BATHYMETRY_PING)
+fprintf(stderr, "dataID->recordID: %d  Read GSF_RECORD_SWATH_BATHYMETRY_PING\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SOUND_VELOCITY_PROFILE)
+fprintf(stderr, "dataID->recordID: %d  Read GSF_RECORD_SOUND_VELOCITY_PROFILE\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_PROCESSING_PARAMETERS)
+fprintf(stderr, "dataID->recordID: %d  Read GSF_RECORD_PROCESSING_PARAMETERS\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SENSOR_PARAMETERS)
+fprintf(stderr, "dataID->recordID: %d  Read GSF_RECORD_SENSOR_PARAMETERS\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_COMMENT)
+fprintf(stderr, "dataID->recordID: %d  Read GSF_RECORD_COMMENT\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_HISTORY)
+fprintf(stderr, "dataID->recordID: %d  Read GSF_RECORD_HISTORY\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_NAVIGATION_ERROR)
+fprintf(stderr, "dataID->recordID: %d  Read GSF_RECORD_NAVIGATION_ERROR\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SWATH_BATHY_SUMMARY)
+fprintf(stderr, "dataID->recordID: %d  Read GSF_RECORD_SWATH_BATHY_SUMMARY\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SINGLE_BEAM_PING)
+fprintf(stderr, "dataID->recordID: %d  Read GSF_RECORD_SINGLE_BEAM_PING\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_HV_NAVIGATION_ERROR)
+fprintf(stderr, "dataID->recordID: %d  Read GSF_RECORD_HV_NAVIGATION_ERROR\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_ATTITUDE)
+fprintf(stderr, "dataID->recordID: %d  Read GSF_RECORD_ATTITUDE\n", dataID->recordID);
+*/
 		if (dataID->recordID == GSF_RECORD_HEADER) {
 			data->kind = MB_DATA_HEADER;
 			status = MB_SUCCESS;
@@ -471,6 +506,32 @@ int mbr_wt_gsfgenmb(int verbose, void *mbio_ptr, void *store_ptr, int *error) {
 		if (data->kind == MB_DATA_DATA && !mb_io_ptr->save1) {
 			/* write a processing parameter record */
 			dataID->recordID = GSF_RECORD_PROCESSING_PARAMETERS;
+/* 
+if (dataID->recordID == GSF_RECORD_HEADER)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_HEADER\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SWATH_BATHYMETRY_PING)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_SWATH_BATHYMETRY_PING\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SOUND_VELOCITY_PROFILE)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_SOUND_VELOCITY_PROFILE\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_PROCESSING_PARAMETERS)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_PROCESSING_PARAMETERS\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SENSOR_PARAMETERS)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_SENSOR_PARAMETERS\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_COMMENT)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_COMMENT\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_HISTORY)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_HISTORY\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_NAVIGATION_ERROR)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_NAVIGATION_ERROR\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SWATH_BATHY_SUMMARY)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_SWATH_BATHY_SUMMARY\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SINGLE_BEAM_PING)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_SINGLE_BEAM_PING\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_HV_NAVIGATION_ERROR)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_HV_NAVIGATION_ERROR\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_ATTITUDE)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_ATTITUDE\n", dataID->recordID);
+*/
 			if (gsfWrite((int)mb_io_ptr->gsfid, dataID, records) < 0) {
 				status = MB_FAILURE;
 				*error = MB_ERROR_WRITE_FAIL;
@@ -484,6 +545,32 @@ int mbr_wt_gsfgenmb(int verbose, void *mbio_ptr, void *store_ptr, int *error) {
 			mb_io_ptr->save1 = true;
 
 		/* write the record */
+/*
+if (dataID->recordID == GSF_RECORD_HEADER)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_HEADER\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SWATH_BATHYMETRY_PING)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_SWATH_BATHYMETRY_PING\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SOUND_VELOCITY_PROFILE)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_SOUND_VELOCITY_PROFILE\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_PROCESSING_PARAMETERS)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_PROCESSING_PARAMETERS\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SENSOR_PARAMETERS)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_SENSOR_PARAMETERS\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_COMMENT)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_COMMENT\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_HISTORY)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_HISTORY\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_NAVIGATION_ERROR)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_NAVIGATION_ERROR\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SWATH_BATHY_SUMMARY)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_SWATH_BATHY_SUMMARY\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_SINGLE_BEAM_PING)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_SINGLE_BEAM_PING\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_HV_NAVIGATION_ERROR)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_HV_NAVIGATION_ERROR\n", dataID->recordID);
+if (dataID->recordID == GSF_RECORD_ATTITUDE)
+fprintf(stderr, "dataID->recordID: %d  Write GSF_RECORD_ATTITUDE\n", dataID->recordID);
+*/
 		if (gsfWrite((int)mb_io_ptr->gsfid, dataID, records) < 0) {
 			status = MB_FAILURE;
 			*error = MB_ERROR_WRITE_FAIL;

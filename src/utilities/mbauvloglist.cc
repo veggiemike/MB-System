@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mbauvloglist.c	8/14/2006
  *
- *    Copyright (c) 2006-2020 by
+ *    Copyright (c) 2006-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * MBauvloglist prints the specified contents of an MBARI AUV mission log
@@ -46,24 +56,26 @@ typedef enum {
 
 typedef enum {
     INDEX_ZERO = -1,
-    INDEX_MERGE_LON = -2,
-    INDEX_MERGE_LAT = -3,
-    INDEX_MERGE_HEADING = -4,
-    INDEX_MERGE_SPEED = -5,
-    INDEX_MERGE_SENSORDEPTH = -6,
-    INDEX_MERGE_ROLL = -7,
-    INDEX_MERGE_PITCH = -8,
-    INDEX_MERGE_HEAVE = -9,
-    INDEX_CALC_CONDUCTIVITY = -10,
-    INDEX_CALC_TEMPERATURE = -11,
-    INDEX_CALC_PRESSURE = -12,
-    INDEX_CALC_SALINITY = -13,
-    INDEX_CALC_SOUNDSPEED = -14,
-    INDEX_CALC_POTENTIALTEMP = -15,
-    INDEX_CALC_DENSITY = -16,
-    INDEX_CALC_KTIME = -17,
-    INDEX_CALC_KSPEED = -18,
-    INDEX_TIME_INTERVAL = -19,
+    INDEX_MERGE_ALTITUDE = -2,
+    INDEX_MERGE_LON = -3,
+    INDEX_MERGE_LAT = -4,
+    INDEX_MERGE_HEADING = -5,
+    INDEX_MERGE_SPEED = -6,
+    INDEX_MERGE_SENSORDEPTH = -7,
+    INDEX_MERGE_ROLL = -8,
+    INDEX_MERGE_PITCH = -9,
+    INDEX_MERGE_HEAVE = -10,
+    INDEX_CALC_CONDUCTIVITY = -11,
+    INDEX_CALC_TEMPERATURE = -12,
+    INDEX_CALC_PRESSURE = -13,
+    INDEX_CALC_SALINITY = -14,
+    INDEX_CALC_SOUNDSPEED = -15,
+    INDEX_CALC_POTENTIALTEMP = -16,
+    INDEX_CALC_DENSITY = -17,
+    INDEX_CALC_KTIME = -18,
+    INDEX_CALC_KSPEED = -19,
+    INDEX_CALC_PSPEED = -20,
+    INDEX_TIME_INTERVAL = -21,
 } index_t;
 
 typedef enum {
@@ -115,6 +127,7 @@ struct printfield {
 	int index;
 	bool formatset;
 	char format[MB_PATH_MAXLINE];
+	double scale;
 };
 
 constexpr char program_name[] = "MBauvloglist";
@@ -225,9 +238,12 @@ int main(int argc, char **argv) {
 
 	bool printheader = false;
 	char file[MB_PATH_MAXLINE] = "";
+	mb_path altitude_file = "";
+	bool altitude_merge = false;
 	mb_path nav_file = "";
 	bool nav_merge = false;
-    bool nav_merge_clip = false;
+    bool merge_clip = false;
+    int decimate = 1;
 	output_t output_mode = OUTPUT_MODE_TAB;
 	int nprintfields = 0;
 	struct printfield printfields[NFIELDSMAX];
@@ -236,17 +252,19 @@ int main(int argc, char **argv) {
 	bool calc_density = false;
 	bool calc_ktime = false;
     bool calc_kspeed = false;
+    bool calc_pspeed = false;
 	bool recalculate_ctd = false;
 	int ctd_calibration_id = 0;
 	bool angles_in_degrees = false;
     bool calculate_time_interval  = false;
+    double scalevalue = 1.0;
 
 	{
 		bool errflg = false;
 		int c;
 		bool help = false;
 		char printformat[MB_PATH_MAXLINE] = "default";  // TODO(schwehr): Is this used correctly?
-		while ((c = getopt(argc, argv, "CcF:f:I:i:L:l:M:m:N:n:O:o:PpR:r:SsVvWwHh")) != -1)
+		while ((c = getopt(argc, argv, "A:a:CcD:d:F:f:I:i:L:l:M:m:N:n:O:o:PpR:r:SsVvWwX:x:Hh")) != -1)
 		{
 			switch (c) {
 			case 'H':
@@ -257,9 +275,18 @@ int main(int argc, char **argv) {
 			case 'v':
 				verbose++;
 				break;
+			case 'A':
+			case 'a':
+				sscanf(optarg, "%1023s", altitude_file);
+				altitude_merge = true;
+				break;
 			case 'C':
 			case 'c':
-				nav_merge_clip = true;
+				merge_clip = true;
+				break;
+			case 'D':
+			case 'd':
+				sscanf(optarg, "%d", &decimate);
 				break;
 			case 'F':
 			case 'f':
@@ -298,6 +325,8 @@ int main(int argc, char **argv) {
 					printfields[nprintfields].formatset = false;
 					strcpy(printfields[nprintfields].format, "");
 				}
+				printfields[nprintfields].scale = scalevalue;
+
 				if (strcmp(printfields[nprintfields].name, "calcPotentialTemperature") == 0)
 					calc_potentialtemp = true;
 				if (strcmp(printfields[nprintfields].name, "calcSoundspeed") == 0)
@@ -308,6 +337,8 @@ int main(int argc, char **argv) {
 					calc_ktime = true;
 				if (strcmp(printfields[nprintfields].name, "calcKSpeed") == 0)
 					calc_kspeed = true;
+				if (strcmp(printfields[nprintfields].name, "calcPSpeed") == 0)
+					calc_pspeed = true;
         		if (strcmp(printfields[nprintfields].name, "timeInterval") == 0)
           			calculate_time_interval = true;
 				printfields[nprintfields].index = -1;
@@ -326,6 +357,12 @@ int main(int argc, char **argv) {
 			case 'S':
 			case 's':
 				angles_in_degrees = true;
+				break;
+			case 'X':
+			case 'x':
+				double tmpd;
+				if (int nscan = sscanf(optarg, "%lf", &tmpd) == 1) 
+					scalevalue = tmpd;
 				break;
 			case '?':
 				errflg = true;
@@ -371,8 +408,12 @@ int main(int argc, char **argv) {
 			fprintf(stderr, "dbg2       speedmin:                 %f\n", speedmin);
 			fprintf(stderr, "dbg2       timegap:                  %f\n", timegap);
 			fprintf(stderr, "dbg2       file:                     %s\n", file);
+			fprintf(stderr, "dbg2       altitude_merge:           %d\n", altitude_merge);
+			fprintf(stderr, "dbg2       altitude_file:            %s\n", altitude_file);
 			fprintf(stderr, "dbg2       nav_merge:                %d\n", nav_merge);
-			fprintf(stderr, "dbg2       nav_merge_clip:           %d\n", nav_merge_clip);
+			fprintf(stderr, "dbg2       nav_file:                 %s\n", nav_file);
+			fprintf(stderr, "dbg2       merge_clip:               %d\n", merge_clip);
+			fprintf(stderr, "dbg2       decimate:                 %d\n", decimate);
 			fprintf(stderr, "dbg2       nav_file:                 %s\n", nav_file);
 			fprintf(stderr, "dbg2       output_mode:              %d\n", output_mode);
 			fprintf(stderr, "dbg2       printheader:              %d\n", printheader);
@@ -384,8 +425,8 @@ int main(int argc, char **argv) {
       fprintf(stderr, "dbg2       calculate_time_interval:  %d\n", calculate_time_interval);
 			fprintf(stderr, "dbg2       nprintfields:             %d\n", nprintfields);
 			for (int i = 0; i < nprintfields; i++)
-				fprintf(stderr, "dbg2         printfields[%d]:          %s %d %s\n", i, printfields[i].name, printfields[i].formatset,
-				        printfields[i].format);
+				fprintf(stderr, "dbg2         printfields[%d]:          %s %d %s %f\n", i, printfields[i].name, printfields[i].formatset,
+				        printfields[i].format, printfields[i].scale);
 		}
 
 		if (help) {
@@ -396,11 +437,17 @@ int main(int argc, char **argv) {
 	}
 
 	int error = MB_ERROR_NO_ERROR;
-	int nav_num = 0;
 	char buffer[MB_PATH_MAXLINE];
-	int nav_alloc = 0;
+
+	/* altitude data for merging */
+	int alt_alloc = 0;
+	int alt_num = 0;
+	double *alt_time_d = nullptr;
+	double *alt_altitude = nullptr;
 
 	/* navigation, heading, attitude data for merging in fnv format */
+	int nav_alloc = 0;
+	int nav_num = 0;
 	double *nav_time_d = nullptr;
 	double *nav_navlon = nullptr;
 	double *nav_navlat = nullptr;
@@ -412,6 +459,70 @@ int main(int argc, char **argv) {
 	double *nav_heave = nullptr;
 
 	int time_i[7];
+
+	/* if altitude merging to be done get altitude */
+	if (altitude_merge && strlen(altitude_file) > 0) {
+		/* count the data points in the altitude file */
+		alt_num = 0;
+		const int nchar = MB_PATH_MAXLINE - 1;
+		FILE *fp = fopen(altitude_file, "r");
+		if (fp == nullptr) {
+			fprintf(stderr, "\nUnable to Open Altitude File <%s> for reading\n", altitude_file);
+			fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+			exit(MB_ERROR_OPEN_FAIL);
+		}
+		char *result;
+		while ((result = fgets(buffer, nchar, fp)) == buffer)
+			alt_num++;
+		fclose(fp);
+
+		/* allocate arrays for nav */
+		if (alt_num > 0) {
+			alt_alloc = alt_num;
+			/* status = */ mb_mallocd(verbose, __FILE__, __LINE__, alt_num * sizeof(double), (void **)&alt_time_d, &error);
+			/* status = */ mb_mallocd(verbose, __FILE__, __LINE__, alt_num * sizeof(double), (void **)&alt_altitude, &error);
+
+			/* if error initializing memory then quit */
+			if (error != MB_ERROR_NO_ERROR) {
+				char *message = nullptr;
+				mb_error(verbose, error, &message);
+				fprintf(stderr, "\nMBIO Error allocating data arrays:\n%s\n", message);
+				fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+				exit(error);
+			}
+		}
+
+		/* read the data points in the altitude file */
+		alt_num = 0;
+		if ((fp = fopen(altitude_file, "r")) == nullptr) {
+			fprintf(stderr, "\nUnable to open altitude file <%s> for reading\n", altitude_file);
+			fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+			exit(MB_ERROR_OPEN_FAIL);
+		}
+    if (fp != NULL) {
+      bool done = false;
+      while (!done) {
+        memset(buffer, 0, MB_PATH_MAXLINE);
+      	char *line_ptr = fgets(buffer, MB_PATH_MAXLINE, fp);
+      	if (line_ptr == NULL) {
+          done = true;
+        }
+        else if (buffer[0] != '#') {
+    			double sec;
+    			const int nget = sscanf(
+    				buffer, "%lf %lf", &alt_time_d[alt_num], &alt_altitude[alt_num]);
+    			bool alt_ok = nget >= 2;
+    			if (alt_num > 0 && alt_time_d[alt_num] <= alt_time_d[alt_num - 1])
+    				alt_ok = false;
+    			if (alt_ok)
+    				alt_num++;
+        }
+      }
+		  fclose(fp);
+    }
+	}
+  if (altitude_merge)
+		fprintf(stderr, "%d %d records read from altitude file %s\n", alt_alloc, alt_num, altitude_file);
 
 	/* if nav merging to be done get nav */
 	if (nav_merge && strlen(nav_file) > 0) {
@@ -499,7 +610,8 @@ int main(int argc, char **argv) {
 	int nfields = 0;
 	int recordsize = 0;
 	bool ktime_available = false;
-  bool kvelocity_available = false;
+    bool kvelocity_available = false;
+    bool pvelocity_available = false;
 
 	/* auv log data */
 	struct field fields[NFIELDSMAX];
@@ -538,11 +650,14 @@ int main(int argc, char **argv) {
 				/* TODO(schwehr): Is something missing? */
 				if (angles_in_degrees &&
 				    (strcmp(fields[nfields].name, "mLonK") == 0   || strcmp(fields[nfields].name, "mLatK") == 0 ||
-             strcmp(fields[nfields].name, "mRollK") == 0  || strcmp(fields[nfields].name, "mPitchK") == 0 ||
-             strcmp(fields[nfields].name, "mHeadK") == 0  || strcmp(fields[nfields].name, "mYawK") == 0 ||
-             strcmp(fields[nfields].name, "mLonCB") == 0  || strcmp(fields[nfields].name, "mLatCB") == 0 ||
-             strcmp(fields[nfields].name, "mRollCB") == 0 || strcmp(fields[nfields].name, "mPitchCB") == 0 ||
-             strcmp(fields[nfields].name, "mHeadCB") == 0 || strcmp(fields[nfields].name, "mYawCB") == 0))
+                    strcmp(fields[nfields].name, "mRollK") == 0  || strcmp(fields[nfields].name, "mPitchK") == 0 ||
+                    strcmp(fields[nfields].name, "mHeadK") == 0  || strcmp(fields[nfields].name, "mYawK") == 0 ||
+                    strcmp(fields[nfields].name, "mLonCB") == 0  || strcmp(fields[nfields].name, "mLatCB") == 0 ||
+                    strcmp(fields[nfields].name, "mRollCB") == 0 || strcmp(fields[nfields].name, "mPitchCB") == 0 ||
+                    strcmp(fields[nfields].name, "mHeadCB") == 0 || strcmp(fields[nfields].name, "mYawCB") == 0 ||
+				    strcmp(fields[nfields].name, "phins_lon") == 0   || strcmp(fields[nfields].name, "phins_lat") == 0 ||
+                    strcmp(fields[nfields].name, "phins_roll") == 0  || strcmp(fields[nfields].name, "phins_pitch") == 0 ||
+                    strcmp(fields[nfields].name, "phins_head") == 0))
 					fields[nfields].scale = RTD;
 				else
 					fields[nfields].scale = 1.0;
@@ -564,6 +679,7 @@ int main(int argc, char **argv) {
 				fields[nfields].type = TYPE_TIMETAG;
 				fields[nfields].size = 8;
 				fields[nfields].scale = 1.0;
+				strcpy(fields[nfields].format, "%17.6f"); /* reset printing format from "%8.8e" */
 				recordsize += 8;
 			}
 			else if (strcmp(type, "angle") == 0) {
@@ -580,12 +696,18 @@ int main(int argc, char **argv) {
 			}
 
       /* check if kearfott time is in this file */
-      if (strcmp(fields[nfields].name, "utcTime") == 0)
-          ktime_available = true;
+      if (strcmp(fields[nfields].name, "utcTime") == 0) {
+        ktime_available = true;
+				strcpy(fields[nfields].format, "%12.6f"); /* reset printing format from "%8.8e" */
+      }
 
-      /* check if kearfott velocity vector is in this file */
+      /* check if Kearfott velocity vector is in this file */
       if (strcmp(fields[nfields].name, "mVbodyxK") == 0)
           kvelocity_available = true;
+
+      /* check if Phins velocity vector is in this file */
+      if (strcmp(fields[nfields].name, "phins_vnorth") == 0)
+          pvelocity_available = true;
 
       /* check if raw and processed ctd data are in this file */
       if (strcmp(fields[nfields].name, "cond_frequency") == 0)
@@ -661,6 +783,12 @@ int main(int argc, char **argv) {
 		exit(MB_ERROR_BAD_FORMAT);
     }
 
+    /* if calculating speed from Phins velocity vector check for available Phins data */
+    if (calc_pspeed && !pvelocity_available) {
+		fprintf(stderr, "\nUnable to calculate speed from Phins data as requested, Phins velocity data not in file <%s>\n", file);
+		exit(MB_ERROR_BAD_FORMAT);
+    }
+
 	/* check the fields to be printed */
 	for (int i = 0; i < nprintfields; i++) {
 		if (strcmp(printfields[i].name, "zero") == 0) {
@@ -673,6 +801,12 @@ int main(int argc, char **argv) {
 			printfields[i].index = INDEX_ZERO;
 			if (!printfields[i].formatset) {
 				strcpy(printfields[i].format, "%.8f");
+			}
+		}
+		else if (strcmp(printfields[i].name, "mergeAltitude") == 0) {
+			printfields[i].index = INDEX_MERGE_ALTITUDE;
+			if (!printfields[i].formatset) {
+				strcpy(printfields[i].format, "%.3f");
 			}
 		}
 		else if (strcmp(printfields[i].name, "mergeLon") == 0) {
@@ -783,6 +917,12 @@ int main(int argc, char **argv) {
 				strcpy(printfields[i].format, "%.3f");
 			}
 		}
+		else if (strcmp(printfields[i].name, "calcPSpeed") == 0) {
+			printfields[i].index = INDEX_CALC_PSPEED;
+			if (!printfields[i].formatset) {
+				strcpy(printfields[i].format, "%.3f");
+			}
+		}
 		else if (strcmp(printfields[i].name, "timeInterval") == 0) {
 			printfields[i].index = INDEX_TIME_INTERVAL;
 			if (!printfields[i].formatset) {
@@ -829,28 +969,33 @@ int main(int argc, char **argv) {
     double prior_time_d = 0.0;
 
 	/* read the data records in the auv log file */
+	int decimate_count = 0;
 	int nrecord = 0;
 	while (fread(buffer, recordsize, 1, fp) == 1) {
         bool output_ok = true;
+        decimate_count++;
+	    double time_d = 0.0;
+        for (int ii = 0; ii < nfields; ii++) {
+          if (strcmp(fields[ii].name, "time") == 0)
+            mb_get_binary_double(true, &buffer[fields[ii].index], &time_d);
+        }
 
         /* if needed check timestamp */
-        if (nav_merge && nav_merge_clip) {
-          double time_d = 0.0;
+        if (nav_merge && merge_clip) {
           for (int ii = 0; ii < nfields; ii++) {
             if (strcmp(fields[ii].name, "time") == 0)
               mb_get_binary_double(true, &buffer[fields[ii].index], &time_d);
           }
-          if (time_d < nav_time_d[1] || time_d > nav_time_d[nav_num-2])
+          if (nav_num < 2) {
+          	output_ok = false;
+          }
+          else if (time_d < nav_time_d[1] || time_d > nav_time_d[nav_num-2]) {
             output_ok = false;
+          }
         }
 
         /* calculate timeInterval */
         if (calculate_time_interval) {
-          double time_d = 0.0;
-          for (int ii = 0; ii < nfields; ii++) {
-            if (strcmp(fields[ii].name, "time") == 0)
-              mb_get_binary_double(true, &buffer[fields[ii].index], &time_d);
-          }
           if (prior_time_d > 0.0) {
             time_interval = time_d - prior_time_d;
           }
@@ -904,8 +1049,7 @@ int main(int argc, char **argv) {
 
         /* calculate timestamp by adding Kearfott second-of-day value (utcTime) to seconds to the start of day
          * from the overall timestamp (time) */
-	      double ktime_calc = 0.0;
-	      double time_d = 0.0;
+	    double ktime_calc = 0.0;
         if (ktime_available && calc_ktime) {
             /* else deal with existing values if available */
             double startofday_time_d = 0.0;
@@ -938,13 +1082,51 @@ int main(int argc, char **argv) {
           kspeed_calc = 3.6 * sqrt(mVbodyxK * mVbodyxK + mVbodyyK * mVbodyyK);
         }
 
+        /* calculate lateral speed in km/hr from x and y velocity components in Phins data */
+        double pspeed_calc = 0.0;
+        if (pvelocity_available && calc_pspeed) {
+          double mVbodyxP = 0.0;
+          double mVbodyyP = 0.0;
+          for (int ii = 0; ii < nfields; ii++) {
+      		if (strcmp(fields[ii].name, "phins_vnorth") == 0) {
+                mb_get_binary_double(true, &buffer[fields[ii].index], &mVbodyxP);
+      		}
+      		else if (strcmp(fields[ii].name, "phins_veast") == 0) {
+                mb_get_binary_double(true, &buffer[fields[ii].index], &mVbodyyP);
+      		}
+          }
+          pspeed_calc = 3.6 * sqrt(mVbodyxP * mVbodyxP + mVbodyyP * mVbodyyP);
+        }
+
 		/* loop over the printfields */
-    if (output_ok) {
-  		for (int i = 0; i < nprintfields; i++) {
+		if (decimate > 1) {
+			if (decimate_count >= decimate) {
+				decimate_count = 0;
+			}
+			else {
+				output_ok = false;
+			}
+		}
+    	if (output_ok) {
+  		  for (int i = 0; i < nprintfields; i++) {
   			const index_t index = static_cast<index_t>(printfields[i].index);
+  			double scale_output = printfields[i].scale;
   			// TODO(schwehr): Make this a switch.
   			if (index == INDEX_ZERO) {
   				double dvalue = 0.0;
+  				if (output_mode == OUTPUT_MODE_BINARY)
+  					fwrite(&dvalue, sizeof(double), 1, stdout);
+  				else
+  					fprintf(stdout, printfields[i].format, dvalue);
+  			}
+  			else if (index == INDEX_MERGE_ALTITUDE) {
+  				double dvalue = 0.0;
+  				int jinterp = 0;
+  				mb_linear_interp(verbose, alt_time_d - 1, alt_altitude - 1, alt_num, time_d, &dvalue,
+  				                                           &jinterp, &error);
+  				if (jinterp < 2 || jinterp > nav_num - 2)
+  					dvalue = 0.0;
+  				dvalue *= scale_output;
   				if (output_mode == OUTPUT_MODE_BINARY)
   					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
@@ -957,6 +1139,7 @@ int main(int argc, char **argv) {
   				                                           &jinterp, &error);
   				if (jinterp < 2 || jinterp > nav_num - 2)
   					dvalue = 0.0;
+  				dvalue *= scale_output;
   				if (output_mode == OUTPUT_MODE_BINARY)
   					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
@@ -969,6 +1152,7 @@ int main(int argc, char **argv) {
   				                                          &jinterp, &error);
   				if (jinterp < 2 || jinterp > nav_num - 2)
   					dvalue = 0.0;
+  				dvalue *= scale_output;
   				if (output_mode == OUTPUT_MODE_BINARY)
   					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
@@ -981,6 +1165,7 @@ int main(int argc, char **argv) {
   				                                         &jinterp, &error);
   				if (jinterp < 2 || jinterp > nav_num - 2)
   					dvalue = 0.0;
+  				dvalue *= scale_output;
   				if (output_mode == OUTPUT_MODE_BINARY)
   					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
@@ -993,7 +1178,8 @@ int main(int argc, char **argv) {
   				    mb_linear_interp(verbose, nav_time_d - 1, nav_speed - 1, nav_num, time_d, &dvalue, &jinterp, &error);
   				if (jinterp < 2 || jinterp > nav_num - 2)
   					dvalue = 0.0;
-  				if (output_mode == OUTPUT_MODE_BINARY)
+   				dvalue *= scale_output;
+ 				if (output_mode == OUTPUT_MODE_BINARY)
   					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
   					fprintf(stdout, printfields[i].format, dvalue);
@@ -1005,6 +1191,7 @@ int main(int argc, char **argv) {
   				    mb_linear_interp(verbose, nav_time_d - 1, nav_sensordepth - 1, nav_num, time_d, &dvalue, &jinterp, &error);
   				if (jinterp < 2 || jinterp > nav_num - 2)
   					dvalue = 0.0;
+  				dvalue *= scale_output;
   				if (output_mode == OUTPUT_MODE_BINARY)
   					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
@@ -1017,6 +1204,7 @@ int main(int argc, char **argv) {
   				    mb_linear_interp(verbose, nav_time_d - 1, nav_roll - 1, nav_num, time_d, &dvalue, &jinterp, &error);
   				if (jinterp < 2 || jinterp > nav_num - 2)
   					dvalue = 0.0;
+  				dvalue *= scale_output;
   				if (output_mode == OUTPUT_MODE_BINARY)
   					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
@@ -1029,6 +1217,7 @@ int main(int argc, char **argv) {
   				    mb_linear_interp(verbose, nav_time_d - 1, nav_pitch - 1, nav_num, time_d, &dvalue, &jinterp, &error);
   				if (jinterp < 2 || jinterp > nav_num - 2)
   					dvalue = 0.0;
+  				dvalue *= scale_output;
   				if (output_mode == OUTPUT_MODE_BINARY)
   					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
@@ -1041,75 +1230,93 @@ int main(int argc, char **argv) {
   				    mb_linear_interp(verbose, nav_time_d - 1, nav_heave - 1, nav_num, time_d, &dvalue, &jinterp, &error);
   				if (jinterp < 2 || jinterp > nav_num - 2)
   					dvalue = 0.0;
-  				if (output_mode == OUTPUT_MODE_BINARY)
+   				dvalue *= scale_output;
+ 				if (output_mode == OUTPUT_MODE_BINARY)
   					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
   					fprintf(stdout, printfields[i].format, dvalue);
   			}
   			else if (index == INDEX_CALC_CONDUCTIVITY) {
+  				double dvalue = scale_output * conductivity_calc;
   				if (output_mode == OUTPUT_MODE_BINARY)
-  					fwrite(&conductivity_calc, sizeof(double), 1, stdout);
+  					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
-  					fprintf(stdout, printfields[i].format, conductivity_calc);
+  					fprintf(stdout, printfields[i].format, dvalue);
   			}
   			else if (index == INDEX_CALC_TEMPERATURE) {
+  				double dvalue = scale_output * temperature_calc;
   				if (output_mode == OUTPUT_MODE_BINARY)
-  					fwrite(&temperature_calc, sizeof(double), 1, stdout);
+  					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
-  					fprintf(stdout, printfields[i].format, temperature_calc);
+  					fprintf(stdout, printfields[i].format, dvalue);
   			}
   			else if (index == INDEX_CALC_PRESSURE) {
+  				double dvalue = scale_output * pressure_calc;
   				if (output_mode == OUTPUT_MODE_BINARY)
-  					fwrite(&pressure_calc, sizeof(double), 1, stdout);
+  					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
-  					fprintf(stdout, printfields[i].format, pressure_calc);
+  					fprintf(stdout, printfields[i].format, dvalue);
   			}
   			else if (index == INDEX_CALC_SALINITY) {
+  				double dvalue = scale_output * salinity_calc;
   				if (output_mode == OUTPUT_MODE_BINARY)
-  					fwrite(&salinity_calc, sizeof(double), 1, stdout);
+  					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
-  					fprintf(stdout, printfields[i].format, salinity_calc);
+  					fprintf(stdout, printfields[i].format, dvalue);
   			}
   			else if (index == INDEX_CALC_SOUNDSPEED) {
+  				double dvalue = scale_output * soundspeed_calc;
   				if (output_mode == OUTPUT_MODE_BINARY)
-  					fwrite(&soundspeed_calc, sizeof(double), 1, stdout);
+  					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
-  					fprintf(stdout, printfields[i].format, soundspeed_calc);
+  					fprintf(stdout, printfields[i].format, dvalue);
   			}
   			else if (index == INDEX_CALC_POTENTIALTEMP) {
+  				double dvalue = scale_output * potentialtemperature_calc;
   				if (output_mode == OUTPUT_MODE_BINARY)
-  					fwrite(&potentialtemperature_calc, sizeof(double), 1, stdout);
+  					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
-  					fprintf(stdout, printfields[i].format, potentialtemperature_calc);
+  					fprintf(stdout, printfields[i].format, dvalue);
   			}
   			else if (index == INDEX_CALC_DENSITY) {
+  				double dvalue = scale_output * density_calc;
   				if (output_mode == OUTPUT_MODE_BINARY)
-  					fwrite(&density_calc, sizeof(double), 1, stdout);
+  					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
-  					fprintf(stdout, printfields[i].format, density_calc);
+  					fprintf(stdout, printfields[i].format, dvalue);
   			}
   			else if (index == INDEX_CALC_KTIME) {
+  				double dvalue = scale_output * ktime_calc;
   				if (output_mode == OUTPUT_MODE_BINARY)
-  					fwrite(&ktime_calc, sizeof(double), 1, stdout);
+  					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
-  					fprintf(stdout, printfields[i].format, ktime_calc);
+  					fprintf(stdout, printfields[i].format, dvalue);
   			}
   			else if (index == INDEX_CALC_KSPEED) {
+  				double dvalue = scale_output * kspeed_calc;
   				if (output_mode == OUTPUT_MODE_BINARY)
-  					fwrite(&kspeed_calc, sizeof(double), 1, stdout);
+  					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
-  					fprintf(stdout, printfields[i].format, kspeed_calc);
+  					fprintf(stdout, printfields[i].format, dvalue);
+  			}
+  			else if (index == INDEX_CALC_PSPEED) {
+  				double dvalue = scale_output * pspeed_calc;
+  				if (output_mode == OUTPUT_MODE_BINARY)
+  					fwrite(&dvalue, sizeof(double), 1, stdout);
+  				else
+  					fprintf(stdout, printfields[i].format, dvalue);
   			}
   			else if (index == INDEX_TIME_INTERVAL) {
+  				double dvalue = scale_output * time_interval;
   				if (output_mode == OUTPUT_MODE_BINARY)
-  					fwrite(&time_interval, sizeof(double), 1, stdout);
+  					fwrite(&dvalue, sizeof(double), 1, stdout);
   				else
-  					fprintf(stdout, printfields[i].format, time_interval);
+  					fprintf(stdout, printfields[i].format, dvalue);
   			}
   			else if (fields[index].type == TYPE_DOUBLE) {
   				double dvalue = 0.0;
   				mb_get_binary_double(true, &buffer[fields[index].index], &dvalue);
-  				dvalue *= fields[index].scale;
+  				dvalue *= (fields[index].scale * scale_output);
   				if ((strcmp(fields[nfields].name, "mHeadK") == 0 || strcmp(fields[nfields].name, "mYawK") == 0) &&
   				    angles_in_degrees && dvalue < 0.0)
   					dvalue += 360.0;
@@ -1137,7 +1344,7 @@ int main(int argc, char **argv) {
   			else if (fields[index].type == TYPE_TIMETAG) {
   				double dvalue = 0.0;
   				mb_get_binary_double(true, &buffer[fields[index].index], &dvalue);
-  				time_d = dvalue;
+  				time_d = scale_output * dvalue;
   				if (strcmp(printfields[i].format, "time_i") == 0) {
   					mb_get_date(verbose, time_d, time_i);
   					if (output_mode == OUTPUT_MODE_BINARY) {
@@ -1146,8 +1353,8 @@ int main(int argc, char **argv) {
   					else if (output_mode == OUTPUT_MODE_CSV) {
   						fprintf(stdout, "%4.4d,%2.2d,%2.2d,%2.2d,%2.2d,%2.2d.%6.6d", time_i[0], time_i[1], time_i[2], time_i[3],
   						        time_i[4], time_i[5], time_i[6]);
-            }
-            else {
+            		}
+            		else {
   						fprintf(stdout, "%4.4d %2.2d %2.2d %2.2d %2.2d %2.2d.%6.6d", time_i[0], time_i[1], time_i[2], time_i[3],
   						        time_i[4], time_i[5], time_i[6]);
   					}
@@ -1167,7 +1374,7 @@ int main(int argc, char **argv) {
   					else if (output_mode == OUTPUT_MODE_CSV) {
   						fprintf(stdout, "%4.4d,%3.3d,%2.2d,%2.2d,%2.2d.%6.6d", time_i[0], time_j[1], time_i[3], time_i[4],
   						        time_i[5], time_i[6]);
-            }
+            		}
   					else {
   						fprintf(stdout, "%4.4d %3.3d %2.2d %2.2d %2.2d.%6.6d", time_i[0], time_j[1], time_i[3], time_i[4],
   						        time_i[5], time_i[6]);
@@ -1184,7 +1391,8 @@ int main(int argc, char **argv) {
   				double dvalue = 0.0;
   				mb_get_binary_double(true, &buffer[fields[index].index], &dvalue);
   				dvalue *= fields[index].scale;
-  				if (strcmp(fields[index].name, "mYawCB") == 0 && angles_in_degrees && dvalue < 0.0)
+   				dvalue *= scale_output;
+ 				if (strcmp(fields[index].name, "mYawCB") == 0 && angles_in_degrees && dvalue < 0.0)
   					dvalue += 360.0;
   				if (output_mode == OUTPUT_MODE_BINARY)
   					fwrite(&dvalue, sizeof(double), 1, stdout);

@@ -1,18 +1,31 @@
 /*--------------------------------------------------------------------
  *    The MB-system:  mb_proj.c  7/16/2002
   *
- *    Copyright (c) 2002-2020 by
+ *    Copyright (c) 2002-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /** @file
- * mb_proj.c includes the "mb_" functions used to initialize
+ * @brief mb_system functions to initialize and transform between projections and
+ * geographic coordinates systems.
+ * 
+ * @details  Declare mb_system functions used to initialize
  * projections, and then to do forward (mb_proj_forward())
  * and inverse (mb_proj_inverse()) projections
  * between geographic coordinates (longitude and latitude) and
@@ -298,7 +311,7 @@ static int mb_proj6_init(int verbose, char *source_crs, char *target_crs, void *
   if (source_crs == NULL) {
       strcpy(source, "EPSG:4326");
   }
-  else if (strncmp(source_crs, "epsg:", 5) == 0) {
+  else if (strncmp(source_crs, "epsg:", 5) == 0 || strncmp(source_crs, "EPSG:", 5) == 0) {
     strcpy(source, "EPSG:");
     strncpy(&source[5], &source_crs[5], (sizeof(mb_path) - 6));
     source[sizeof(mb_path)-1] = 0;
@@ -320,11 +333,21 @@ static int mb_proj6_init(int verbose, char *source_crs, char *target_crs, void *
       sprintf(source, "EPSG:%4.4d", epsg_id);
     }
   }
+  else if (strncmp(source_crs, "LTM", 3) == 0) {
+    double lon_origin, lat_origin;
+    int n = sscanf(source_crs, "LTM%lf/%lf", &lon_origin, &lat_origin);
+    if (n == 2 && fabs(lon_origin) <= 180.0 && fabs(lat_origin) <= 90.0) {
+      sprintf(source, "+proj=tmerc +lon_0=%.9f +lat_0=%.9f +ellps=WGS84", lon_origin, lat_origin);
+    }
+    else {
+      fprintf(stderr, "Bad definition of a local transverse mercator projection: %s\n", source_crs);
+    }
+  }
   else {
     strncpy(source, source_crs, sizeof(mb_path)-1);
   }
   mb_path target;
-  if (strncmp(target_crs, "epsg:", 5) == 0) {
+  if (strncmp(target_crs, "epsg:", 5) == 0 || strncmp(target_crs, "EPSG:", 5) == 0) {
     strcpy(target, "EPSG:");
     strncpy(&target[5], &target_crs[5], (sizeof(mb_path) - 6));
     target[sizeof(mb_path)-1] = 0;
@@ -344,6 +367,16 @@ static int mb_proj6_init(int verbose, char *source_crs, char *target_crs, void *
         epsg_id = 32700 + utm_zone;
       }
       sprintf(target, "EPSG:%4.4d", epsg_id);
+    }
+  }
+  else if (strncmp(target_crs, "LTM", 3) == 0) {
+    double lon_origin, lat_origin;
+    int n = sscanf(target_crs, "LTM%lf/%lf", &lon_origin, &lat_origin);
+    if (n == 2 && fabs(lon_origin) <= 180.0 && fabs(lat_origin) <= 90.0) {
+      sprintf(target, "+proj=tmerc +lon_0=%.9f +lat_0=%.9f +ellps=WGS84", lon_origin, lat_origin);
+    }
+    else {
+      fprintf(stderr, "Bad definition of a local transverse mercator projection: %s\n", target_crs);
     }
   }
   else {

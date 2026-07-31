@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mbr_sburivax.c	2/2/93
  *
- *    Copyright (c) 1993-2020 by
+ *    Copyright (c) 1993-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * mbr_sburivax.c contains the functions for reading and writing
@@ -282,6 +292,10 @@ int mbr_rt_sburivax(int verbose, void *mbio_ptr, void *store_ptr, int *error) {
 		/* time stamp */
 		store->year = data->year;
 		store->day = data->day;
+		if (data->sec == 60) {
+		  data->min++;
+		  data->sec = 0;
+		}
 		store->min = data->min;
 		store->sec = data->sec;
 

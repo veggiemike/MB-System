@@ -54,8 +54,8 @@ public:
 
             nav_input::mDataInstMutex.lock();
             // set (Instantaneous) nav values
-            double lat = ns.last_lonlat_fix[1];
-            double lon = ns.last_lonlat_fix[0];
+            double lat = ns.absolute_position[1];
+            double lon = ns.absolute_position[0];
             double depth = ns.depth;
             nav_flags_t nflags = 0;
             nflags |= (ns.relative_position_ok ? NF_POS_VALID : 0);
@@ -85,7 +85,7 @@ public:
         // behavior, i.e. defer notification until processing
         // is complete
         if(mDelegateNotify){
-            TRN_NDPRINT(5, "NAV_SOL::%s:%d  NOTIFY SEM\n", __func__, __LINE__);
+            TRN_NDPRINT(6, "NAV_SOL::%s:%d  NOTIFY SEM\n", __func__, __LINE__);
 
             notify_sem_list();
         }

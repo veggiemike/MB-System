@@ -1,29 +1,49 @@
+#------------------------------------------------------------------------------
+#    The MB-system:  CMakeLists.txt   27 June 2023
 #
+#    Copyright (c) 2023-2024 by
+#    David W. Caress (caress@mbari.org)
+#      Monterey Bay Aquarium Research Institute
+#      Moss Landing, California, USA
+#    Dale N. Chayes 
+#      Center for Coastal and Ocean Mapping
+#      University of New Hampshire
+#      Durham, New Hampshire, USA
+#    Christian dos Santos Ferreira
+#      MARUM
+#      University of Bremen
+#      Bremen Germany
+#      
+#    MB-System was created by Caress and Chayes in 1992 at the
+#      Lamont-Doherty Earth Observatory
+#      Columbia University
+#      Palisades, NY 10964
 #
+#    See README.md file for copying and redistribution conditions.
+#------------------------------------------------------------------------------
 
-message("in bsio")
+message("In src/bsio")
 
-# add static or shared library, depending on BUILD_SHARED_LIBS
-add_library(mbbsio
-           mbbs_io.c
-           mbbs_iomrv1.c
-           mbbs_iomrv2.c
-           mbbs_memalloc.c
-           mbbs_misc.c
-           mbbs_swapbytes.c
-           mbbs_tm.c
-           mbbs_wrhdrfields.c
-           mbbs_wrsampflags.c)
+if(CMAKE_SYSTEM_NAME STREQUAL Linux)
+  find_package(TIRPC REQUIRED)
+else()
+  add_library(TIRPC::TIRPC INTERFACE IMPORTED)
+endif()
 
-target_compile_definitions(mbbsio PRIVATE 
-         $<$<COMPILE_LANG_AND_ID:C,GNU>:HAVE_CONFIG_H>
-         $<$<COMPILE_LANG_AND_ID:C,CC>:HAVE_CONFIG_H>)
+add_library(
+  mbbsio
+  mbbs_io.c
+  mbbs_iomrv1.c
+  mbbs_iomrv2.c
+  mbbs_memalloc.c
+  mbbs_misc.c
+  mbbs_swapbytes.c
+  mbbs_tm.c
+  mbbs_wrhdrfields.c
+  mbbs_wrsampflags.c)
 
-target_include_directories(mbbsio
-                           PUBLIC
-                           .
-                           ${CMAKE_SOURCE_DIR}/src/mbio
-                           ${CMAKE_SOURCE_DIR}/src/mbaux)
+set_target_properties(mbbsio PROPERTIES VERSION "0" SOVERSION "0")
+target_include_directories(mbbsio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(mbbsio PRIVATE TIRPC::TIRPC)
 
-install(TARGETS mbbsio mbbsio
-	DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS mbbsio DESTINATION ${CMAKE_INSTALL_LIBDIR})

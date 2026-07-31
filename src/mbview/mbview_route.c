@@ -1,16 +1,26 @@
 /*------------------------------------------------------------------------------
  *    The MB-system:	mbview_route.c	9/25/2003
  *
- *    Copyright (c) 2003-2020 by
+ *    Copyright (c) 2003-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
- *------------------------------------------------------------------------------*/
+ *    See README.md file for copying and redistribution conditions.
+ *--------------------------------------------------------------------*/
 /*
  *
  * Author:	D. W. Caress
@@ -464,6 +474,12 @@ int mbview_addroute(int verbose, size_t instance, int npoint, double *routelon, 
 
 		/* get route positions in display coordinates */
 		status = mbview_projectll2display(instance, routelon[i], routelat[i], zdata, &xdisplay, &ydisplay, &zdisplay);
+		
+		if (isnan(xdisplay)) {
+			mbv_verbose = 5;
+			status = mbview_projectll2display(instance, routelon[i], routelat[i], zdata, &xdisplay, &ydisplay, &zdisplay);
+			mbv_verbose = 0;
+		}
 
 		/* check for reasonable coordinates */
 		if (fabs(xdisplay) < 1000.0 && fabs(ydisplay) < 1000.0 && fabs(zdisplay) < 1000.0) {
@@ -680,7 +696,7 @@ int mbview_deleteallroutes(int verbose, size_t instance, int *error) {
 /*------------------------------------------------------------------------------*/
 int mbview_getroute(int verbose, size_t instance, int route, int *npointtotal, double *routelon, double *routelat, int *waypoint,
                     double *routetopo, double *routebearing, double *distlateral, double *distovertopo, double *slope,
-                    int *routecolor, int *routesize, mb_path routename, int *error) {
+                    int *routecolor, int *routesize, int *routeeditmode, mb_path routename, int *error) {
 	/* local variables */
 	int status = MB_SUCCESS;
 	struct mbview_world_struct *view;
@@ -708,6 +724,7 @@ int mbview_getroute(int verbose, size_t instance, int route, int *npointtotal, d
 		fprintf(stderr, "dbg2       slope:                     %p\n", slope);
 		fprintf(stderr, "dbg2       routecolor:                %p\n", routecolor);
 		fprintf(stderr, "dbg2       routesize:                 %p\n", routesize);
+		fprintf(stderr, "dbg2       routeeditmode:             %p\n", routeeditmode);
 		fprintf(stderr, "dbg2       routename:                 %p\n", routename);
 	}
 
@@ -821,6 +838,7 @@ int mbview_getroute(int verbose, size_t instance, int route, int *npointtotal, d
 		/* get color size and name */
 		*routecolor = shared.shareddata.routes[route].color;
 		*routesize = shared.shareddata.routes[route].size;
+		*routeeditmode = shared.shareddata.routes[route].editmode;
 		strcpy(routename, shared.shareddata.routes[route].name);
 
 		/* recalculate slope */
@@ -856,6 +874,7 @@ int mbview_getroute(int verbose, size_t instance, int route, int *npointtotal, d
 		fprintf(stderr, "dbg2       npointtotal:               %d\n", *npointtotal);
 		fprintf(stderr, "dbg2       routecolor:                %d\n", *routecolor);
 		fprintf(stderr, "dbg2       routesize:                 %d\n", *routesize);
+		fprintf(stderr, "dbg2       routeeditmode:             %d\n", *routeeditmode);
 		fprintf(stderr, "dbg2       routename:                 %s\n", routename);
 		for (i = 0; i < *npointtotal; i++) {
 			fprintf(
@@ -1796,11 +1815,9 @@ int mbview_route_add(int verbose, size_t instance, int inew, int jnew, int waypo
 					shared.shareddata.routes[i].segments = NULL;
 					status = mb_reallocd(mbv_verbose, __FILE__, __LINE__, shared.shareddata.routes[i].npoints_alloc * sizeof(int),
 					                     (void **)&(shared.shareddata.routes[i].waypoint), &error);
-					status =
-					    mb_reallocd(mbv_verbose, __FILE__, __LINE__, shared.shareddata.routes[i].npoints_alloc * sizeof(double),
+					status = mb_reallocd(mbv_verbose, __FILE__, __LINE__, shared.shareddata.routes[i].npoints_alloc * sizeof(double),
 					                (void **)&(shared.shareddata.routes[i].distlateral), &error);
-					status =
-					    mb_reallocd(mbv_verbose, __FILE__, __LINE__, shared.shareddata.routes[i].npoints_alloc * sizeof(double),
+					status = mb_reallocd(mbv_verbose, __FILE__, __LINE__, shared.shareddata.routes[i].npoints_alloc * sizeof(double),
 					                (void **)&(shared.shareddata.routes[i].disttopo), &error);
 					status = mb_reallocd(mbv_verbose, __FILE__, __LINE__,
 					                     shared.shareddata.routes[i].npoints_alloc * sizeof(struct mbview_pointw_struct),
@@ -1925,7 +1942,7 @@ int mbview_route_add(int verbose, size_t instance, int inew, int jnew, int waypo
 			}
 		}
 
-		/* set distance values */
+		/* set or reset distance values */
 		mbview_route_setdistance(instance, inew);
 
 		/* make routes viewable */
@@ -2275,13 +2292,12 @@ int mbview_route_setdistance(size_t instance, int working_route) {
 			routelon1 -= 360.0;
 		routelat1 = route->points[j].ylat;
 		routetopo1 = route->points[j].zdata;
-		mbview_projectdistance(instance, routelon0, routelat0, routetopo0, routelon1, routelat1, routetopo1, &distlateral,
+		if (j > 0) {
+		  mbview_projectdistance(instance, routelon0, routelat0, routetopo0, routelon1, routelat1, routetopo1, &distlateral,
 		                       &distovertopo, &routeslope);
-		route->distancelateral += distlateral;
-		route->distancetopo += distovertopo;
-		routelon0 = routelon1;
-		routelat0 = routelat1;
-		routetopo0 = routetopo1;
+		  route->distancelateral += distlateral;
+		  route->distancetopo += distovertopo;
+		}
 		route->nroutepoint++;
 
 		/* set distances for route waypoint */

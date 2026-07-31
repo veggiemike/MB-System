@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mbview.h	10/9/2002
  *
- *    Copyright (c); 2002-2020 by
- *    David W. Caress (caress@mbari.org);
+ *    Copyright (c) 2002-2025 by
+ *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu);
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * Author:	D. W. Caress
@@ -652,6 +662,7 @@ struct mbview_struct {
 	int site_view_mode;
 	int route_view_mode;
 	int nav_view_mode;
+	int navswathbounds_view_mode;
 	int navdrape_view_mode;
 	int vector_view_mode;
 	int profile_view_mode;
@@ -744,7 +755,7 @@ int mbview_setwindowparms(int verbose, size_t instance, int (*mbview_dismiss_not
 int mbview_setviewcontrols(int verbose, size_t instance, int display_mode, int mouse_mode, int grid_mode, int primary_histogram,
                            int primaryslope_histogram, int secondary_histogram, int primary_shade_mode, int slope_shade_mode,
                            int secondary_shade_mode, int grid_contour_mode, int site_view_mode, int route_view_mode,
-                           int nav_view_mode, int navdrape_view_mode, int vector_view_mode, double exageration,
+                           int nav_view_mode, int navswathbounds_view_mode, int navdrape_view_mode, int vector_view_mode, double exageration,
                            double modelelevation3d, double modelazimuth3d, double viewelevation3d, double viewazimuth3d,
                            double illuminate_magnitude, double illuminate_elevation, double illuminate_azimuth,
                            double slope_magnitude, double overlay_shade_magnitude, double overlay_shade_center,
@@ -879,7 +890,7 @@ int mbview_deleteroute(int verbose, size_t instance, int iroute, int *error);
 int mbview_deleteallroutes(int verbose, size_t instance, int *error);
 int mbview_getroute(int verbose, size_t instance, int route, int *npointtotal, double *routelon, double *routelat, int *waypoint,
                     double *routetopo, double *routebearing, double *distlateral, double *distovertopo, double *slope,
-                    int *routecolor, int *routesize, mb_path routename, int *error);
+                    int *routecolor, int *routesize, int *routeeditmode, mb_path routename, int *error);
 int mbview_enableviewroutes(int verbose, size_t instance, int *error);
 int mbview_enableeditroutes(int verbose, size_t instance, int *error);
 int mbview_enableviewties(int verbose, size_t instance, int *error);

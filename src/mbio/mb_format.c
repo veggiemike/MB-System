@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:  mb_format.c  2/18/94
  *
- *    Copyright (c) 1993-2020 by
+ *    Copyright (c) 1993-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * mb_format.c contains several functions associated with getting
@@ -308,14 +318,20 @@ int mb_format_register(int verbose, int *format, void *mbio_ptr, int *error) {
   else if (*format == MBF_HS10JAMS) {
     status = mbr_register_hs10jams(verbose, mbio_ptr, error);
   }
+  else if (*format == MBF_SOIROVNV) {
+    status = mbr_register_soirovnv(verbose, mbio_ptr, error);
+  }
+  else if (*format == MBF_SOIUSBLN) {
+    status = mbr_register_soiusbln(verbose, mbio_ptr, error);
+  }
+  else if (*format == MBF_SAMESURF) {
+    status = mbr_register_samesurf(verbose, mbio_ptr, error);
+  }
   else if (*format == MBF_HSDS2RAW) {
     status = mbr_register_hsds2raw(verbose, mbio_ptr, error);
   }
   else if (*format == MBF_HSDS2LAM) {
     status = mbr_register_hsds2lam(verbose, mbio_ptr, error);
-  }
-  else if (*format == MBF_SAMESURF) {
-    status = mbr_register_samesurf(verbose, mbio_ptr, error);
   }
   else if (*format == MBF_IMAGE83P) {
     status = mbr_register_image83p(verbose, mbio_ptr, error);
@@ -343,9 +359,12 @@ int mb_format_register(int verbose, int *format, void *mbio_ptr, int *error) {
   }
   else if (*format == MBF_3DWISSLR) {
     status = mbr_register_3dwisslr(verbose, mbio_ptr, error);
-    }
-    else if (*format == MBF_3DWISSLP) {
+  }
+  else if (*format == MBF_3DWISSLP) {
     status = mbr_register_3dwisslp(verbose, mbio_ptr, error);
+  }
+  else if (*format == MBF_3DWISSL2) {
+    status = mbr_register_3dwissl2(verbose, mbio_ptr, error);
   }
   else if (*format == MBF_WASSPENL) {
     status = mbr_register_wasspenl(verbose, mbio_ptr, error);
@@ -859,6 +878,24 @@ int mb_format_info(int verbose, int *format, int *system, int *beams_bath_max, i
                                platform_source, nav_source, sensordepth_source, heading_source, attitude_source, svp_source,
                                beamwidth_xtrack, beamwidth_ltrack, error);
   }
+  else if (*format == MBF_SOIROVNV) {
+    status = mbr_info_soirovnv(verbose, system, beams_bath_max, beams_amp_max, pixels_ss_max, format_name, system_name,
+                               format_description, numfile, filetype, variable_beams, traveltime, beam_flagging,
+                               platform_source, nav_source, sensordepth_source, heading_source, attitude_source, svp_source,
+                               beamwidth_xtrack, beamwidth_ltrack, error);
+  }
+  else if (*format == MBF_SOIUSBLN) {
+    status = mbr_info_soiusbln(verbose, system, beams_bath_max, beams_amp_max, pixels_ss_max, format_name, system_name,
+                               format_description, numfile, filetype, variable_beams, traveltime, beam_flagging,
+                               platform_source, nav_source, sensordepth_source, heading_source, attitude_source, svp_source,
+                               beamwidth_xtrack, beamwidth_ltrack, error);
+  }
+  else if (*format == MBF_SAMESURF) {
+    status = mbr_info_samesurf(verbose, system, beams_bath_max, beams_amp_max, pixels_ss_max, format_name, system_name,
+                               format_description, numfile, filetype, variable_beams, traveltime, beam_flagging,
+                               platform_source, nav_source, sensordepth_source, heading_source, attitude_source, svp_source,
+                               beamwidth_xtrack, beamwidth_ltrack, error);
+  }
   else if (*format == MBF_HSDS2RAW) {
     status = mbr_info_hsds2raw(verbose, system, beams_bath_max, beams_amp_max, pixels_ss_max, format_name, system_name,
                                format_description, numfile, filetype, variable_beams, traveltime, beam_flagging,
@@ -867,12 +904,6 @@ int mb_format_info(int verbose, int *format, int *system, int *beams_bath_max, i
   }
   else if (*format == MBF_HSDS2LAM) {
     status = mbr_info_hsds2lam(verbose, system, beams_bath_max, beams_amp_max, pixels_ss_max, format_name, system_name,
-                               format_description, numfile, filetype, variable_beams, traveltime, beam_flagging,
-                               platform_source, nav_source, sensordepth_source, heading_source, attitude_source, svp_source,
-                               beamwidth_xtrack, beamwidth_ltrack, error);
-  }
-  else if (*format == MBF_SAMESURF) {
-    status = mbr_info_samesurf(verbose, system, beams_bath_max, beams_amp_max, pixels_ss_max, format_name, system_name,
                                format_description, numfile, filetype, variable_beams, traveltime, beam_flagging,
                                platform_source, nav_source, sensordepth_source, heading_source, attitude_source, svp_source,
                                beamwidth_xtrack, beamwidth_ltrack, error);
@@ -933,6 +964,12 @@ int mb_format_info(int verbose, int *format, int *system, int *beams_bath_max, i
   }
   else if (*format == MBF_3DWISSLP) {
     status = mbr_info_3dwisslp(verbose, system, beams_bath_max, beams_amp_max, pixels_ss_max, format_name, system_name,
+                               format_description, numfile, filetype, variable_beams, traveltime, beam_flagging,
+                               platform_source, nav_source, sensordepth_source, heading_source, attitude_source, svp_source,
+                               beamwidth_xtrack, beamwidth_ltrack, error);
+  }
+  else if (*format == MBF_3DWISSL2) {
+    status = mbr_info_3dwissl2(verbose, system, beams_bath_max, beams_amp_max, pixels_ss_max, format_name, system_name,
                                format_description, numfile, filetype, variable_beams, traveltime, beam_flagging,
                                platform_source, nav_source, sensordepth_source, heading_source, attitude_source, svp_source,
                                beamwidth_xtrack, beamwidth_ltrack, error);
@@ -2141,7 +2178,8 @@ int mb_get_format(int verbose, char *filename, char *fileroot, int *format, int 
       i = strlen(filename) - 4;
     else
       i = 0;
-    if ((suffix = strstr(&filename[i], ".seg")) != NULL || (suffix = strstr(&filename[i], ".SEG")) != NULL)
+    if ((suffix = strstr(&filename[i], ".seg")) != NULL || (suffix = strstr(&filename[i], ".SEG")) != NULL 
+        || (suffix = strstr(&filename[i], ".sgy")) != NULL || (suffix = strstr(&filename[i], ".SGY")) != NULL)
       suffix_len = 4;
     else
       suffix_len = 0;
@@ -2379,6 +2417,52 @@ int mb_get_format(int verbose, char *filename, char *fileroot, int *format, int 
       *format = MBF_HYDROB93;
       found = true;
     }
+  }
+  
+  /* look for SOI ROV nav format with filenames of form: EEEEEEEE_sb_sprint_RRRRR.txt
+     where EEEEEEEE is an expedition name like FKt2303030 and RRRRR is an ROV dive id
+     like S0496 */
+  if (!found) {
+    int i;
+    if (strlen(filename) >= 5)
+      i = strlen(filename) - 4;
+    else
+      i = 0;
+    if ((suffix = strstr(&filename[i], ".txt")) != NULL)
+      suffix_len = 4;
+    else
+      suffix_len = 0;
+  	if (suffix_len == 4 && strstr(filename, "_sb_sprint_") != NULL) {
+      if (fileroot != NULL) {
+        strncpy(fileroot, filename, strlen(filename) - suffix_len);
+        fileroot[strlen(filename) - suffix_len] = '\0';
+      }
+      *format = MBF_SOIROVNV;
+      found = true;
+  	}
+  }
+  
+  /* look for SOI USBL nav format with filenames of form: EEEEEEEE_usbl_gga_alpha_RRRRR.txt
+     where EEEEEEEE is an expedition name like FKt2303030 and RRRRR is an ROV dive id
+     like S0496 */
+  if (!found) {
+    int i;
+    if (strlen(filename) >= 5)
+      i = strlen(filename) - 4;
+    else
+      i = 0;
+    if ((suffix = strstr(&filename[i], ".txt")) != NULL)
+      suffix_len = 4;
+    else
+      suffix_len = 0;
+  	if (suffix_len == 4 && strstr(filename, "_usbl_gga_") != NULL) {
+      if (fileroot != NULL) {
+        strncpy(fileroot, filename, strlen(filename) - suffix_len);
+        fileroot[strlen(filename) - suffix_len] = '\0';
+      }
+      *format = MBF_SOIUSBLN;
+      found = true;
+  	}
   }
 
   /* look for SIO SB2000 prefix convention */
@@ -2824,6 +2908,25 @@ int mb_get_format(int verbose, char *filename, char *fileroot, int *format, int 
         }
   }
 
+  /* look for a 3DatDepth *.sriat file format convention */
+  if (!found) {
+    int i;
+    if (strlen(filename) >= 7)
+      i = strlen(filename) - 6;
+    else
+      i = 0;
+    if ((suffix = strstr(&filename[i], ".sriat")) != NULL)
+      suffix_len = 6;
+    else if ((suffix = strstr(&filename[i], ".SRIAT")) != NULL)
+      suffix_len = 6;
+    else
+      suffix_len = 0;
+    if (suffix_len == 6) {
+      *format = MBF_3DWISSL2;
+	  found = true;
+	}
+  }
+
   /* look for a WASSP *.000 file format convention */
   if (!found) {
     int i;
@@ -2964,15 +3067,18 @@ int mb_datalist_open(int verbose, void **datalist_ptr, char *path, int look_proc
       MB_SUCCESS) {
     /* get datalist pointer */
     datalist = (struct mb_datalist_struct *)*datalist_ptr;
-    strcpy(datalist->path, "");
-    datalist->printed = false;
     datalist->open = false;
+    datalist->fp = NULL;
     datalist->recursion = 0;
-    datalist->look_processed = look_processed;
-    datalist->local_weight = true;
-    datalist->weight_set = false;
-    datalist->weight = 0.0;
+    memset(datalist->path, 0, sizeof(mb_path));
+    datalist->printed = false;
     datalist->datalist = NULL;
+    datalist->look_processed = look_processed;
+    datalist->look_altnav = false;
+    memset(datalist->altnav_suffix, 0, sizeof(mb_path));
+    datalist->weight_set = false;
+    datalist->local_weight = true;
+    datalist->weight = 0.0;
 
     if ((datalist->fp = fopen(path, "r")) == NULL) {
       mb_freed(verbose, __FILE__, __LINE__, (void **)datalist_ptr, error);
@@ -3063,14 +3169,18 @@ int mb_datalist_readorg(int verbose, void *datalist_ptr, char *path, int *format
     fprintf(stderr, "dbg2       datalist->printed:          %d\n", datalist->printed);
     fprintf(stderr, "dbg2       datalist->datalist:         %p\n", (void *)datalist->datalist);
     fprintf(stderr, "dbg2       datalist->look_processed:   %d\n", datalist->look_processed);
+    fprintf(stderr, "dbg2       datalist->look_altnav:      %d\n", datalist->look_altnav);
   }
 
   char ppath[MB_PATH_MAXLINE];
   char dpath[MB_PATH_MAXLINE];
   int pstatus;
+  char apath[MB_PATH_MAXLINE];
+  int astatus;
 
-  /* call mb_datalist_read2() */
-  const int status = mb_datalist_read2(verbose, datalist_ptr, &pstatus, path, ppath, dpath, format, weight, error);
+  /* call mb_datalist_read3() */
+  const int status = mb_datalist_read3(verbose, datalist_ptr, &pstatus, path, ppath, 
+                                        &astatus, apath, dpath, format, weight, error);
 
   /* deal with pstatus */
   if (status == MB_SUCCESS && *error == MB_ERROR_NO_ERROR) {
@@ -3094,7 +3204,8 @@ int mb_datalist_readorg(int verbose, void *datalist_ptr, char *path, int *format
 }
 
 /*--------------------------------------------------------------------*/
-int mb_datalist_read(int verbose, void *datalist_ptr, char *path, char *dpath, int *format, double *weight, int *error) {
+int mb_datalist_read(int verbose, void *datalist_ptr, char *path, 
+                      char *dpath, int *format, double *weight, int *error) {
   if (verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
     fprintf(stderr, "dbg2  Input arguments:\n");
@@ -3113,13 +3224,17 @@ int mb_datalist_read(int verbose, void *datalist_ptr, char *path, char *dpath, i
     fprintf(stderr, "dbg2       datalist->printed:          %d\n", datalist->printed);
     fprintf(stderr, "dbg2       datalist->datalist:         %p\n", (void *)datalist->datalist);
     fprintf(stderr, "dbg2       datalist->look_processed:   %d\n", datalist->look_processed);
+    fprintf(stderr, "dbg2       datalist->look_altnav:      %d\n", datalist->look_altnav);
   }
 
   char ppath[MB_PATH_MAXLINE];
   int pstatus;
+  char apath[MB_PATH_MAXLINE];
+  int astatus;
 
-  /* call mb_datalist_read2() */
-  const int status = mb_datalist_read2(verbose, datalist_ptr, &pstatus, path, ppath, dpath, format, weight, error);
+  /* call mb_datalist_read3() */
+  const int status = mb_datalist_read3(verbose, datalist_ptr, &pstatus, path, ppath, 
+                                        &astatus, apath, dpath, format, weight, error);
 
   /* deal with pstatus */
   if (status == MB_SUCCESS && *error == MB_ERROR_NO_ERROR) {
@@ -3164,6 +3279,7 @@ int mb_datalist_read2(int verbose, void *datalist_ptr, int *pstatus, char *path,
     fprintf(stderr, "dbg2       datalist->printed:          %d\n", datalist->printed);
     fprintf(stderr, "dbg2       datalist->datalist:         %p\n", (void *)datalist->datalist);
     fprintf(stderr, "dbg2       datalist->look_processed:   %d\n", datalist->look_processed);
+    fprintf(stderr, "dbg2       datalist->look_altnav:      %d\n", datalist->look_altnav);
   }
 
   int status = MB_SUCCESS;
@@ -3237,6 +3353,10 @@ int mb_datalist_read2(int verbose, void *datalist_ptr, int *pstatus, char *path,
                 rawspecified = true;
               }
               else if (strncmp(buffer, "P:", 2) == 0) {
+                istart = 2;
+                processedspecified = true;
+              }
+              else if (strncmp(buffer, "A:", 2) == 0) {
                 istart = 2;
                 processedspecified = true;
               }
@@ -3399,6 +3519,342 @@ int mb_datalist_read2(int verbose, void *datalist_ptr, int *pstatus, char *path,
     fprintf(stderr, "dbg2       pstatus      %d\n", *pstatus);
     fprintf(stderr, "dbg2       path:        %s\n", path);
     fprintf(stderr, "dbg2       ppath:       %s\n", ppath);
+    fprintf(stderr, "dbg2       dpath:       %s\n", dpath);
+    fprintf(stderr, "dbg2       format:      %d\n", *format);
+    fprintf(stderr, "dbg2       weight:      %f\n", *weight);
+    fprintf(stderr, "dbg2       error:       %d\n", *error);
+    fprintf(stderr, "dbg2  Return status:\n");
+    fprintf(stderr, "dbg2       status:      %d\n", status);
+  }
+
+  return (status);
+}
+
+/*--------------------------------------------------------------------*/
+int mb_datalist_read3(int verbose, void *datalist_ptr, 
+                      int *pstatus, char *path, char *ppath, 
+                      int *astatus, char *apath, char *dpath, 
+                      int *format, double *weight, int *error) {
+  if (verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2  Input arguments:\n");
+    fprintf(stderr, "dbg2       verbose:       %d\n", verbose);
+    fprintf(stderr, "dbg2       datalist_ptr:  %p\n", (void *)datalist_ptr);
+  }
+
+  /* get datalist pointer */
+  struct mb_datalist_struct *datalist = (struct mb_datalist_struct *)datalist_ptr;
+
+  if (verbose >= 2) {
+    fprintf(stderr, "dbg2       datalist->open:             %d\n", datalist->open);
+    fprintf(stderr, "dbg2       datalist->fp:               %p\n", (void *)datalist->fp);
+    fprintf(stderr, "dbg2       datalist->recursion:        %d\n", datalist->recursion);
+    fprintf(stderr, "dbg2       datalist->path:             %s\n", datalist->path);
+    fprintf(stderr, "dbg2       datalist->printed:          %d\n", datalist->printed);
+    fprintf(stderr, "dbg2       datalist->datalist:         %p\n", (void *)datalist->datalist);
+    fprintf(stderr, "dbg2       datalist->look_processed:   %d\n", datalist->look_processed);
+    fprintf(stderr, "dbg2       datalist->look_altnav:      %d\n", datalist->look_altnav);
+    fprintf(stderr, "dbg2       datalist->local_weight:     %d\n", datalist->local_weight);
+    fprintf(stderr, "dbg2       datalist->weight_set:       %d\n", datalist->weight_set);
+  }
+
+  int status = MB_SUCCESS;
+  struct mb_datalist_struct *datalist2;
+  mb_path buffer;
+  mb_path root;
+  mb_path tmpstr;
+  mb_path pfile;
+  int pfile_specified;
+  char *buffer_ptr;
+  int len;
+  int nscan;
+  int pformat;
+  struct stat file_status;
+  int fstat;
+  int file_ok;
+  bool rawspecified = false;
+  bool processedspecified = false;
+  bool altnavspecified = false;
+  int istart;
+
+  *astatus = MB_ALTNAV_NONE;
+
+  /* loop over reading from datalist_ptr */
+  bool done = false;
+  if (datalist->open && !done) {
+    while (!done) {
+      /* copy current datalist path */
+      strcpy(dpath, datalist->path);
+
+      /* if recursive datalist closed read current datalist */
+      if (datalist->datalist == NULL) {
+        bool rdone = false;
+        while (!rdone) {
+          buffer_ptr = fgets(buffer, MB_PATH_MAXLINE, datalist->fp);
+
+          /* deal with end of datalist file */
+          if (buffer_ptr != buffer) {
+            rdone = true;
+            done = true;
+            *pstatus = MB_PROCESSED_NONE;
+            status = MB_FAILURE;
+            *error = MB_ERROR_EOF;
+          }
+
+          /* look for special $PROCESSED command */
+          else if (strncmp(buffer, "$PROCESSED", 10) == 0) {
+            if (datalist->look_processed == MB_DATALIST_LOOK_UNSET)
+              datalist->look_processed = MB_DATALIST_LOOK_YES;
+          }
+
+          /* look for special $RAW command */
+          else if (strncmp(buffer, "$RAW", 4) == 0) {
+            if (datalist->look_processed == MB_DATALIST_LOOK_UNSET)
+              datalist->look_processed = MB_DATALIST_LOOK_NO;
+          }
+
+          /* look for special $NOLOCALWEIGHT command */
+          else if (strncmp(buffer, "$NOLOCALWEIGHT", 14) == 0) {
+            datalist->local_weight = false;
+          }
+
+          /* look for special $ALTNAVSUFFIX: command */
+          else if (strncmp(buffer, "$ALTNAVSUFFIX:", 14) == 0
+                    && sscanf(buffer, "$ALTNAVSUFFIX:%s", datalist->altnav_suffix) == 1) {
+            if (datalist->look_altnav == MB_DATALIST_LOOK_UNSET)
+              datalist->look_altnav = MB_DATALIST_LOOK_YES;
+          }
+
+          /* get filename */
+          else if (buffer[0] != '#') {
+            /* check for R: and P: prefixes on paths. If either prefix is found,
+                then the file path is for a raw file, and the R: or P: indicates
+                whether the raw or processed file should be used. These prefixes
+                override the datalist->look_processed value. In general these
+                prefixes are placed in datalists by mbgrid and mbmosaic to indicate
+                which file was used in gridding/mosaicing */
+            if (buffer[1] == ':') {
+              if (strncmp(buffer, "R:", 2) == 0) {
+                istart = 2;
+                rawspecified = true;
+              }
+              else if (strncmp(buffer, "P:", 2) == 0) {
+                istart = 2;
+                processedspecified = true;
+              }
+              else if (strncmp(buffer, "A:", 2) == 0) {
+                istart = 2;
+                processedspecified = true;
+                altnavspecified = true;
+              }
+              else
+                istart = 0;
+            }
+            else
+              istart = 0;
+
+            /* read datalist item */
+            if (altnavspecified) {
+              nscan = sscanf(&(buffer[istart]), "%s %d %lf %s", path, format, weight, apath);
+              if (nscan < 4)
+                altnavspecified = false;
+            }
+            else {
+              nscan = sscanf(&(buffer[istart]), "%s %d %lf", path, format, weight);
+            }
+
+            /* get path */
+            if (nscan >= 1 && path[0] != '/' && strrchr(datalist->path, '/') != NULL &&
+                (len = strrchr(datalist->path, '/') - datalist->path + 1) > 1) {
+              strcpy(tmpstr, path);
+              strncpy(path, datalist->path, len);
+              path[len] = '\0';
+              strcat(path, tmpstr);
+            }
+
+            /* guess format if no format specified */
+            if (nscan == 1) {
+              fstat = mb_get_format(verbose, path, root, &pformat, error);
+
+              /* if no format specified set it */
+              if (nscan == 1 && pformat != 0) {
+                nscan = 2;
+                *format = pformat;
+              }
+            }
+
+            /* check if file or datalist can be opened */
+            if (nscan >= 2) {
+              fstat = stat(path, &file_status);
+              if (fstat == 0 && (file_status.st_mode & S_IFMT) != S_IFDIR && file_status.st_size > 0) {
+                file_ok = true;
+              }
+              else {
+                file_ok = false;
+                /* print warning if verbose > 0 */
+                if (verbose > 0) {
+                  fprintf(stderr, "MBIO Warning: Datalist entry skipped because it could not be opened!\n");
+                  fprintf(stderr, "\tDatalist: %s\n", datalist->path);
+                  fprintf(stderr, "\tFile:     %s\n", path);
+                }
+              }
+            }
+
+            /* check for processed file */
+            *pstatus = MB_PROCESSED_NONE;
+            pfile[0] = '\0';
+            if (file_ok) {
+              mb_pr_get_ofile(verbose, path, &pfile_specified, pfile, error);
+              if (strlen(pfile) > 0 && pfile[0] != '/' && strrchr(path, '/') != NULL &&
+                  (len = strrchr(path, '/') - path + 1) > 1) {
+                strcpy(tmpstr, pfile);
+                strncpy(pfile, path, len);
+                pfile[len] = '\0';
+                strcat(pfile, tmpstr);
+              }
+
+              if (!pfile_specified && *format > 0) {
+                sprintf(pfile, "%sp.mb%d", path, *format);
+                pfile_specified = MB_YES;
+              }
+
+              if (pfile_specified) {
+                if ((/* fstat = */ stat(pfile, &file_status)) == 0 && (file_status.st_mode & S_IFMT) != S_IFDIR &&
+                    file_status.st_size > 0) {
+                  strcpy(ppath, pfile);
+                  if (datalist->look_processed == MB_DATALIST_LOOK_YES)
+                    *pstatus = MB_PROCESSED_USE;
+                  else
+                    *pstatus = MB_PROCESSED_EXIST;
+                }
+              }
+
+              /* apply processed or raw prefixes */
+              if (*pstatus == MB_PROCESSED_EXIST && processedspecified)
+                *pstatus = MB_PROCESSED_USE;
+              else if (*pstatus == MB_PROCESSED_USE && rawspecified)
+                *pstatus = MB_PROCESSED_EXIST;
+            }
+
+            /* set alternate navigation path if specified */
+            if (altnavspecified) {
+              *astatus = MB_ALTNAV_USE;
+            }
+            else if (file_ok && datalist->look_altnav) {
+              if (*pstatus == MB_PROCESSED_USE) {
+                strncpy(apath, ppath, sizeof(mb_path)-strlen(datalist->altnav_suffix)-1);
+              }
+              else {
+                strncpy(apath, path, sizeof(mb_path)-strlen(datalist->altnav_suffix)-1);
+              }
+              strcat(apath, datalist->altnav_suffix);
+              if ((/* fstat = */ stat(apath, &file_status)) == 0 && (file_status.st_mode & S_IFMT) != S_IFDIR &&
+                    file_status.st_size > 0) {
+                *astatus = MB_ALTNAV_USE;
+              }
+              else {
+                *astatus = MB_ALTNAV_NONE;
+              }
+            }
+
+            /* set weight value - recursive weight from above
+               overrides local weight as long as local_weight is true */
+            if (nscan >= 2 && file_ok) {
+              /* use recursive weight from above unless prohibited */
+              if (datalist->weight_set && (!datalist->local_weight || nscan != 3))
+                *weight = datalist->weight;
+
+              /* else if weight not locally specified set to 1.0 */
+              else if (nscan != 3)
+                *weight = 1.0;
+            }
+
+            /* deal with file */
+            if (nscan >= 2 && file_ok && *format >= 0) {
+              /* set done */
+              done = true;
+              rdone = true;
+            }
+
+            /* deal with recursive datalist */
+            else if (nscan >= 2 && file_ok && *format == -1 &&
+                     datalist->recursion < MB_DATALIST_RECURSION_MAX) {
+              if ((status = mb_datalist_open(verbose, (void **)&(datalist->datalist), path,
+                                             datalist->look_processed, error)) == MB_SUCCESS) {
+                datalist2 = datalist->datalist;
+                datalist2->recursion = datalist->recursion + 1;
+                datalist2->local_weight = datalist->local_weight;
+                datalist2->look_altnav = datalist->look_altnav;
+                strncpy(datalist2->altnav_suffix, datalist->altnav_suffix, sizeof(mb_path));
+                rdone = true;
+
+                /* set weight to recursive value if available */
+                if (nscan >= 3 && (!datalist->weight_set || datalist->local_weight)) {
+                  datalist2->weight_set = true;
+                  datalist2->weight = *weight;
+                }
+
+                /* else set weight to local value if available */
+                else if (datalist->weight_set) {
+                  datalist2->weight_set = true;
+                  datalist2->weight = datalist->weight;
+                }
+
+                /* else do not set weight */
+                else {
+                  datalist2->weight_set = false;
+                  datalist2->weight = 0.0;
+                }
+              }
+              else {
+                status = MB_SUCCESS;
+                *error = MB_ERROR_NO_ERROR;
+              }
+            }
+          }
+        }
+      }
+
+      /* if open read next entry from recursive datalist */
+      if (!done && datalist->open && datalist->datalist != NULL) {
+        datalist2 = (struct mb_datalist_struct *)datalist->datalist;
+        if (datalist2->open) {
+          /* recursively call mb_read_datalist */
+          status = mb_datalist_read3(verbose, (void *)datalist->datalist, pstatus, path, ppath, astatus, apath, dpath, format, weight,
+                                     error);
+
+          /* if datalist read fails close it */
+          if (status == MB_FAILURE) {
+            status = mb_datalist_close(verbose, (void **)&(datalist->datalist), error);
+          }
+          else {
+            done = true;
+          }
+        }
+      }
+    }
+  }
+
+  if (verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> completed\n", __func__);
+    fprintf(stderr, "dbg2  Datalist values:\n");
+    fprintf(stderr, "dbg2       datalist->open:             %d\n", datalist->open);
+    fprintf(stderr, "dbg2       datalist->fp:               %p\n", (void *)datalist->fp);
+    fprintf(stderr, "dbg2       datalist->recursion:        %d\n", datalist->recursion);
+    fprintf(stderr, "dbg2       datalist->path:             %s\n", datalist->path);
+    fprintf(stderr, "dbg2       datalist->printed:          %d\n", datalist->printed);
+    fprintf(stderr, "dbg2       datalist->datalist:         %p\n", (void *)datalist->datalist);
+    fprintf(stderr, "dbg2       datalist->look_processed:   %d\n", datalist->look_processed);
+    fprintf(stderr, "dbg2       datalist->look_altnav:      %d\n", datalist->look_altnav);
+    fprintf(stderr, "dbg2       datalist->altnav_suffix:    %s\n", datalist->altnav_suffix);
+    fprintf(stderr, "dbg2       datalist->local_weight:     %d\n", datalist->local_weight);
+    fprintf(stderr, "dbg2       datalist->weight_set:       %d\n", datalist->weight_set);
+    fprintf(stderr, "dbg2  Return values:\n");
+    fprintf(stderr, "dbg2       pstatus      %d\n", *pstatus);
+    fprintf(stderr, "dbg2       path:        %s\n", path);
+    fprintf(stderr, "dbg2       ppath:       %s\n", ppath);
+    fprintf(stderr, "dbg2       astatus      %d\n", *astatus);
+    fprintf(stderr, "dbg2       apath:       %s\n", apath);
     fprintf(stderr, "dbg2       dpath:       %s\n", dpath);
     fprintf(stderr, "dbg2       format:      %d\n", *format);
     fprintf(stderr, "dbg2       weight:      %f\n", *weight);
@@ -3601,12 +4057,21 @@ int mb_imagelist_read(int verbose, void *imagelist_ptr, int *imagestatus,
                   imagelist->leftrightstereo = MB_IMAGESTATUS_STEREO;
               }
 
-              /* Check for special tags $PARAMETER or #PARAMETER */
+              /* Check for special tags $PARAMETER or #PARAMETER 
+              		- return the entire mbphotomosaic command in string path0
+              		- return the directory path of the imagelist file containing this command 
+              			as string path1 */
               else if (strncmp(buffer, "$PARAMETER", 8) == 0
                   || strncmp(buffer, "#PARAMETER", 8) == 0) {
                   mb_path tmp;
                   int n = sscanf(buffer, "%s %s", tmp, path0);
                   if (n == 2) {
+                  	  strcpy(path1, imagelist->path);
+                  	  char *slash = strrchr(path1, '/');
+                  	  if (slash != NULL)
+                  	  	slash[0] = 0;
+                  	  else
+                  	  	path1[0] = 0;
                       *imagestatus = MB_IMAGESTATUS_PARAMETER;
                       done = true;
                       rdone = true;
@@ -4072,6 +4537,60 @@ int mb_get_relative_path(int verbose, char *path, char *ipwd, int *error) {
     status = MB_SUCCESS;
     *error = MB_ERROR_NO_ERROR;
   }
+
+  if (verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> completed\n", __func__);
+    fprintf(stderr, "dbg2  Return values:\n");
+    fprintf(stderr, "dbg2       path:          %s\n", path);
+    fprintf(stderr, "dbg2       error:         %d\n", *error);
+    fprintf(stderr, "dbg2  Return status:\n");
+    fprintf(stderr, "dbg2       status:      %d\n", status);
+  }
+
+  return (status);
+}
+
+/*--------------------------------------------------------------------*/
+int mb_get_absolute_path(int verbose, char *path, char *ipwd, int *error) {
+  if (verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2  Input arguments:\n");
+    fprintf(stderr, "dbg2       verbose:       %d\n", verbose);
+    fprintf(stderr, "dbg2       path:          %s\n", path);
+    fprintf(stderr, "dbg2       ipwd:          %s\n", ipwd);
+  }
+
+  /* get string lengths */
+  int pathlen = strlen(path);
+  int pwdlen = strlen(ipwd);
+
+#ifdef WIN32
+  /* The approximation here is to try to make a Windows path like a unix one and expect that
+     the same algorithm still applies. Off course, there probably many ways this can go wrong
+     because we trim the first 2 chars in strings like C:\blabla and don't put it back. But
+     test have shown that it was maybe not necessary.
+  */
+  cvt_to_nix_path(path);
+  cvt_to_nix_path(ipwd);
+#endif
+
+  int status = MB_SUCCESS;
+  char absolutepath[MB_PATH_MAXLINE] = {""};
+  char *bufptr = NULL;
+
+  /* if path starts with '/' then it is already an absolute path so do nothing 
+  	 otherwise concatenate pwd and path and then shorten the path if possible */
+  if (pathlen > 0 && path[0] != '/') {
+    strncpy(absolutepath, ipwd, MB_PATH_MAXLINE);
+    strncat(absolutepath, "/", MB_PATH_MAXLINE - strlen(ipwd));
+    strncat(absolutepath, path, MB_PATH_MAXLINE - strlen(ipwd) - 1);
+    strncpy(path, absolutepath, MB_PATH_MAXLINE);
+  }
+  mb_get_shortest_path(verbose, path, error);
+
+  /* no error even if no path or pwd */
+  status = MB_SUCCESS;
+  *error = MB_ERROR_NO_ERROR;
 
   if (verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> completed\n", __func__);

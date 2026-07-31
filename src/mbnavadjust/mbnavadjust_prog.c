@@ -1,15 +1,24 @@
 /*--------------------------------------------------------------------
  *    The MB-system:  mbnavadjust_prog.c  3/23/00
  *
- *    Copyright (c) 2000-2020 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * mbnavadjust is an interactive navigation adjustment package
@@ -218,6 +227,7 @@ int mbnavadjust_init_globals() {
   mbna_save_frequency = 10;
   mbna_color_foreground = BLACK;
   mbna_color_background = WHITE;
+  project.use_mode = MBNA_USE_MODE_PRIMARY;
   project.section_length = 0.14;
   project.section_soundings = 100000;
   project.decimation = 1;
@@ -256,6 +266,7 @@ int mbnavadjust_init_globals() {
   mbna_bias_mode = MBNA_BIAS_SAME;
   mbna_allow_set_tie = false;
   mbna_allow_add_tie = false;
+  mbna_modelplot_mode = MBNA_MODELPLOT_MODE_CROSSINGS;
   mbna_modelplot_zoom = false;
   mbna_modelplot_zoom_x1 = 0;
   mbna_modelplot_zoom_x2 = 0;
@@ -2871,9 +2882,11 @@ int mbnavadjust_naverr_addtie() {
       }
 
       /* add info text */
-      snprintf(message, sizeof(message), "Add Tie Point %d of Crossing %d\n > Nav points: %d:%d:%d %d:%d:%d\n > Offsets: %f %f %f m\n",
-              mbna_current_tie, mbna_current_crossing, crossing->file_id_1, crossing->section_1, tie->snav_1,
-              crossing->file_id_2, crossing->section_2, tie->snav_2, tie->offset_x_m, tie->offset_y_m, tie->offset_z_m);
+      snprintf(message, sizeof(message), "Add Tie Point %d of Crossing %d\n > Nav points: %2.2d:%4.4d:%2.2d:%2.2d %2.2d:%4.4d:%2.2d:%2.2d\n > Offsets: %f %f %f m\n",
+              mbna_current_tie, mbna_current_crossing, 
+              project.files[crossing->file_id_1].block, crossing->file_id_1, crossing->section_1, tie->snav_1,
+              project.files[crossing->file_id_2].block, crossing->file_id_2, crossing->section_2, tie->snav_2, 
+              tie->offset_x_m, tie->offset_y_m, tie->offset_z_m);
       if (mbna_verbose == 0)
         fprintf(stderr, "%s", message);
       do_info_add(message, true);
@@ -4050,6 +4063,7 @@ int mbnavadjust_referenceplussection_load() {
     /* put up message */
     snprintf(message, sizeof(message), "Loading file %d section %d...", mbna_current_file, mbna_current_section);
     do_message_update(message);
+    fprintf(stderr, "%s\n", message);
 
     struct mbna_section *section2 = &project.files[mbna_current_file].sections[mbna_current_section];
     struct mbna_globaltie *globaltie = &section2->globaltie;
@@ -4058,6 +4072,13 @@ int mbnavadjust_referenceplussection_load() {
     mbna_file_id_2 = mbna_current_file;
     mbna_section_2 = mbna_current_section;
     int refgrid_id = project.refgrid_select;
+    if (project.refgrid_select >= 0) {
+      fprintf(stderr, "Current selected reference grid: %d %s\n", 
+        project.refgrid_select, project.refgrid_names[project.refgrid_select]);
+    }
+    else {
+      fprintf(stderr, "No selected reference grid\n");
+    }
 
     if (section2->status == MBNA_CROSSING_STATUS_SET ) {
       mbna_current_tie = 0;
@@ -4071,7 +4092,11 @@ int mbnavadjust_referenceplussection_load() {
       mbna_offset_x = globaltie->offset_x;
       mbna_offset_y = globaltie->offset_y;
       mbna_offset_z = globaltie->offset_z_m;
-      refgrid_id = globaltie->refgrid_id;
+      if (globaltie->refgrid_id >= 0 && project.refgrid_select < 0) {
+        refgrid_id = globaltie->refgrid_id;
+        fprintf(stderr, "Using previously used global tie reference grid: %d %s\n", 
+                globaltie->refgrid_id, project.refgrid_names[globaltie->refgrid_id]);
+      }
     } else if (project.inversion_status != MBNA_INVERSION_NONE) {
       mbna_current_tie = -1;
       mbna_snav_1 = 0;
@@ -4140,45 +4165,57 @@ int mbnavadjust_referenceplussection_load() {
     mbna_lat_min = section2->latmin + mbna_offset_y;
     mbna_lat_max = section2->latmax + mbna_offset_y;
 
-    /* calculate the desired area for the reference grid subset to be loaded */
-    double length_meters = MAX((section2->lonmax - section2->lonmin) / mbna_mtodeglon,
-                                (section2->latmax - section2->latmin) / mbna_mtodeglat);
-    double lon_size_deg = length_meters * mbna_mtodeglon;
-    double lat_size_deg = length_meters * mbna_mtodeglat;
-    project.reference_section.lonmin = mbna_lon_min - 2.0 * lon_size_deg;
-    project.reference_section.lonmax = mbna_lon_max + 2.0 * lon_size_deg;
-    project.reference_section.latmin = mbna_lat_min - 2.0 * lat_size_deg;
-    project.reference_section.latmax = mbna_lat_max + 2.0 * lat_size_deg;
+    /* if the desired reference grid is selected or the loaded section has an exising 
+       global tie with a previously selected reference grid, load that reference grid */
+    if (refgrid_id >= 0) {
 
-    /* load the specified reference grid if overlaps the desired area */
-    if (!(project.refgrid_bounds[1][refgrid_id] < project.reference_section.lonmin
-        || project.refgrid_bounds[0][refgrid_id] > project.reference_section.lonmax
-        || project.refgrid_bounds[3][refgrid_id] < project.reference_section.latmin
-        || project.refgrid_bounds[2][refgrid_id] > project.reference_section.latmax)) {
-      snprintf(message, sizeof(message), "Reading reference grid: %s/%s\n", project.datadir, project.refgrid_names[refgrid_id]);
-      do_message_update(message);
-      int refgrid_status = mbnavadjust_reference_load(mbna_verbose, &project, refgrid_id,
-                                &project.reference_section, (void **)&swath1, &error);
-      if (refgrid_status == MB_SUCCESS) {
-        project.refgrid_status = MBNA_REFGRID_LOADED;
-        project.refgrid_select = refgrid_id;
-        snprintf(message, sizeof(message), "Read reference grid: %s/%s",
-                          project.datadir, project.refgrid_names[refgrid_id]);
+      /* calculate the desired area for the reference grid subset to be loaded */
+      double length_meters = MAX((section2->lonmax - section2->lonmin) / mbna_mtodeglon,
+                                  (section2->latmax - section2->latmin) / mbna_mtodeglat);
+      double lon_size_deg = length_meters * mbna_mtodeglon;
+      double lat_size_deg = length_meters * mbna_mtodeglat;
+      project.reference_section.lonmin = mbna_lon_min - 2.0 * lon_size_deg;
+      project.reference_section.lonmax = mbna_lon_max + 2.0 * lon_size_deg;
+      project.reference_section.latmin = mbna_lat_min - 2.0 * lat_size_deg;
+      project.reference_section.latmax = mbna_lat_max + 2.0 * lat_size_deg;
+
+      /* load the specified reference grid if overlaps the desired area */
+      fprintf(stderr, "Will load reference grid %d if bounds overlap desired area: \n", refgrid_id);
+      fprintf(stderr, "   refgrid_bounds: %f %f %f %f    section bounds: %f %f %f %f\n",
+        project.refgrid_bounds[0][refgrid_id], project.refgrid_bounds[1][refgrid_id], 
+        project.refgrid_bounds[2][refgrid_id], project.refgrid_bounds[3][refgrid_id],
+        project.reference_section.lonmin, project.reference_section.lonmax, 
+        project.reference_section.latmin, project.reference_section.latmax);
+      if (!(project.refgrid_bounds[1][refgrid_id] < project.reference_section.lonmin
+          || project.refgrid_bounds[0][refgrid_id] > project.reference_section.lonmax
+          || project.refgrid_bounds[3][refgrid_id] < project.reference_section.latmin
+          || project.refgrid_bounds[2][refgrid_id] > project.reference_section.latmax)) {
+        snprintf(message, sizeof(message), "Reading reference grid: %s/%s\n", project.datadir, project.refgrid_names[refgrid_id]);
         do_message_update(message);
-        snprintf(message, sizeof(message), "Read reference grid: %s/%s \n\t Dimensions: %d %d\n\tBounds: %f %f   %f %f\n",
-                          project.datadir, project.refgrid_names[refgrid_id],
-                          project.refgrid.nx, project.refgrid.ny,
-                          project.refgrid.bounds[0], project.refgrid.bounds[1],
-                          project.refgrid.bounds[2], project.refgrid.bounds[3]);
         fprintf(stderr, "%s\n", message);
-        mbna_lon_min = MIN(project.reference_section.lonmin, section2->lonmin + mbna_offset_x);
-        mbna_lon_max = MAX(project.reference_section.lonmax, section2->lonmax + mbna_offset_x);
-        mbna_lat_min = MIN(project.reference_section.latmin, section2->latmin + mbna_offset_y);
-        mbna_lat_max = MAX(project.reference_section.latmax, section2->latmax + mbna_offset_y);
-      } else {
-        snprintf(message, sizeof(message), "Failed to read reference grid: %s/%s",
-                          project.datadir, project.refgrid_names[refgrid_id]);
-        do_message_update(message);
+        int refgrid_status = mbnavadjust_reference_load(mbna_verbose, &project, refgrid_id,
+                                  &project.reference_section, (void **)&swath1, &error);
+        if (refgrid_status == MB_SUCCESS) {
+          project.refgrid_status = MBNA_REFGRID_LOADED;
+          project.refgrid_select = refgrid_id;
+          snprintf(message, sizeof(message), "Read reference grid: %s/%s",
+                            project.datadir, project.refgrid_names[refgrid_id]);
+          do_message_update(message);
+          snprintf(message, sizeof(message), "Read reference grid: %s/%s \n\tDimensions: %d %d\n\tBounds: %f %f   %f %f\n",
+                            project.datadir, project.refgrid_names[refgrid_id],
+                            project.refgrid.nx, project.refgrid.ny,
+                            project.refgrid.bounds[0], project.refgrid.bounds[1],
+                            project.refgrid.bounds[2], project.refgrid.bounds[3]);
+          fprintf(stderr, "%s\n", message);
+          mbna_lon_min = MIN(project.reference_section.lonmin, section2->lonmin + mbna_offset_x);
+          mbna_lon_max = MAX(project.reference_section.lonmax, section2->lonmax + mbna_offset_x);
+          mbna_lat_min = MIN(project.reference_section.latmin, section2->latmin + mbna_offset_y);
+          mbna_lat_max = MAX(project.reference_section.latmax, section2->latmax + mbna_offset_y);
+        } else {
+          snprintf(message, sizeof(message), "Failed to read reference grid: %s/%s",
+                            project.datadir, project.refgrid_names[refgrid_id]);
+          do_message_update(message);
+        }
       }
     }
 
@@ -4522,9 +4559,9 @@ int mbnavadjust_get_misfit() {
     if ((mbna_plot_lon_max - mbna_plot_lon_min) / mbna_mtodeglon > (mbna_plot_lat_max - mbna_plot_lat_min) / mbna_mtodeglat) {
       grid_dx = (mbna_plot_lon_max - mbna_plot_lon_min) / (grid_nx - 1);
       grid_dy = grid_dx * mbna_mtodeglat / mbna_mtodeglon;
-      /* fprintf(stderr,"DEBUG %s %d: grid scale: grid_dx:%f grid_dy:%f\n",
-      __FILE__,__LINE__,
-      grid_dx,grid_dy); */
+//fprintf(stderr,"DEBUG %s %d: grid scale: grid_dx:%f grid_dy:%f\n",
+//__FILE__,__LINE__,
+//grid_dx,grid_dy);
     }
     else {
       grid_dy = (mbna_plot_lat_max - mbna_plot_lat_min) / (grid_ny - 1);
@@ -4536,9 +4573,9 @@ int mbnavadjust_get_misfit() {
     grid_nxy = grid_nx * grid_ny;
     grid_olon = 0.5 * (mbna_plot_lon_min + mbna_plot_lon_max) - (grid_nx / 2 + 0.5) * grid_dx;
     grid_olat = 0.5 * (mbna_plot_lat_min + mbna_plot_lat_max) - (grid_ny / 2 + 0.5) * grid_dy;
-    /* fprintf(stderr,"DEBUG %s %d: grid_olon:%.10f grid_olat:%.10f\n",
-    __FILE__,__LINE__,
-    grid_olon,grid_olat); */
+//fprintf(stderr,"DEBUG %s %d: grid_olon:%.10f grid_olat:%.10f\n",
+//__FILE__,__LINE__,
+//grid_olon,grid_olat);
 
     /* get 3d misfit grid */
     nzmisfitcalc = MBNA_MISFIT_DIMZ;
@@ -4555,22 +4592,20 @@ int mbnavadjust_get_misfit() {
       mbna_misfit_offset_y = mbna_offset_y;
       mbna_misfit_offset_z = mbna_offset_z;
     }
-    /* fprintf(stderr,"DEBUG %s %d: GRID parameters: dx:%.10f dy:%.10f nx:%d ny:%d  bounds:  grid: %.10f %.10f %.10f %.10f
-    plot: %.10f %.10f %.10f %.10f\n",
-    __FILE__,__LINE__,
-    grid_dx, grid_dy, grid_nx, grid_ny,
-    grid_olon, grid_olon + grid_nx * grid_dx,
-    grid_olat, grid_olat + grid_ny * grid_dy,
-    mbna_lon_min, mbna_lon_max, mbna_lat_min, mbna_lat_max); */
+//fprintf(stderr,"DEBUG %s %d: GRID parameters: dx:%.10f dy:%.10f nx:%d ny:%d  bounds:  grid: %.10f %.10f %.10f %.10f  plot: %.10f %.10f %.10f %.10f\n",
+//__FILE__,__LINE__,
+//grid_dx, grid_dy, grid_nx, grid_ny,
+//grid_olon, grid_olon + grid_nx * grid_dx,
+//grid_olat, grid_olat + grid_ny * grid_dy,
+//mbna_lon_min, mbna_lon_max, mbna_lat_min, mbna_lat_max);
 
     /* figure out range of z offsets */
     zmin = mbna_misfit_offset_z - 0.5 * project.zoffsetwidth;
     zmax = mbna_misfit_offset_z + 0.5 * project.zoffsetwidth;
     zoff_dz = project.zoffsetwidth / (nzmisfitcalc - 1);
-    /* fprintf(stderr,"DEBUG %s %d: mbna_misfit_offset_z:%f project.zoffsetwidth:%f nzmisfitcalc:%d zmin:%f zmax:%f
-    zoff_dz:%f\n",
-    __FILE__,__LINE__,
-    mbna_misfit_offset_z,project.zoffsetwidth,nzmisfitcalc,zmin,zmax,zoff_dz); */
+//fprintf(stderr,"DEBUG %s:%d:%s: mbna_misfit_offset_z:%f project.zoffsetwidth:%f nzmisfitcalc:%d zmin:%f zmax:%f zoff_dz:%f\n",
+//__FILE__,__LINE__, __FUNCTION__, 
+//mbna_misfit_offset_z,project.zoffsetwidth,nzmisfitcalc,zmin,zmax,zoff_dz);
 
     /* allocate and initialize grids and arrays */
     if (status == MB_SUCCESS) {
@@ -4664,10 +4699,10 @@ int mbnavadjust_get_misfit() {
             grid1[k] += swath1->pings[i].bath[j];
             gridn1[k]++;
           }
-          /* else
-          fprintf(stderr,"DEBUG %s %d: BAD swath1: %d %d  %.10f %.10f  %f %f  %d %d\n",
-          __FILE__,__LINE__,
-          i, j, swath1->pings[i].bathlon[j], swath1->pings[i].bathlat[j], x, y, igx, igy); */
+//else
+//fprintf(stderr,"DEBUG %s %d: BAD swath1: %d %d  %.10f %.10f  %f %f  %d %d\n",
+//__FILE__,__LINE__,
+//i, j, swath1->pings[i].bathlon[j], swath1->pings[i].bathlat[j], x, y, igx, igy);
         }
       }
     }
@@ -4685,10 +4720,10 @@ int mbnavadjust_get_misfit() {
             grid2[k] += swath2->pings[i].bath[j];
             gridn2[k]++;
           }
-          /* else
-          fprintf(stderr,"DEBUG %s %d: BAD swath2: %d %d  %.10f %.10f  %f %f  %d %d\n",
-          __FILE__,__LINE__,
-          i, j, swath2->pings[i].bathlon[j], swath2->pings[i].bathlat[j], x, y, igx, igy); */
+//else
+//fprintf(stderr,"DEBUG %s %d: BAD swath2: %d %d  %.10f %.10f  %f %f  %d %d\n",
+//__FILE__,__LINE__,
+//i, j, swath2->pings[i].bathlon[j], swath2->pings[i].bathlat[j], x, y, igx, igy);
         }
       }
     }
@@ -4742,6 +4777,9 @@ int mbnavadjust_get_misfit() {
     mbna_minmisfit_y = 0.0;
     mbna_minmisfit_z = 0.0;
     found = false;
+//int imin;
+//int jmin;
+//int kmin;
     for (int ic = 0; ic < gridm_nx; ic++)
       for (int jc = 0; jc < gridm_ny; jc++)
         for (int kc = 0; kc < nzmisfitcalc; kc++) {
@@ -4759,22 +4797,21 @@ int mbnavadjust_get_misfit() {
               mbna_minmisfit_x = (ic - gridm_nx / 2) * grid_dx + mbna_misfit_offset_x;
               mbna_minmisfit_y = (jc - gridm_ny / 2) * grid_dy + mbna_misfit_offset_y;
               mbna_minmisfit_z = zmin + zoff_dz * kc;
-              // const int imin = ic;
-              // const int jmin = jc;
-              // const int kmin = kc;
+//imin = ic;
+//jmin = jc;
+//kmin = kc;
               found = true;
-              /* zoff = zmin + zoff_dz * kc;
-              fprintf(stderr,"DEBUG %s %d: ic:%d jc:%d kc:%d misfit:%f %f %d  pos:%f %f %f zoff:%f
-              mbna_ofset_z:%f\n",
-              __FILE__,__LINE__,
-              ic,jc,kc,misfit_min,mbna_minmisfit,mbna_minmisfit_n,mbna_minmisfit_x,mbna_minmisfit_y,mbna_minmisfit_z,
-              zoff,mbna_offset_z); */
+//zoff = zmin + zoff_dz * kc;
+//fprintf(stderr,"DEBUG %s %d: ic:%d jc:%d kc:%d misfit:%f %f %d  pos:%f %f %f zoff:%f mbna_ofset_z:%f\n",
+//__FILE__,__LINE__,
+//ic,jc,kc,misfit_min,mbna_minmisfit,mbna_minmisfit_n,mbna_minmisfit_x,mbna_minmisfit_y,mbna_minmisfit_z,
+//zoff,mbna_offset_z);
             }
           }
-          /* if (ic == jc && kc == 0)
-          fprintf(stderr,"DEBUG %s %d: ic:%d jc:%d misfit:%d %f\n",
-          __FILE__,__LINE__,
-          ic,jc,gridnm[lc],gridm[lc]);*/
+//if (ic == jc && kc == 0)
+//fprintf(stderr,"DEBUG %s %d: ic:%d jc:%d misfit:%d %f\n",
+//__FILE__,__LINE__,
+//ic,jc,gridnm[lc],gridm[lc]);
         }
     if (!found) {
       mbna_minmisfit_nthreshold /= 10.0;
@@ -4789,34 +4826,33 @@ int mbnavadjust_get_misfit() {
               mbna_minmisfit_x = (ic - gridm_nx / 2) * grid_dx + mbna_misfit_offset_x;
               mbna_minmisfit_y = (jc - gridm_ny / 2) * grid_dy + mbna_misfit_offset_y;
               mbna_minmisfit_z = zmin + zoff_dz * kc;
-              // imin = ic;
-              // jmin = jc;
-              // kmin = kc;
+//imin = ic;
+//jmin = jc;
+//kmin = kc;
               found = true;
             }
-            /* fprintf(stderr,"DEBUG %s %d: ijk:%d %d %d gridm:%d %f  misfit:%f %f %d  pos:%f %f %f\n",
-            __FILE__,__LINE__,
-            ic,jc,kc,gridnm[lc],gridm[lc],misfit_min,mbna_minmisfit,mbna_minmisfit_n,mbna_minmisfit_x,mbna_minmisfit_y,mbna_minmisfit_z);
-            */
+//fprintf(stderr,"DEBUG %s %d: ijk:%d %d %d gridm:%d %f  misfit:%f %f %d  pos:%f %f %f\n",
+//__FILE__,__LINE__,
+//ic,jc,kc,gridnm[lc],gridm[lc],misfit_min,mbna_minmisfit,mbna_minmisfit_n,mbna_minmisfit_x,mbna_minmisfit_y,mbna_minmisfit_z);
           }
     }
     misfit_min = 0.99 * misfit_min;
     misfit_max = 1.01 * misfit_max;
-    /* if (found)
-    {
-    lc = kmin + nzmisfitcalc * (imin + jmin * gridm_nx);
-    fprintf(stderr,"DEBUG %s %d: min misfit: i:%d j:%d k:%d    n:%d m:%f   offsets: %f %f %f\n",
-    __FILE__,__LINE__,
-    imin, jmin, kmin, gridnm[lc], gridm[lc],
-    mbna_minmisfit_x / mbna_mtodeglon,
-    mbna_minmisfit_y / mbna_mtodeglat,
-    mbna_minmisfit_z);
-    } */
+//if (found)
+//{
+//lc = kmin + nzmisfitcalc * (imin + jmin * gridm_nx);
+//fprintf(stderr,"DEBUG %s %d: min misfit: i:%d j:%d k:%d    n:%d m:%f   offsets: %f %f %f\n",
+//__FILE__,__LINE__,
+//imin, jmin, kmin, gridnm[lc], gridm[lc],
+//mbna_minmisfit_x / mbna_mtodeglon,
+//mbna_minmisfit_y / mbna_mtodeglat,
+//mbna_minmisfit_z);
+//}
 
-    /* fprintf(stderr,"DEBUG %s %d: Misfit bounds: nmin:%d best:%f min:%f max:%f min loc: %f %f %f\n",
-    __FILE__,__LINE__,
-    mbna_minmisfit_n,mbna_minmisfit,misfit_min,misfit_max,
-    mbna_minmisfit_x/mbna_mtodeglon,mbna_minmisfit_y/mbna_mtodeglat,mbna_minmisfit_z); */
+//fprintf(stderr,"DEBUG %s %d: Misfit bounds: nmin:%d best:%f min:%f max:%f min loc: %f %f %f\n",
+//__FILE__,__LINE__,
+//mbna_minmisfit_n,mbna_minmisfit,misfit_min,misfit_max,
+//mbna_minmisfit_x/mbna_mtodeglon,mbna_minmisfit_y/mbna_mtodeglat,mbna_minmisfit_z);
 
     /* set message on */
     if (mbna_verbose > 1)
@@ -5061,6 +5097,9 @@ int mbnavadjust_get_misfitxy() {
       && ((mbna_naverr_mode == MBNA_NAVERR_MODE_CROSSING && project.num_crossings > 0 && mbna_current_crossing >= 0)
           || (mbna_naverr_mode == MBNA_NAVERR_MODE_SECTION && project.refgrid_status == MBNA_REFGRID_LOADED))) {
     /* get minimum misfit in plane at current z offset */
+// fprintf(stderr,"DEBUG %s:%d:%s: mbna_misfit_offset_z:%f project.zoffsetwidth:%f nzmisfitcalc:%d zmin:%f zmax:%f zoff_dz:%f\n",
+// __FILE__,__LINE__, __FUNCTION__, 
+// mbna_misfit_offset_z,project.zoffsetwidth,nzmisfitcalc,zmin,zmax,zoff_dz);
     if (grid_nxyzeq > 0) {
       /* get closest to current zoffset in existing 3d grid */
       misfit_max = 0.0;
@@ -5246,7 +5285,7 @@ void mbnavadjust_naverr_plot(int plotmode) {
   struct mbna_tie *tie = NULL;
   struct mbna_globaltie *globaltie = NULL;
   int ix, iy, ix1, ix2, iy1, iy2, idx, idy;
-  int boxoff, boxwid;
+  int boxoff, wid;
   static int ixo, iyo;
   static int izx1, izy1, izx2, izy2;
   static int pixel, ipixel;
@@ -5311,30 +5350,30 @@ void mbnavadjust_naverr_plot(int plotmode) {
           tie = &crossing->ties[i];
           if (i == mbna_current_tie) {
             boxoff = 6;
-            boxwid = 13;
+            wid = 13;
             snav_1 = mbna_snav_1;
             snav_2 = mbna_snav_2;
           }
           else {
             boxoff = 3;
-            boxwid = 7;
+            wid = 7;
             snav_1 = tie->snav_1;
             snav_2 = tie->snav_2;
           }
           ix = (int)(mbna_plotx_scale * (section1->snav_lon[snav_1] - mbna_plot_lon_min));
           iy = (int)(cont_borders[3] - mbna_ploty_scale * (section1->snav_lat[snav_1] - mbna_plot_lat_min));
-          xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, pixel_values[mbna_color_background],
+          xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, pixel_values[mbna_color_background],
                            XG_SOLIDLINE);
-          xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, pixel_values[mbna_color_background],
+          xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, pixel_values[mbna_color_background],
                            XG_SOLIDLINE);
           ixo = ix;
           iyo = iy;
           ix = (int)(mbna_plotx_scale * (section2->snav_lon[snav_2] + mbna_offset_x_old - mbna_plot_lon_min));
           iy = (int)(cont_borders[3] -
                      mbna_ploty_scale * (section2->snav_lat[snav_2] + mbna_offset_y_old - mbna_plot_lat_min));
-          xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, pixel_values[mbna_color_background],
+          xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, pixel_values[mbna_color_background],
                            XG_SOLIDLINE);
-          xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, pixel_values[mbna_color_background],
+          xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, pixel_values[mbna_color_background],
                            XG_SOLIDLINE);
           xg_drawline(pcont_xgid, ixo, iyo, ix, iy, pixel_values[mbna_color_background], XG_SOLIDLINE);
         }
@@ -5426,7 +5465,7 @@ void mbnavadjust_naverr_plot(int plotmode) {
         tie = &crossing->ties[i];
         if (i == mbna_current_tie) {
           boxoff = 6;
-          boxwid = 13;
+          wid = 13;
           snav_1 = mbna_snav_1;
           snav_2 = mbna_snav_2;
           if (mbna_allow_set_tie)
@@ -5436,22 +5475,22 @@ void mbnavadjust_naverr_plot(int plotmode) {
         }
         else {
           boxoff = 3;
-          boxwid = 7;
+          wid = 7;
           snav_1 = tie->snav_1;
           snav_2 = tie->snav_2;
           fill = pixel_values[6];
         }
         ix = (int)(mbna_plotx_scale * (section1->snav_lon[snav_1] - mbna_plot_lon_min));
         iy = (int)(cont_borders[3] - mbna_ploty_scale * (section1->snav_lat[snav_1] - mbna_plot_lat_min));
-        xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, fill, XG_SOLIDLINE);
-        xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, pixel_values[mbna_color_foreground],
+        xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, fill, XG_SOLIDLINE);
+        xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, pixel_values[mbna_color_foreground],
                          XG_SOLIDLINE);
         ixo = ix;
         iyo = iy;
         ix = (int)(mbna_plotx_scale * (section2->snav_lon[snav_2] + mbna_offset_x - mbna_plot_lon_min));
         iy = (int)(cont_borders[3] - mbna_ploty_scale * (section2->snav_lat[snav_2] + mbna_offset_y - mbna_plot_lat_min));
-        xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, fill, XG_SOLIDLINE);
-        xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, pixel_values[mbna_color_foreground],
+        xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, fill, XG_SOLIDLINE);
+        xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, pixel_values[mbna_color_foreground],
                          XG_SOLIDLINE);
         xg_drawline(pcont_xgid, ixo, iyo, ix, iy, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
       }
@@ -5717,21 +5756,21 @@ void mbnavadjust_naverr_plot(int plotmode) {
       /* replot tie point */
       if (globaltie->status != MBNA_TIE_NONE) {
         boxoff = 6;
-        boxwid = 13;
+        wid = 13;
         ix = (int)(mbna_plotx_scale * (section2->snav_lon[globaltie->snav] - mbna_plot_lon_min));
         iy = (int)(cont_borders[3] - mbna_ploty_scale * (section2->snav_lat[globaltie->snav] - mbna_plot_lat_min));
-        xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, pixel_values[mbna_color_background],
+        xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, pixel_values[mbna_color_background],
                          XG_SOLIDLINE);
-        xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, pixel_values[mbna_color_background],
+        xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, pixel_values[mbna_color_background],
                          XG_SOLIDLINE);
         ixo = ix;
         iyo = iy;
         ix = (int)(mbna_plotx_scale * (section2->snav_lon[globaltie->snav] + mbna_offset_x_old - mbna_plot_lon_min));
         iy = (int)(cont_borders[3] -
                    mbna_ploty_scale * (section2->snav_lat[globaltie->snav] + mbna_offset_y_old - mbna_plot_lat_min));
-        xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, pixel_values[mbna_color_background],
+        xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, pixel_values[mbna_color_background],
                          XG_SOLIDLINE);
-        xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, pixel_values[mbna_color_background],
+        xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, pixel_values[mbna_color_background],
                          XG_SOLIDLINE);
         xg_drawline(pcont_xgid, ixo, iyo, ix, iy, pixel_values[mbna_color_background], XG_SOLIDLINE);
       }
@@ -5811,22 +5850,22 @@ void mbnavadjust_naverr_plot(int plotmode) {
     mbnavadjust_naverr_checkoksettie();
     if (globaltie->status != MBNA_TIE_NONE) {
       boxoff = 6;
-      boxwid = 13;
+      wid = 13;
       if (mbna_allow_set_tie)
         fill = pixel_values[RED];
       else
         fill = pixel_values[6];
       ix = (int)(mbna_plotx_scale * (section2->snav_lon[mbna_snav_2] - mbna_plot_lon_min));
       iy = (int)(cont_borders[3] - mbna_ploty_scale * (section2->snav_lat[mbna_snav_2] - mbna_plot_lat_min));
-      xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, fill, XG_SOLIDLINE);
-      xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, pixel_values[mbna_color_foreground],
+      xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, fill, XG_SOLIDLINE);
+      xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, pixel_values[mbna_color_foreground],
                        XG_SOLIDLINE);
       ixo = ix;
       iyo = iy;
       ix = (int)(mbna_plotx_scale * (section2->snav_lon[mbna_snav_2] + mbna_offset_x - mbna_plot_lon_min));
       iy = (int)(cont_borders[3] - mbna_ploty_scale * (section2->snav_lat[mbna_snav_2] + mbna_offset_y - mbna_plot_lat_min));
-      xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, fill, XG_SOLIDLINE);
-      xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, boxwid, boxwid, pixel_values[mbna_color_foreground],
+      xg_fillrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, fill, XG_SOLIDLINE);
+      xg_drawrectangle(pcont_xgid, ix - boxoff, iy - boxoff, wid, wid, pixel_values[mbna_color_foreground],
                        XG_SOLIDLINE);
       xg_drawline(pcont_xgid, ixo, iyo, ix, iy, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
     }
@@ -6536,7 +6575,6 @@ int mbnavadjust_autosetsvsvertical() {
 
   int nnav = 0;
   int nblock = 0;
-  int ndiscontinuity = 0;
   int nsmooth = 0;
   int ntie = 0;
   int nglobal = 0;
@@ -6637,7 +6675,6 @@ int mbnavadjust_autosetsvsvertical() {
     /* count number of nav points, discontinuities, and blocks */
     nnav = 0;
     nblock = 0;
-    ndiscontinuity = 0;
     nsmooth = 0;
     for (int ifile = 0; ifile < project.num_files; ifile++) {
       file = &project.files[ifile];
@@ -6646,8 +6683,6 @@ int mbnavadjust_autosetsvsvertical() {
       for (int isection = 0; isection < file->num_sections; isection++) {
         section = &file->sections[isection];
         nnav += section->num_snav - section->continuity;
-        if (!section->continuity)
-          ndiscontinuity++;
       }
       file->block = nblock - 1;
       file->block_offset_x = 0.0;
@@ -7826,11 +7861,9 @@ int mbnavadjust_invertnav() {
 
   int nnav = 0;
   int nblock = 0;
-  int ndiscontinuity = 0;
   int nglobaltiexy = 0;
   int nglobaltiez = 0;
   int nsmooth = 0;
-  int nnsmooth = 0;
   int ntie = 0;
   int nglobal = 0;
   int nfixed = 0;
@@ -8056,7 +8089,6 @@ int mbnavadjust_invertnav() {
     /* count number of nav points, discontinuities, blocks, and global ties */
     nnav = 0;
     nblock = 0;
-    ndiscontinuity = 0;
     nglobaltiexy = 0;
     nglobaltiez = 0;
     for (int ifile = 0; ifile < project.num_files; ifile++) {
@@ -8066,8 +8098,6 @@ int mbnavadjust_invertnav() {
       for (int isection = 0; isection < file->num_sections; isection++) {
         section = &file->sections[isection];
         nnav += section->num_snav - section->continuity;
-        if (!section->continuity)
-          ndiscontinuity++;
         if (section->globaltie.status != MBNA_TIE_NONE) {
           if (section->globaltie.status == MBNA_TIE_XY || section->globaltie.status == MBNA_TIE_XYZ
               || section->globaltie.status == MBNA_TIE_XY_FIXED || section->globaltie.status == MBNA_TIE_XYZ_FIXED) {
@@ -8137,16 +8167,12 @@ int mbnavadjust_invertnav() {
               || section->globaltie.status == MBNA_TIE_XY_FIXED || section->globaltie.status == MBNA_TIE_XYZ_FIXED) {
             global_ties_xy_files[nglobaltiexy] = ifile;
             global_ties_xy_sections[nglobaltiexy] = isection;
-//fprintf(stderr, "%s:%d:%s: Adding global tie to XY list: %d   %4.4d:%2.2d\n",
-//__FILE__, __LINE__, __FUNCTION__, nglobaltiexy, ifile, isection);
             nglobaltiexy++;
           }
           if (section->globaltie.status == MBNA_TIE_Z || section->globaltie.status == MBNA_TIE_XYZ
               || section->globaltie.status == MBNA_TIE_Z_FIXED || section->globaltie.status == MBNA_TIE_XYZ_FIXED) {
             global_ties_z_files[nglobaltiez] = ifile;
             global_ties_z_sections[nglobaltiez] = isection;
-//fprintf(stderr, "%s:%d:%s: Adding global tie to Z list: %d   %4.4d:%2.2d\n",
-//__FILE__, __LINE__, __FUNCTION__, nglobaltiexy, ifile, isection);
             nglobaltiez++;
           }
         }
@@ -8155,16 +8181,12 @@ int mbnavadjust_invertnav() {
               || section->fixedtie.status == MBNA_TIE_XY_FIXED || section->fixedtie.status == MBNA_TIE_XYZ_FIXED) {
             global_ties_xy_files[nglobaltiexy] = ifile;
             global_ties_xy_sections[nglobaltiexy] = isection;
-//fprintf(stderr, "%s:%d:%s: Adding fixed tie to XY list: %d   %4.4d:%2.2d\n",
-//__FILE__, __LINE__, __FUNCTION__, nglobaltiexy, ifile, isection);
             nglobaltiexy++;
           }
           if (section->fixedtie.status == MBNA_TIE_Z || section->fixedtie.status == MBNA_TIE_XYZ
               || section->fixedtie.status == MBNA_TIE_Z_FIXED || section->fixedtie.status == MBNA_TIE_XYZ_FIXED) {
             global_ties_z_files[nglobaltiez] = ifile;
             global_ties_z_sections[nglobaltiez] = isection;
-//fprintf(stderr, "%s:%d:%s: Adding fixed tie to Z list: %d   %4.4d:%2.2d\n",
-//__FILE__, __LINE__, __FUNCTION__, nglobaltiexy, ifile, isection);
             nglobaltiez++;
           }
         }
@@ -9812,7 +9834,6 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
       smoothweight = pow(10.0, smooth_exp) / 100.0;
 
       bool full_inversion = false;
-      int ncoffset = 0;
       int inavstart = 0;
       int inavend = nnav - 1;
       if (isurvey == -1 || isurvey == project.num_surveys) {
@@ -9844,7 +9865,6 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
               section = &file->sections[isection];
 
               if (first) {
-                ncoffset = section->snav_invert_id[0];
                 inavstart = section->snav_invert_id[0];
                 first = false;
               }
@@ -9946,12 +9966,12 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
                   /* A1: get absolute id for first snav point */
                   file1 = &project.files[crossing->file_id_1];
                   section1 = &file1->sections[crossing->section_1];
-                  nc1 = section1->snav_invert_id[tie->snav_1] - ncoffset;
+                  nc1 = section1->snav_invert_id[tie->snav_1] - inavstart;
 
                   /* A2: get absolute id for second snav point */
                   file2 = &project.files[crossing->file_id_2];
                   section2 = &file2->sections[crossing->section_2];
-                  nc2 = section2->snav_invert_id[tie->snav_2] - ncoffset;
+                  nc2 = section2->snav_invert_id[tie->snav_2] - inavstart;
 
                   /* get uncertainty ellipsoid component magnitudes,
                       make them small if tie is set fixed so that
@@ -10246,7 +10266,7 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
       //fprintf(stderr,"APPLYING WEIGHT: %f  ifile:%d isection:%d\n",weight,ifile,isection);
 
                       index_m = irow * 6;
-                      index_n = (section->snav_invert_id[globaltie->snav] - ncoffset) * 3;
+                      index_n = (section->snav_invert_id[globaltie->snav] - inavstart) * 3;
                       matrix.ia[index_m] = index_n;
                       matrix.a[index_m] = weight;
                       b[irow] = weight * offset_x;
@@ -10259,7 +10279,7 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
                       weight *= matrix_scale;
 
                       index_m = irow * 6;
-                      index_n = (section->snav_invert_id[globaltie->snav] - ncoffset) * 3 + 1;
+                      index_n = (section->snav_invert_id[globaltie->snav] - inavstart) * 3 + 1;
                       matrix.ia[index_m] = index_n;
                       matrix.a[index_m] = weight;
                       b[irow] = weight * offset_y;
@@ -10280,7 +10300,7 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
                       weight *= matrix_scale;
 
                       index_m = irow * 6;
-                      index_n = (section->snav_invert_id[globaltie->snav] - ncoffset) * 3 + 2;
+                      index_n = (section->snav_invert_id[globaltie->snav] - inavstart) * 3 + 2;
                       matrix.ia[index_m] = index_n;
                       matrix.a[index_m] = weight;
                       b[irow] = weight * offset_z;
@@ -10310,7 +10330,7 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
                       for (int isnav = 0; isnav < section->num_snav; isnav++) {
                           if (file->status == MBNA_FILE_FIXEDNAV || file->status == MBNA_FILE_FIXEDXYNAV) {
                               index_m = irow * 6;
-                              index_n = (section->snav_invert_id[isnav] - ncoffset) * 3;
+                              index_n = (section->snav_invert_id[isnav] - inavstart) * 3;
                               matrix.ia[index_m] = index_n;
                               matrix.a[index_m] = weight;
                               b[irow] = -file->block_offset_x;
@@ -10318,7 +10338,7 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
                               irow++;
 
                               index_m = irow * 6;
-                              index_n = (section->snav_invert_id[isnav] - ncoffset) * 3 + 1;
+                              index_n = (section->snav_invert_id[isnav] - inavstart) * 3 + 1;
                               matrix.ia[index_m] = index_n;
                               matrix.a[index_m] = weight;
                               b[irow] = -file->block_offset_y;
@@ -10328,7 +10348,7 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
 
                           if (file->status == MBNA_FILE_FIXEDNAV || file->status == MBNA_FILE_FIXEDZNAV) {
                               index_m = irow * 6;
-                              index_n = (section->snav_invert_id[isnav] - ncoffset) * 3 + 2;
+                              index_n = (section->snav_invert_id[isnav] - inavstart) * 3 + 2;
                               matrix.ia[index_m] = index_n;
                               matrix.a[index_m] = weight;
                               b[irow] = -file->block_offset_z;
@@ -10342,7 +10362,6 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
       }
 
       /* E1: loop over all navigation applying first derivative smoothing */
-      nnsmooth = 0;
       for (int inav = inavstart; inav < inavend; inav++) {
           int index_m;
           int index_n;
@@ -10358,7 +10377,6 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
               }
               weight *= matrix_scale;
               zweight = 10.0 * weight;
-              nnsmooth++;
 
               index_m = irow * 6;
               index_n = (inav - inavstart) * 3;
@@ -10399,7 +10417,6 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
       }
 
       /* E1: loop over all navigation applying second derivative smoothing */
-      nnsmooth = 0;
       for (int inav = inavstart; inav < inavend - 1; inav++) {
           int index_m;
           int index_n;
@@ -10417,7 +10434,6 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
               }
               weight *= matrix_scale;
               zweight = 10.0 * weight;
-              nnsmooth++;
 
               index_m = irow * 6;
               index_n = (inav - inavstart) * 3;
@@ -10510,6 +10526,8 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
       itielast = -1;
       itienext = -1;
       for (int inav = inavstart; inav <= inavend; inav++) {
+          int iinv = inav - inavstart;
+
           if (x_num_ties[inav] > 0) {
               itielast = inav;
           }
@@ -10534,19 +10552,19 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
               /* now interpolate or extrapolate */
               if (itielast >= 0 && itienext > itielast) {
                   factor = (x_time_d[inav] - x_time_d[itielast] ) / (x_time_d[itienext] - x_time_d[itielast]);
-                  x[inav * 3] = x[(itielast - ncoffset) * 3] + factor * (x[(itienext - ncoffset) * 3] - x[(itielast - ncoffset) * 3]);
-                  x[inav * 3 + 1] = x[(itielast - ncoffset) * 3 + 1] + factor * (x[(itienext - ncoffset) * 3 + 1] - x[(itielast - ncoffset) * 3 + 1]);
-                  x[inav * 3 + 2] = x[(itielast - ncoffset) * 3 + 2] + factor * (x[(itienext - ncoffset) * 3 + 2] - x[(itielast - ncoffset) * 3 + 2]);
+                  x[iinv * 3] = x[(itielast - inavstart) * 3] + factor * (x[(itienext - inavstart) * 3] - x[(itielast - inavstart) * 3]);
+                  x[iinv * 3 + 1] = x[(itielast - inavstart) * 3 + 1] + factor * (x[(itienext - inavstart) * 3 + 1] - x[(itielast - inavstart) * 3 + 1]);
+                  x[iinv * 3 + 2] = x[(itielast - inavstart) * 3 + 2] + factor * (x[(itienext - inavstart) * 3 + 2] - x[(itielast - inavstart) * 3 + 2]);
               }
               else if (itielast >= 0) {
-                  x[inav * 3] = x[(itielast - ncoffset) * 3];
-                  x[inav * 3 + 1] = x[(itielast - ncoffset) * 3 + 1];
-                  x[inav * 3 + 2] = x[(itielast - ncoffset) * 3 + 2];
+                  x[iinv * 3] = x[(itielast - inavstart) * 3];
+                  x[iinv * 3 + 1] = x[(itielast - inavstart) * 3 + 1];
+                  x[iinv * 3 + 2] = x[(itielast - inavstart) * 3 + 2];
               }
               else if (itienext >= 0) {
-                  x[inav * 3] = x[(itienext - ncoffset) * 3];
-                  x[inav * 3 + 1] = x[(itienext - ncoffset) * 3 + 1];
-                  x[inav * 3 + 2] = x[(itienext - ncoffset) * 3 + 2];
+                  x[iinv * 3] = x[(itienext - inavstart) * 3];
+                  x[iinv * 3 + 1] = x[(itienext - inavstart) * 3 + 1];
+                  x[iinv * 3 + 2] = x[(itienext - inavstart) * 3 + 2];
               }
           }
       }
@@ -10561,11 +10579,7 @@ fprintf(stderr, "\nGlobal ties Z %d:\n", nglobaltiez);
               for (int isection = 0; isection < file->num_sections; isection++) {
                   section = &file->sections[isection];
                   for (int isnav = 0; isnav < section->num_snav; isnav++) {
-                      int k = section->snav_invert_id[isnav] - ncoffset;
-/* fprintf(stderr, "Solution: %d:%d:%d:%d  inav:%d %d  prior: %f %f %f   perturbation: %f %f %f\n",
-file->block, ifile, isection, isnav, section->snav_invert_id[isnav], k,
-section->snav_lon_offset[isnav]/project.mtodeglon, section->snav_lat_offset[isnav]/project.mtodeglat, section->snav_z_offset[isnav],
-x[3 * k], x[3 * k + 1], x[3 * k + 2]); */
+                      int k = section->snav_invert_id[isnav] - inavstart;
                       section->snav_lon_offset[isnav] += x[3 * k] * project.mtodeglon;
                       section->snav_lat_offset[isnav] += x[3 * k + 1] * project.mtodeglat;
                       section->snav_z_offset[isnav] += x[3 * k + 2];
@@ -11038,7 +11052,7 @@ int mbnavadjust_updategrid() {
       for (int ifile = 0; ifile < project.num_files; ifile++) {
         file = &project.files[ifile];
         snprintf(npath, sizeof(npath), "%s/nvs_%4.4d.mb166", project.datadir, ifile);
-        snprintf(apath, sizeof(apath), "%s/nvs_%4.4d.na%d", project.datadir, ifile, file->output_id);
+        snprintf(apath, sizeof(apath), "%s/nvs_%4.4d.na0", project.datadir, ifile);
         if ((nfp = fopen(npath, "r")) == NULL) {
           status = MB_FAILURE;
           error = MB_ERROR_OPEN_FAIL;
@@ -11065,12 +11079,12 @@ int mbnavadjust_updategrid() {
           /* write file header */
           char user[256], host[256], date[32];
           status = mb_user_host_date(mbna_verbose, user, host, date, &error);
-          gethostname(host, MBP_FILENAMESIZE);
+          gethostname(host, 256);
           snprintf(ostring, sizeof(ostring), "# Adjusted navigation generated using MBnavadjust\n");
           fprintf(afp, "%s", ostring);
           snprintf(ostring, sizeof(ostring), "# MB-System version:        %s\n", MB_VERSION);
           fprintf(afp, "%s", ostring);
-          snprintf(ostring, sizeof(ostring), "# MB-System build data:     %s\n", MB_BUILD_DATE);
+          snprintf(ostring, sizeof(ostring), "# MB-System build data:     %s\n", MB_VERSION_DATE);
           fprintf(afp, "%s", ostring);
           snprintf(ostring, sizeof(ostring), "# MBnavadjust project name: %s\n", project.name);
           fprintf(afp, "%s", ostring);
@@ -11225,41 +11239,16 @@ int mbnavadjust_applynav() {
   }
 
   int status = MB_SUCCESS;
-  struct mbna_file *file;
-  struct mbna_section *section;
-  mb_pathplus npath;
-  mb_pathplus apath;
-  mb_pathplus opath;
-  FILE *nfp, *afp, *ofp;
-  char *result;
-  mb_command buffer;
-  int nscan;
-  int time_i[7];
-  double time_d;
-  double navlon;
-  double navlat;
-  double heading;
-  double speed;
-  double draft;
-  double roll;
-  double pitch;
-  double heave;
-  double factor;
-  double zoffset;
-  mb_pathplus ostring;
-  int mbp_heading_mode;
-  double mbp_headingbias;
-  int mbp_rollbias_mode;
-  double mbp_rollbias;
-  double mbp_rollbias_port;
-  double mbp_rollbias_stbd;
-  int isection, isnav;
-  double seconds;
 
   /* output results from navigation solution */
   if (project.open && project.num_crossings > 0 &&
       (project.num_crossings_analyzed >= 10 || project.num_truecrossings_analyzed == project.num_truecrossings) &&
       error == MB_ERROR_NO_ERROR) {
+
+    mb_pathplus npath;
+    mb_pathplus opath;
+    mb_path ppath;
+    FILE *nfp, *ofp;
 
     /* now output inverse solution */
     snprintf(message, sizeof(message), "Applying navigation solution...");
@@ -11267,10 +11256,21 @@ int mbnavadjust_applynav() {
 
     /* generate new nav files */
     for (int ifile = 0; ifile < project.num_files; ifile++) {
-      file = &project.files[ifile];
+      struct mbna_file *file = &project.files[ifile];
+
       snprintf(npath, sizeof(npath), "%s/nvs_%4.4d.mb166", project.datadir, ifile);
-      snprintf(apath, sizeof(apath), "%s/nvs_%4.4d.na%d", project.datadir, ifile, file->output_id);
-      snprintf(opath, sizeof(opath), "%s.na%d", file->path, file->output_id);
+      if (project.use_mode == MBNA_USE_MODE_PRIMARY) {
+        snprintf(opath, sizeof(opath), "%s.na%d", file->path, 0);
+      }
+      else {
+        status = mb_pr_get_output(mbna_verbose, &file->format, file->path, ppath, &error);
+        if (project.use_mode == MBNA_USE_MODE_SECONDARY) {
+          snprintf(opath, sizeof(ppath), "%s.na%d", ppath, 1);
+        }
+        else {
+          snprintf(opath, sizeof(ppath), "%s.na%d", ppath, 2);
+        }
+      }
       if ((nfp = fopen(npath, "r")) == NULL) {
         status = MB_FAILURE;
         error = MB_ERROR_OPEN_FAIL;
@@ -11279,18 +11279,8 @@ int mbnavadjust_applynav() {
         if (mbna_verbose == 0)
           fprintf(stderr, "%s", message);
       }
-      else if ((afp = fopen(apath, "w")) == NULL) {
-        fclose(nfp);
-        status = MB_FAILURE;
-        error = MB_ERROR_OPEN_FAIL;
-        snprintf(message, sizeof(message), " > Unable to open output nav file %s\n", apath);
-        do_info_add(message, false);
-        if (mbna_verbose == 0)
-          fprintf(stderr, "%s", message);
-      }
       else if ((ofp = fopen(opath, "w")) == NULL) {
         fclose(nfp);
-        fclose(afp);
         status = MB_FAILURE;
         error = MB_ERROR_OPEN_FAIL;
         snprintf(message, sizeof(message), " > Unable to open output nav file %s\n", opath);
@@ -11306,34 +11296,43 @@ int mbnavadjust_applynav() {
 
         /* write file header */
         char user[256], host[256], date[32];
+        mb_pathplus ostring;
         status = mb_user_host_date(mbna_verbose, user, host, date, &error);
         snprintf(ostring, sizeof(ostring), "# Adjusted navigation generated using MBnavadjust\n");
         fprintf(ofp, "%s", ostring);
-        fprintf(afp, "%s", ostring);
         snprintf(ostring, sizeof(ostring), "# MB-System version:        %s\n", MB_VERSION);
         fprintf(ofp, "%s", ostring);
-        fprintf(afp, "%s", ostring);
-        snprintf(ostring, sizeof(ostring), "# MB-System build data:     %s\n", MB_BUILD_DATE);
+        snprintf(ostring, sizeof(ostring), "# MB-System build data:     %s\n", MB_VERSION_DATE);
         fprintf(ofp, "%s", ostring);
-        fprintf(afp, "%s", ostring);
         snprintf(ostring, sizeof(ostring), "# MBnavadjust project name: %s\n", project.name);
         fprintf(ofp, "%s", ostring);
-        fprintf(afp, "%s", ostring);
         snprintf(ostring, sizeof(ostring), "# MBnavadjust project path: %s\n", project.path);
         fprintf(ofp, "%s", ostring);
-        fprintf(afp, "%s", ostring);
         snprintf(ostring, sizeof(ostring), "# MBnavadjust project home: %s\n", project.home);
         fprintf(ofp, "%s", ostring);
-        fprintf(afp, "%s", ostring);
         snprintf(ostring, sizeof(ostring), "# Generated by user <%s> on cpu <%s> at <%s>\n", user, host, date);
         fprintf(ofp, "%s", ostring);
-        fprintf(afp, "%s", ostring);
 
         /* read the input nav */
-        isection = 0;
-        section = &file->sections[isection];
-        isnav = 0;
+        int isection = 0;
+        struct mbna_section *section = &file->sections[isection];
+        int isnav = 0;
         bool done = false;
+        char *result = NULL;
+        mb_command buffer;
+        int nscan;
+        int time_i[7];
+        double seconds;
+        double time_d;
+        double navlon;
+        double navlat;
+        double heading;
+        double speed;
+        double draft;
+        double roll;
+        double pitch;
+        double heave;
+        double zoffset;
         while (!done) {
           if ((result = fgets(buffer, sizeof(buffer), nfp)) != buffer) {
             done = true;
@@ -11367,6 +11366,7 @@ int mbnavadjust_applynav() {
             }
 
             /* update the nav if possible (and it should be...) */
+            double factor;
             if (time_d < section->snav_time_d[isnav]) {
               factor = 0.0;
 //fprintf(stderr,"%s:%4.4d:%s: Nav time outside expected section: %f < %f ifile:%d isection:%d isnav:%d\n",
@@ -11405,61 +11405,68 @@ int mbnavadjust_applynav() {
                       time_i[0], time_i[1], time_i[2], time_i[3], time_i[4], time_i[5], time_i[6], time_d, navlon,
                       navlat, heading, speed, draft, roll, pitch, heave, zoffset);
               fprintf(ofp, "%s", ostring);
-              fprintf(afp, "%s", ostring);
               /* fprintf(stderr, "NAV OUT: %3.3d:%3.3d:%2.2d factor:%f | %s", i,isection,isnav,factor,ostring); */
             }
           }
         }
         fclose(nfp);
-        fclose(afp);
         fclose(ofp);
 
-        /* get bias values */
-        mb_pr_get_heading(mbna_verbose, file->path, &mbp_heading_mode, &mbp_headingbias, &error);
-        mb_pr_get_rollbias(mbna_verbose, file->path, &mbp_rollbias_mode, &mbp_rollbias, &mbp_rollbias_port,
-                           &mbp_rollbias_stbd, &error);
+        if (project.use_mode == MBNA_USE_MODE_PRIMARY) {
+          int mbp_heading_mode;
+          double mbp_headingbias;
+          int mbp_rollbias_mode;
+          double mbp_rollbias;
+          double mbp_rollbias_port;
+          double mbp_rollbias_stbd;
 
-        /* update output file in mbprocess parameter file */
-        status = mb_pr_update_format(mbna_verbose, file->path, true, file->format, &error);
-        status = mb_pr_update_navadj(mbna_verbose, file->path, MBP_NAVADJ_LLZ, opath, MBP_NAV_LINEAR, &error);
+          /* get bias values */
+          mb_pr_get_heading(mbna_verbose, file->path, &mbp_heading_mode, &mbp_headingbias, &error);
+          mb_pr_get_rollbias(mbna_verbose, file->path, &mbp_rollbias_mode, &mbp_rollbias, &mbp_rollbias_port,
+                             &mbp_rollbias_stbd, &error);
 
-        /* update heading bias in mbprocess parameter file */
-        mbp_headingbias = file->heading_bias + file->heading_bias_import;
-        if (mbp_headingbias == 0.0) {
-          if (mbp_heading_mode == MBP_HEADING_OFF || mbp_heading_mode == MBP_HEADING_OFFSET)
-            mbp_heading_mode = MBP_HEADING_OFF;
-          else if (mbp_heading_mode == MBP_HEADING_CALC || mbp_heading_mode == MBP_HEADING_CALCOFFSET)
-            mbp_heading_mode = MBP_HEADING_CALC;
-        }
-        else {
-          if (mbp_heading_mode == MBP_HEADING_OFF || mbp_heading_mode == MBP_HEADING_OFFSET)
-            mbp_heading_mode = MBP_HEADING_OFFSET;
-          else if (mbp_heading_mode == MBP_HEADING_CALC || mbp_heading_mode == MBP_HEADING_CALCOFFSET)
-            mbp_heading_mode = MBP_HEADING_CALCOFFSET;
-        }
-        status = mb_pr_update_heading(mbna_verbose, file->path, mbp_heading_mode, mbp_headingbias, &error);
+          /* update output file in mbprocess parameter file */
+          status = mb_pr_update_format(mbna_verbose, file->path, true, file->format, &error);
+          status = mb_pr_update_navadj(mbna_verbose, file->path, MBP_NAVADJ_LLZ, opath, MBP_NAV_LINEAR, &error);
 
-        /* update roll bias in mbprocess parameter file */
-        mbp_rollbias = file->roll_bias + file->roll_bias_import;
-        if (mbp_rollbias == 0.0) {
-          if (mbp_rollbias_mode == MBP_ROLLBIAS_DOUBLE) {
-            mbp_rollbias_port = mbp_rollbias + mbp_rollbias_port - file->roll_bias_import;
-            mbp_rollbias_stbd = mbp_rollbias + mbp_rollbias_stbd - file->roll_bias_import;
-          }
-          else
-            mbp_rollbias_mode = MBP_ROLLBIAS_OFF;
-        }
-        else {
-          if (mbp_rollbias_mode == MBP_ROLLBIAS_DOUBLE) {
-            mbp_rollbias_port = mbp_rollbias + mbp_rollbias_port - file->roll_bias_import;
-            mbp_rollbias_stbd = mbp_rollbias + mbp_rollbias_stbd - file->roll_bias_import;
+          /* update heading bias in mbprocess parameter file */
+          mbp_headingbias = file->heading_bias + file->heading_bias_import;
+          if (mbp_headingbias == 0.0) {
+            if (mbp_heading_mode == MBP_HEADING_OFF || mbp_heading_mode == MBP_HEADING_OFFSET)
+              mbp_heading_mode = MBP_HEADING_OFF;
+            else if (mbp_heading_mode == MBP_HEADING_CALC || mbp_heading_mode == MBP_HEADING_CALCOFFSET)
+              mbp_heading_mode = MBP_HEADING_CALC;
           }
           else {
-            mbp_rollbias_mode = MBP_ROLLBIAS_SINGLE;
+            if (mbp_heading_mode == MBP_HEADING_OFF || mbp_heading_mode == MBP_HEADING_OFFSET)
+              mbp_heading_mode = MBP_HEADING_OFFSET;
+            else if (mbp_heading_mode == MBP_HEADING_CALC || mbp_heading_mode == MBP_HEADING_CALCOFFSET)
+              mbp_heading_mode = MBP_HEADING_CALCOFFSET;
           }
+          status = mb_pr_update_heading(mbna_verbose, file->path, mbp_heading_mode, mbp_headingbias, &error);
+
+          /* update roll bias in mbprocess parameter file */
+          mbp_rollbias = file->roll_bias + file->roll_bias_import;
+          if (mbp_rollbias == 0.0) {
+            if (mbp_rollbias_mode == MBP_ROLLBIAS_DOUBLE) {
+              mbp_rollbias_port = mbp_rollbias + mbp_rollbias_port - file->roll_bias_import;
+              mbp_rollbias_stbd = mbp_rollbias + mbp_rollbias_stbd - file->roll_bias_import;
+            }
+            else
+              mbp_rollbias_mode = MBP_ROLLBIAS_OFF;
+          }
+          else {
+            if (mbp_rollbias_mode == MBP_ROLLBIAS_DOUBLE) {
+              mbp_rollbias_port = mbp_rollbias + mbp_rollbias_port - file->roll_bias_import;
+              mbp_rollbias_stbd = mbp_rollbias + mbp_rollbias_stbd - file->roll_bias_import;
+            }
+            else {
+              mbp_rollbias_mode = MBP_ROLLBIAS_SINGLE;
+            }
+          }
+          status = mb_pr_update_rollbias(mbna_verbose, file->path, mbp_rollbias_mode, mbp_rollbias, mbp_rollbias_port,
+                                         mbp_rollbias_stbd, &error);
         }
-        status = mb_pr_update_rollbias(mbna_verbose, file->path, mbp_rollbias_mode, mbp_rollbias, mbp_rollbias_port,
-                                       mbp_rollbias_stbd, &error);
       }
     }
 
@@ -11530,9 +11537,9 @@ int mbnavadjust_modelplot_setzoom() {
       xscale = ((double)plot_width) / (mbna_modelplot_end - mbna_modelplot_start + 1);
 
       ipingstart = (MIN(mbna_modelplot_zoom_x1, mbna_modelplot_zoom_x2) - xo) / xscale + mbna_modelplot_start;
-      ipingstart = MIN(MAX(ipingstart, 0), project.num_pings - 1);
+      ipingstart = MIN(MAX(ipingstart, 0), mbna_modelplot_count - 1);
       ipingend = (MAX(mbna_modelplot_zoom_x1, mbna_modelplot_zoom_x2) - xo) / xscale + mbna_modelplot_start;
-      ipingend = MIN(MAX(ipingend, 0), project.num_pings - 1);
+      ipingend = MIN(MAX(ipingend, 0), mbna_modelplot_count - 1);
 
       if (ipingend > ipingstart) {
         mbna_modelplot_zoom = true;
@@ -11549,9 +11556,9 @@ int mbnavadjust_modelplot_setzoom() {
       xscale = ((double)plot_width) / (mbna_modelplot_end - mbna_modelplot_start + 1);
 
       ipingstart = (MIN(mbna_modelplot_zoom_x1, mbna_modelplot_zoom_x2) - xo) / xscale + mbna_modelplot_start;
-      ipingstart = MIN(MAX(ipingstart, 0), project.num_pings - 1);
+      ipingstart = MIN(MAX(ipingstart, 0), mbna_modelplot_count - 1);
       ipingend = (MAX(mbna_modelplot_zoom_x1, mbna_modelplot_zoom_x2) - xo) / xscale + mbna_modelplot_start;
-      ipingend = MIN(MAX(ipingend, 0), project.num_pings - 1);
+      ipingend = MIN(MAX(ipingend, 0), mbna_modelplot_count - 1);
 
       if (ipingend > ipingstart) {
         mbna_modelplot_zoom = true;
@@ -11585,12 +11592,12 @@ int mbnavadjust_modelplot_setzoom() {
     if (project.modelplot_style == MBNA_MODELPLOT_TIMESERIES) {
       mbna_modelplot_zoom = false;
       mbna_modelplot_start = 0;
-      mbna_modelplot_end = project.num_pings - 1;
+      mbna_modelplot_end = mbna_modelplot_count - 1;
     }
     else if (project.modelplot_style == MBNA_MODELPLOT_PERTURBATION) {
       mbna_modelplot_zoom = false;
       mbna_modelplot_start = 0;
-      mbna_modelplot_end = project.num_pings - 1;
+      mbna_modelplot_end = mbna_modelplot_count - 1;
     }
     else {
       mbna_modelplot_tiezoom = false;
@@ -11622,19 +11629,23 @@ int mbnavadjust_modelplot_pick(int x, int y) {
   /* find nearest snav pt with tie */
   if (project.open && project.inversion_status != MBNA_INVERSION_NONE && project.modelplot) {
     if (project.modelplot_style == MBNA_MODELPLOT_TIMESERIES) {
-      mbnavadjust_modelplot_pick_timeseries(x, y);
-    }
-    else if (project.modelplot_style == MBNA_MODELPLOT_PERTURBATION) {
-      mbnavadjust_modelplot_pick_perturbation(x, y);
-    }
-    else if (project.modelplot_style == MBNA_MODELPLOT_TIEOFFSETS) {
-      if (mbna_view_list == MBNA_VIEW_LIST_GLOBALTIES
-              || mbna_view_list == MBNA_VIEW_LIST_GLOBALTIESSORTED) {
-        mbnavadjust_modelplot_pick_globaltieoffsets(x, y);
+      if (mbna_modelplot_mode == MBNA_MODELPLOT_MODE_SECTIONS) {
+        mbnavadjust_modelplot_pick_timeseries_globalties(x, y);
       }
       else {
-        mbnavadjust_modelplot_pick_tieoffsets(x, y);
+      	mbnavadjust_modelplot_pick_timeseries_crossingties(x, y);
       }
+    }
+    else if (project.modelplot_style == MBNA_MODELPLOT_PERTURBATION) {
+      if (mbna_modelplot_mode == MBNA_MODELPLOT_MODE_SECTIONS) {
+        mbnavadjust_modelplot_pick_perturbation_globalties(x, y);
+      }
+      else {
+      	mbnavadjust_modelplot_pick_perturbation_crossingties(x, y);
+      }
+    }
+    else if (project.modelplot_style == MBNA_MODELPLOT_TIEOFFSETS) {
+      mbnavadjust_modelplot_pick_tieoffsets(x, y);
     }
   }
 
@@ -11652,7 +11663,7 @@ int mbnavadjust_modelplot_pick(int x, int y) {
 }
 /*--------------------------------------------------------------------*/
 
-int mbnavadjust_modelplot_pick_timeseries(int x, int y) {
+int mbnavadjust_modelplot_pick_timeseries_crossingties(int x, int y) {
   if (mbna_verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
     fprintf(stderr, "dbg2       x:           %d\n", x);
@@ -11855,7 +11866,112 @@ int mbnavadjust_modelplot_pick_timeseries(int x, int y) {
 }
 /*--------------------------------------------------------------------*/
 
-int mbnavadjust_modelplot_pick_perturbation(int x, int y) {
+int mbnavadjust_modelplot_pick_timeseries_globalties(int x, int y) {
+  if (mbna_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2       x:           %d\n", x);
+    fprintf(stderr, "dbg2       y:           %d\n", y);
+  }
+
+  int status = MB_SUCCESS;
+
+  /* find nearest global tie in model plot */
+  if (project.open && project.modelplot
+    && project.modelplot_style == MBNA_MODELPLOT_TIMESERIES
+    && (mbna_modelplot_mode == MBNA_MODELPLOT_MODE_SECTIONS)) {
+    struct mbna_file *file;
+    struct mbna_section *section;
+    int range;
+    int pick_file;
+    int pick_section;
+    int pick_snav;
+    int ix, iy;
+    int rangemin = 10000000;
+    for (int ifile = 0; ifile < project.num_files; ifile++) {
+      file = &project.files[ifile];
+      for (int jsection = 0; jsection < file->num_sections; jsection++) {
+        section = &file->sections[jsection];
+        if (section->globaltie.status != MBNA_TIE_NONE) {
+          int iping = section->modelplot_start_count + section->snav_id[section->globaltie.snav];
+          ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+
+          iy = mbna_modelplot_yo_lon -
+               (int)(mbna_modelplot_yscale
+                 * (section->snav_lon_offset[section->globaltie.snav] / project.mtodeglon - mbna_modelplot_yxmid));
+          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+          if (range < rangemin) {
+            rangemin = range;
+            pick_file = ifile;
+            pick_section = jsection;
+            pick_snav = section->globaltie.snav;
+          }
+
+          iy = mbna_modelplot_yo_lat -
+               (int)(mbna_modelplot_yscale
+                 * (section->snav_lat_offset[section->globaltie.snav] / project.mtodeglat - mbna_modelplot_yymid));
+          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+          if (range < rangemin) {
+            rangemin = range;
+            pick_file = ifile;
+            pick_section = jsection;
+            pick_snav = section->globaltie.snav;
+          }
+
+          iy = mbna_modelplot_yo_z -
+                (int)(mbna_modelplot_yzscale
+                  * (section->snav_z_offset[section->globaltie.snav] - mbna_modelplot_yzmid));
+          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+          if (range < rangemin) {
+            rangemin = range;
+            pick_file = ifile;
+            pick_section = jsection;
+            pick_snav = section->globaltie.snav;
+          }
+        }
+      }
+    }
+
+    /* deal with successful pick */
+    if (rangemin < 10000000) {
+      mbna_file_select = pick_file;
+      mbna_section_select = pick_section;
+      mbna_modelplot_pickfile = pick_file;
+      mbna_modelplot_picksection = pick_section;
+      mbna_modelplot_picksnav = pick_snav;
+      mbna_crossing_select = MBNA_SELECT_NONE;
+      mbna_tie_select = MBNA_SELECT_NONE;
+
+      /* bring up naverr window if required */
+      if (mbna_naverr_mode == MBNA_NAVERR_MODE_UNLOADED) {
+        do_naverr_init(MBNA_NAVERR_MODE_SECTION);
+      }
+
+      /* else if naverr window is up, load selected global crossing */
+      else {
+        mbnavadjust_naverr_specific_section(mbna_file_select, mbna_section_select);
+        mbnavadjust_naverr_plot(MBNA_PLOT_MODE_FIRST);
+        do_naverr_update();
+        do_update_status();
+      }
+
+      /* set flag to replot modelplot */
+      project.modelplot_uptodate = false;
+    }
+  }
+
+  if (mbna_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBnavadjust function <%s> completed\n", __func__);
+    fprintf(stderr, "dbg2  Return values:\n");
+    fprintf(stderr, "dbg2       error:       %d\n", error);
+    fprintf(stderr, "dbg2  Return status:\n");
+    fprintf(stderr, "dbg2       status:      %d\n", status);
+  }
+
+  return (status);
+}
+/*--------------------------------------------------------------------*/
+
+int mbnavadjust_modelplot_pick_perturbation_crossingties(int x, int y) {
   if (mbna_verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
     fprintf(stderr, "dbg2       x:           %d\n", x);
@@ -12056,6 +12172,111 @@ int mbnavadjust_modelplot_pick_perturbation(int x, int y) {
 }
 /*--------------------------------------------------------------------*/
 
+int mbnavadjust_modelplot_pick_perturbation_globalties(int x, int y) {
+  if (mbna_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2       x:           %d\n", x);
+    fprintf(stderr, "dbg2       y:           %d\n", y);
+  }
+
+  int status = MB_SUCCESS;
+
+  /* find nearest global tie in model plot */
+  if (project.open && project.modelplot
+    && project.modelplot_style == MBNA_MODELPLOT_PERTURBATION
+    && (mbna_modelplot_mode == MBNA_MODELPLOT_MODE_SECTIONS)) {
+    struct mbna_file *file;
+    struct mbna_section *section;
+    int range;
+    int pick_file;
+    int pick_section;
+    int pick_snav;
+    int ix, iy;
+    int rangemin = 10000000;
+    for (int ifile = 0; ifile < project.num_files; ifile++) {
+      file = &project.files[ifile];
+      for (int jsection = 0; jsection < file->num_sections; jsection++) {
+        section = &file->sections[jsection];
+        if (section->globaltie.status != MBNA_TIE_NONE) {
+          int iping = section->modelplot_start_count + section->snav_id[section->globaltie.snav];
+          ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+
+          iy = mbna_modelplot_yo_lon -
+               (int)(mbna_modelplot_yscale
+                 * (section->snav_lon_offset[section->globaltie.snav] / project.mtodeglon - file->block_offset_x));
+          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+          if (range < rangemin) {
+            rangemin = range;
+            pick_file = ifile;
+            pick_section = jsection;
+            pick_snav = section->globaltie.snav;
+          }
+
+          iy = mbna_modelplot_yo_lat -
+               (int)(mbna_modelplot_yscale
+                 * (section->snav_lat_offset[section->globaltie.snav] / project.mtodeglat - file->block_offset_y));
+          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+          if (range < rangemin) {
+            rangemin = range;
+            pick_file = ifile;
+            pick_section = jsection;
+            pick_snav = section->globaltie.snav;
+          }
+
+          iy = mbna_modelplot_yo_z -
+                (int)(mbna_modelplot_yzscale
+                  * (section->snav_z_offset[section->globaltie.snav] - file->block_offset_z));
+          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+          if (range < rangemin) {
+            rangemin = range;
+            pick_file = ifile;
+            pick_section = jsection;
+            pick_snav = section->globaltie.snav;
+          }
+        }
+      }
+    }
+
+    /* deal with successful pick */
+    if (rangemin < 10000000) {
+      mbna_file_select = pick_file;
+      mbna_section_select = pick_section;
+      mbna_modelplot_pickfile = pick_file;
+      mbna_modelplot_picksection = pick_section;
+      mbna_modelplot_picksnav = pick_snav;
+      mbna_crossing_select = MBNA_SELECT_NONE;
+      mbna_tie_select = MBNA_SELECT_NONE;
+
+      /* bring up naverr window if required */
+      if (mbna_naverr_mode == MBNA_NAVERR_MODE_UNLOADED) {
+        do_naverr_init(MBNA_NAVERR_MODE_SECTION);
+      }
+
+      /* else if naverr window is up, load selected global crossing */
+      else {
+        mbnavadjust_naverr_specific_section(mbna_file_select, mbna_section_select);
+        mbnavadjust_naverr_plot(MBNA_PLOT_MODE_FIRST);
+        do_naverr_update();
+        do_update_status();
+      }
+
+      /* set flag to replot modelplot */
+      project.modelplot_uptodate = false;
+    }
+  }
+
+  if (mbna_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBnavadjust function <%s> completed\n", __func__);
+    fprintf(stderr, "dbg2  Return values:\n");
+    fprintf(stderr, "dbg2       error:       %d\n", error);
+    fprintf(stderr, "dbg2  Return status:\n");
+    fprintf(stderr, "dbg2       status:      %d\n", status);
+  }
+
+  return (status);
+}
+/*--------------------------------------------------------------------*/
+
 int mbnavadjust_modelplot_pick_tieoffsets(int x, int y) {
   if (mbna_verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -12154,96 +12375,37 @@ int mbnavadjust_modelplot_pick_tieoffsets(int x, int y) {
 }
 /*--------------------------------------------------------------------*/
 
-int mbnavadjust_modelplot_pick_globaltieoffsets(int x, int y) {
+int mbnavadjust_modelplot_middlepick(int x, int y) {
   if (mbna_verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
     fprintf(stderr, "dbg2       x:           %d\n", x);
     fprintf(stderr, "dbg2       y:           %d\n", y);
   }
 
-  int status = MB_SUCCESS;
-
-  /* find nearest global tie in model plot */
-  if (project.open && project.modelplot
-    && project.modelplot_style == MBNA_MODELPLOT_TIEOFFSETS
-    && (mbna_view_list == MBNA_VIEW_LIST_GLOBALTIES
-        || mbna_view_list == MBNA_VIEW_LIST_GLOBALTIESSORTED)) {
-    struct mbna_file *file;
-    struct mbna_section *section;
-    int range;
-    int pick_file;
-    int pick_section;
-    int ix, iy;
-    int rangemin = 10000000;
-    int plot_index = 0;
-    for (int ifile = 0; ifile < project.num_files; ifile++) {
-      file = &project.files[ifile];
-      for (int jsection = 0; jsection < file->num_sections; jsection++) {
-        section = &file->sections[jsection];
-        if (section->globaltie.isurveyplotindex >= 0) {
-          if (section->globaltie.isurveyplotindex >= mbna_modelplot_tiestart &&
-              section->globaltie.isurveyplotindex <= mbna_modelplot_tieend) {
-            ix = mbna_modelplot_xo +
-                 (int)(mbna_modelplot_xscale * (section->globaltie.isurveyplotindex - mbna_modelplot_tiestart + 1));
-
-            iy = mbna_modelplot_yo_lon - (int)(mbna_modelplot_yscale * (section->globaltie.offset_x_m - mbna_modelplot_yxmid));
-            range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
-            if (range < rangemin) {
-              rangemin = range;
-              pick_file = ifile;
-              pick_section = jsection;
-            }
-
-            iy = mbna_modelplot_yo_lat - (int)(mbna_modelplot_yscale * (section->globaltie.offset_y_m - mbna_modelplot_yymid));
-            range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
-            if (range < rangemin) {
-              rangemin = range;
-              pick_file = ifile;
-              pick_section = jsection;
-            }
-
-            iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * (section->globaltie.offset_z_m - mbna_modelplot_yzmid));
-            range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
-            if (range < rangemin) {
-              rangemin = range;
-              pick_file = ifile;
-              pick_section = jsection;
-            }
-          }
-
-          /* increment plot_index */
-          plot_index++;
-        }
+  /* call specific picking function */
+  if (project.open && project.inversion_status != MBNA_INVERSION_NONE && project.modelplot) {
+    if (project.modelplot_style == MBNA_MODELPLOT_TIMESERIES) {
+      if (mbna_modelplot_mode == MBNA_MODELPLOT_MODE_SECTIONS) {
+        mbnavadjust_modelplot_middlepick_timeseries_globalties(x, y);
+      }
+      else {
+      	mbnavadjust_modelplot_middlepick_timeseries_crossingties(x, y);
       }
     }
-
-    /* deal with successful pick */
-    if (rangemin < 10000000) {
-      mbna_file_select = pick_file;
-      mbna_section_select = pick_section;
-      mbna_modelplot_pickfile = pick_file;
-      mbna_modelplot_picksection = pick_section;
-      mbna_modelplot_picksnav = 0;
-      mbna_crossing_select = MBNA_SELECT_NONE;
-      mbna_tie_select = MBNA_SELECT_NONE;
-
-      /* bring up naverr window if required */
-      if (mbna_naverr_mode == MBNA_NAVERR_MODE_UNLOADED) {
-        do_naverr_init(MBNA_NAVERR_MODE_SECTION);
+    else if (project.modelplot_style == MBNA_MODELPLOT_PERTURBATION) {
+      if (mbna_modelplot_mode == MBNA_MODELPLOT_MODE_SECTIONS) {
+        mbnavadjust_modelplot_middlepick_perturbation_globalties(x, y);
       }
-
-      /* else if naverr window is up, load selected crossing */
       else {
-        mbnavadjust_naverr_specific_section(mbna_file_select, mbna_section_select);
-        mbnavadjust_naverr_plot(MBNA_PLOT_MODE_FIRST);
-        do_naverr_update();
-        do_update_status();
+      	mbnavadjust_modelplot_middlepick_perturbation_crossingties(x, y);
       }
-
-      /* set flag to replot modelplot */
-      project.modelplot_uptodate = false;
+    }
+    else if (project.modelplot_style == MBNA_MODELPLOT_TIEOFFSETS) {
+      mbnavadjust_modelplot_middlepick_tieoffsets(x, y);
     }
   }
+
+  const int status = MB_SUCCESS;
 
   if (mbna_verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBnavadjust function <%s> completed\n", __func__);
@@ -12257,7 +12419,7 @@ int mbnavadjust_modelplot_pick_globaltieoffsets(int x, int y) {
 }
 /*--------------------------------------------------------------------*/
 
-int mbnavadjust_modelplot_middlepick(int x, int y) {
+int mbnavadjust_modelplot_middlepick_timeseries_crossingties(int x, int y) {
   if (mbna_verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
     fprintf(stderr, "dbg2       x:           %d\n", x);
@@ -12546,10 +12708,156 @@ int mbnavadjust_modelplot_middlepick(int x, int y) {
       }
     }
 
+    /* update visualization */
+    if (project.visualization_status)
+      do_update_visualization_status();
+  }
+
+  if (mbna_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBnavadjust function <%s> completed\n", __func__);
+    fprintf(stderr, "dbg2  Return values:\n");
+    fprintf(stderr, "dbg2       error:       %d\n", error);
+    fprintf(stderr, "dbg2  Return status:\n");
+    fprintf(stderr, "dbg2       status:      %d\n", status);
+  }
+
+  return (status);
+}
+/*--------------------------------------------------------------------*/
+
+int mbnavadjust_modelplot_middlepick_timeseries_globalties(int x, int y) {
+  if (mbna_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2       x:           %d\n", x);
+    fprintf(stderr, "dbg2       y:           %d\n", y);
+  }
+
+  int status = MB_SUCCESS;
+
+  /* find nearest section in model plot whether it has a global tie or not */
+  if (project.open && project.modelplot
+    && project.modelplot_style == MBNA_MODELPLOT_TIMESERIES
+    && (mbna_modelplot_mode == MBNA_MODELPLOT_MODE_SECTIONS)) {
+    struct mbna_file *file;
+    struct mbna_section *section;
+    int range;
+    int pick_file;
+    int pick_section;
+    int pick_snav;
+    int ix, iy;
+    int rangemin = 10000000;
+    for (int ifile = 0; ifile < project.num_files; ifile++) {
+      file = &project.files[ifile];
+      for (int jsection = 0; jsection < file->num_sections; jsection++) {
+        section = &file->sections[jsection];
+        if (section->show_in_modelplot) {
+          int iping = section->modelplot_start_count + section->snav_id[0];
+          ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+
+          iy = mbna_modelplot_yo_lon -
+               (int)(mbna_modelplot_yscale
+                 * (section->snav_lon_offset[0] / project.mtodeglon - mbna_modelplot_yxmid));
+          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+          if (range < rangemin) {
+            rangemin = range;
+            pick_file = ifile;
+            pick_section = jsection;
+            pick_snav = 0;
+          }
+
+          iy = mbna_modelplot_yo_lat -
+               (int)(mbna_modelplot_yscale
+                 * (section->snav_lat_offset[0] / project.mtodeglat - mbna_modelplot_yymid));
+          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+          if (range < rangemin) {
+            rangemin = range;
+            pick_file = ifile;
+            pick_section = jsection;
+            pick_snav = 0;
+          }
+
+          iy = mbna_modelplot_yo_z -
+                (int)(mbna_modelplot_yzscale
+                  * (section->snav_z_offset[0] - mbna_modelplot_yzmid));
+          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+          if (range < rangemin) {
+            rangemin = range;
+            pick_file = ifile;
+            pick_section = jsection;
+            pick_snav = 0;
+          }
+        }
+      }
+    }
+
+    /* deal with successful pick */
+    if (rangemin < 10000000) {
+      mbna_file_select = pick_file;
+      mbna_section_select = pick_section;
+      mbna_modelplot_pickfile = pick_file;
+      mbna_modelplot_picksection = pick_section;
+      mbna_modelplot_picksnav = pick_snav;
+      mbna_crossing_select = MBNA_SELECT_NONE;
+      mbna_tie_select = MBNA_SELECT_NONE;
+
+      /* bring up naverr window if required */
+      if (mbna_naverr_mode == MBNA_NAVERR_MODE_UNLOADED) {
+        do_naverr_init(MBNA_NAVERR_MODE_SECTION);
+      }
+
+      /* else if naverr window is up, load selected global crossing */
+      else {
+        mbnavadjust_naverr_specific_section(mbna_file_select, mbna_section_select);
+        mbnavadjust_naverr_plot(MBNA_PLOT_MODE_FIRST);
+        do_naverr_update();
+        do_update_status();
+      }
+
+      /* set flag to replot modelplot */
+      project.modelplot_uptodate = false;
+    }
+  }
+
+  if (mbna_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBnavadjust function <%s> completed\n", __func__);
+    fprintf(stderr, "dbg2  Return values:\n");
+    fprintf(stderr, "dbg2       error:       %d\n", error);
+    fprintf(stderr, "dbg2  Return status:\n");
+    fprintf(stderr, "dbg2       status:      %d\n", status);
+  }
+
+  return (status);
+}
+/*--------------------------------------------------------------------*/
+
+int mbnavadjust_modelplot_middlepick_perturbation_crossingties(int x, int y) {
+  if (mbna_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2       x:           %d\n", x);
+    fprintf(stderr, "dbg2       y:           %d\n", y);
+  }
+
+  int status = MB_SUCCESS;
+  struct mbna_file *file;
+  struct mbna_section *section;
+  struct mbna_crossing *crossing;
+  struct mbna_tie *tie;
+  int range;
+  int rangemin;
+  int pick_crossing;
+  int pick_tie;
+  // int pick_file;
+  // int pick_section;
+  // int pick_snav;
+  int ix, iy, iping;
+
+  /* handle middle button pick */
+  if (project.open && project.inversion_status != MBNA_INVERSION_NONE && project.modelplot) {
+
     /* middle pick for perturbation plot is either choosing one of multiple available
         ties from a tied crossing (left button) pick, or if that is not the
         situation, picking the nearest untied crossing */
-    else if (project.modelplot_style == MBNA_MODELPLOT_PERTURBATION) {
+   if (project.modelplot_style == MBNA_MODELPLOT_PERTURBATION) {
       /* first snav pick had multiple ties - now pick which one to use */
       if (mbna_modelplot_pickfile != MBNA_SELECT_NONE) {
         rangemin = 10000000;
@@ -12824,94 +13132,212 @@ int mbnavadjust_modelplot_middlepick(int x, int y) {
       }
     }
 
-    /* middle pick for tie offsets plot is choosing which survey vs survey group (block)
-        to plot by itself */
-    else {
-      rangemin = 10000000;
-
-      /* search by looping over crossings */
-      for (int i = 0; i < project.num_crossings; i++) {
-        crossing = &(project.crossings[i]);
-
-        /* loop over all ties for this crossing */
-        for (int j = 0; j < crossing->num_ties; j++) {
-          tie = &(crossing->ties[j]);
-
-          /* handle first snav point */
-          file = &project.files[crossing->file_id_1];
-          section = &file->sections[crossing->section_1];
-
-          ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (tie->isurveyplotindex - mbna_modelplot_tiestart));
-
-          iy = mbna_modelplot_yo_lon - (int)(mbna_modelplot_yscale * (tie->offset_x_m - mbna_modelplot_yxmid));
-          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
-          if (range < rangemin) {
-            rangemin = range;
-            pick_crossing = i;
-            pick_tie = j;
-            // pick_file = crossing->file_id_1;
-            // pick_section = crossing->section_1;
-            // pick_snav = tie->snav_1;
-          }
-
-          iy = mbna_modelplot_yo_lat - (int)(mbna_modelplot_yscale * (tie->offset_y_m - mbna_modelplot_yymid));
-          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
-          if (range < rangemin) {
-            rangemin = range;
-            pick_crossing = i;
-            pick_tie = j;
-            // pick_file = crossing->file_id_1;
-            // pick_section = crossing->section_1;
-            // pick_snav = tie->snav_1;
-          }
-
-          iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * (tie->offset_z_m - mbna_modelplot_yzmid));
-          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
-          if (range < rangemin) {
-            rangemin = range;
-            pick_crossing = i;
-            pick_tie = j;
-            // pick_file = crossing->file_id_1;
-            // pick_section = crossing->section_1;
-            // pick_snav = tie->snav_1;
-          }
-        }
-      }
-
-      /* deal with successful pick */
-      if (rangemin < 10000000) {
-        crossing = &(project.crossings[pick_crossing]);
-        mbna_crossing_select = pick_crossing;
-        mbna_tie_select = pick_tie;
-        mbna_modelplot_pickfile = MBNA_SELECT_NONE;
-        mbna_modelplot_picksection = MBNA_SELECT_NONE;
-        mbna_modelplot_picksnav = MBNA_SELECT_NONE;
-        mbna_block_select1 = project.files[crossing->file_id_1].block;
-        mbna_block_select2 = project.files[crossing->file_id_2].block;
-        mbna_block_select = (mbna_block_select2 * (mbna_block_select2 + 1) / 2) + mbna_block_select1;
-        mbna_modelplot_tiezoom = false;
-
-        /* bring up naverr window if required */
-        if (mbna_naverr_mode == MBNA_NAVERR_MODE_UNLOADED) {
-          do_naverr_init(MBNA_NAVERR_MODE_CROSSING);
-        }
-
-        /* else if naverr window is up, load selected crossing */
-        else {
-          mbnavadjust_naverr_specific_crossing(mbna_crossing_select, mbna_tie_select);
-          mbnavadjust_naverr_plot(MBNA_PLOT_MODE_FIRST);
-          do_naverr_update();
-          do_update_status();
-        }
-
-                /* set flag to replot modelplot */
-                project.modelplot_uptodate = false;
-      }
-    }
-
     /* update visualization */
     if (project.visualization_status)
       do_update_visualization_status();
+  }
+
+  if (mbna_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBnavadjust function <%s> completed\n", __func__);
+    fprintf(stderr, "dbg2  Return values:\n");
+    fprintf(stderr, "dbg2       error:       %d\n", error);
+    fprintf(stderr, "dbg2  Return status:\n");
+    fprintf(stderr, "dbg2       status:      %d\n", status);
+  }
+
+  return (status);
+}
+/*--------------------------------------------------------------------*/
+
+int mbnavadjust_modelplot_middlepick_perturbation_globalties(int x, int y) {
+  if (mbna_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2       x:           %d\n", x);
+    fprintf(stderr, "dbg2       y:           %d\n", y);
+  }
+
+  int status = MB_SUCCESS;
+
+  /* find nearest global tie in model plot */
+  if (project.open && project.modelplot
+    && project.modelplot_style == MBNA_MODELPLOT_PERTURBATION
+    && (mbna_modelplot_mode == MBNA_MODELPLOT_MODE_SECTIONS)) {
+    struct mbna_file *file;
+    struct mbna_section *section;
+    int range;
+    int pick_file;
+    int pick_section;
+    int pick_snav;
+    int ix, iy;
+    int rangemin = 10000000;
+    for (int ifile = 0; ifile < project.num_files; ifile++) {
+      file = &project.files[ifile];
+      for (int jsection = 0; jsection < file->num_sections; jsection++) {
+        section = &file->sections[jsection];
+        if (section->show_in_modelplot) {
+          int iping = section->modelplot_start_count + section->snav_id[0];
+          ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+
+          iy = mbna_modelplot_yo_lon -
+               (int)(mbna_modelplot_yscale
+                 * (section->snav_lon_offset[0] / project.mtodeglon - file->block_offset_x));
+          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+          if (range < rangemin) {
+            rangemin = range;
+            pick_file = ifile;
+            pick_section = jsection;
+            pick_snav = 0;
+          }
+
+          iy = mbna_modelplot_yo_lat -
+               (int)(mbna_modelplot_yscale
+                 * (section->snav_lat_offset[0] / project.mtodeglat - file->block_offset_y));
+          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+          if (range < rangemin) {
+            rangemin = range;
+            pick_file = ifile;
+            pick_section = jsection;
+            pick_snav = 0;
+          }
+
+          iy = mbna_modelplot_yo_z -
+                (int)(mbna_modelplot_yzscale
+                  * (section->snav_z_offset[0] - file->block_offset_z));
+          range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+          if (range < rangemin) {
+            rangemin = range;
+            pick_file = ifile;
+            pick_section = jsection;
+            pick_snav = 0;
+          }
+        }
+      }
+    }
+
+    /* deal with successful pick */
+    if (rangemin < 10000000) {
+      mbna_file_select = pick_file;
+      mbna_section_select = pick_section;
+      mbna_modelplot_pickfile = pick_file;
+      mbna_modelplot_picksection = pick_section;
+      mbna_modelplot_picksnav = pick_snav;
+      mbna_crossing_select = MBNA_SELECT_NONE;
+      mbna_tie_select = MBNA_SELECT_NONE;
+
+      /* bring up naverr window if required */
+      if (mbna_naverr_mode == MBNA_NAVERR_MODE_UNLOADED) {
+        do_naverr_init(MBNA_NAVERR_MODE_SECTION);
+      }
+
+      /* else if naverr window is up, load selected global crossing */
+      else {
+        mbnavadjust_naverr_specific_section(mbna_file_select, mbna_section_select);
+        mbnavadjust_naverr_plot(MBNA_PLOT_MODE_FIRST);
+        do_naverr_update();
+        do_update_status();
+      }
+
+      /* set flag to replot modelplot */
+      project.modelplot_uptodate = false;
+    }
+  }
+
+  if (mbna_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBnavadjust function <%s> completed\n", __func__);
+    fprintf(stderr, "dbg2  Return values:\n");
+    fprintf(stderr, "dbg2       error:       %d\n", error);
+    fprintf(stderr, "dbg2  Return status:\n");
+    fprintf(stderr, "dbg2       status:      %d\n", status);
+  }
+
+  return (status);
+}
+/*--------------------------------------------------------------------*/
+
+int mbnavadjust_modelplot_middlepick_tieoffsets(int x, int y) {
+  if (mbna_verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2       x:           %d\n", x);
+    fprintf(stderr, "dbg2       y:           %d\n", y);
+  }
+
+  int status = MB_SUCCESS;
+  struct mbna_crossing *crossing;
+  struct mbna_tie *tie;
+  int range;
+  int rangemin;
+  int pick_crossing;
+  int pick_tie;
+  int ix, iy;
+
+  /* find nearest snav pt with tie */
+  if (project.open && project.inversion_status != MBNA_INVERSION_NONE && project.modelplot) {
+    rangemin = 10000000;
+
+    /* search by looping over crossings */
+    for (int i = 0; i < project.num_crossings; i++) {
+      crossing = &(project.crossings[i]);
+
+      /* loop over all ties for this crossing */
+      for (int j = 0; j < crossing->num_ties; j++) {
+        tie = &(crossing->ties[j]);
+
+        /* handle first snav point */
+        // struct mbna_file *file = &project.files[crossing->file_id_1];
+        // struct mbna_section *section = &file->sections[crossing->section_1];
+
+        ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (tie->isurveyplotindex - mbna_modelplot_tiestart));
+
+        iy = mbna_modelplot_yo_lon - (int)(mbna_modelplot_yscale * (tie->offset_x_m - mbna_modelplot_yxmid));
+        range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+        if (range < rangemin) {
+          rangemin = range;
+          pick_crossing = i;
+          pick_tie = j;
+        }
+
+        iy = mbna_modelplot_yo_lat - (int)(mbna_modelplot_yscale * (tie->offset_y_m - mbna_modelplot_yymid));
+        range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+        if (range < rangemin) {
+          rangemin = range;
+          pick_crossing = i;
+          pick_tie = j;
+        }
+
+        iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * (tie->offset_z_m - mbna_modelplot_yzmid));
+        range = (ix - x) * (ix - x) + (iy - y) * (iy - y);
+        if (range < rangemin) {
+          rangemin = range;
+          pick_crossing = i;
+          pick_tie = j;
+        }
+      }
+    }
+
+    /* deal with successful pick */
+    if (rangemin < 10000000) {
+      mbna_crossing_select = pick_crossing;
+      mbna_tie_select = pick_tie;
+      /* mbna_modelplot_pickfile = MBNA_SELECT_NONE; */
+      mbna_modelplot_picksection = MBNA_SELECT_NONE;
+      mbna_modelplot_picksnav = MBNA_SELECT_NONE;
+
+      /* bring up naverr window if required */
+      if (mbna_naverr_mode == MBNA_NAVERR_MODE_UNLOADED) {
+        do_naverr_init(MBNA_NAVERR_MODE_CROSSING);
+      }
+
+      /* else if naverr window is up, load selected crossing */
+      else {
+        mbnavadjust_naverr_specific_crossing(mbna_crossing_select, mbna_tie_select);
+        mbnavadjust_naverr_plot(MBNA_PLOT_MODE_FIRST);
+        do_naverr_update();
+        do_update_status();
+      }
+
+      /* set flag to replot modelplot */
+      project.modelplot_uptodate = false;
+    }
   }
 
   if (mbna_verbose >= 2) {
@@ -13231,8 +13657,14 @@ int mbnavadjust_modelplot_plot_timeseries() {
                 pixel_values[mbna_color_foreground], XG_DASHLINE);
 
     /* plot title */
-    if (mbna_view_mode == MBNA_VIEW_MODE_SURVEY) {
+    if (mbna_view_mode == MBNA_VIEW_MODE_ALL) {
+      snprintf(label, sizeof(label), "Display All Data");
+    }
+    else if (mbna_view_mode == MBNA_VIEW_MODE_SURVEY) {
       snprintf(label, sizeof(label), "Display Only Selected Survey - Selected Survey:%d", mbna_survey_select);
+    }
+    else if (mbna_view_mode == MBNA_VIEW_MODE_BLOCK) {
+      snprintf(label, sizeof(label), "Display Only Selected Survey-vs-Survey Block - Selected Block: %4.4d %2.2d vs %2.2d", mbna_block_select, mbna_block_select1, mbna_block_select2);
     }
     else if (mbna_view_mode == MBNA_VIEW_MODE_FILE) {
       snprintf(label, sizeof(label), "Display Only Selected File - Selected Survey/File:%d/%d", mbna_survey_select, mbna_file_select);
@@ -13247,13 +13679,22 @@ int mbnavadjust_modelplot_plot_timeseries() {
       snprintf(label, sizeof(label), "Display With Selected Section: Selected Survey/File/Section:%d/%d/%d", mbna_survey_select,
               mbna_file_select, mbna_section_select);
     }
-    else if (mbna_view_mode == MBNA_VIEW_MODE_ALL) {
-      snprintf(label, sizeof(label), "Display All Data");
-    }
 
     xg_justify(pmodp_xgid, label, &stringwidth, &stringascent, &stringdescent);
     ix = mbna_modelplot_xo + (plot_width - stringwidth) / 2;
     iy = MBNA_MODELPLOT_Y_SPACE - 2 * stringascent;
+    xg_drawstring(pmodp_xgid, ix, iy, label, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+
+    /* plot pick mode */
+		if (mbna_modelplot_mode == MBNA_MODELPLOT_MODE_CROSSINGS) {
+    	snprintf(label, sizeof(label), "Pick Mode: Crossings & crossing ties");
+    }
+    else {
+    	snprintf(label, sizeof(label), "Pick Mode: Sections & global ties");
+    }
+    xg_justify(pmodp_xgid, label, &stringwidth, &stringascent, &stringdescent);
+    ix = mbna_modelplot_xo;
+    iy = mbna_modelplot_yo_lon - plot_height / 2 - stringascent / 4;
     xg_drawstring(pmodp_xgid, ix, iy, label, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
 
     /* plot labels */
@@ -13541,270 +13982,333 @@ int mbnavadjust_modelplot_plot_timeseries() {
       }
     }
 
-    /* Loop over all files plotting global ties */
+    /* Loop over all files plotting global ties in orange - if a tie is selected plot it larger in red
+    		- if an untied section is selected plot it large in red */
     for (int i = 0; i < project.num_files; i++) {
       file = &project.files[i];
       for (int j = 0; j < file->num_sections; j++) {
         section = &file->sections[j];
-        if (section->show_in_modelplot && section->globaltie.status != MBNA_TIE_NONE) {
-          for (int isnav = 0; isnav < section->num_snav; isnav++) {
-            iping = section->modelplot_start_count + section->snav_id[section->globaltie.snav];
-            ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-
-            if (section->globaltie.status != MBNA_TIE_Z) {
-              /* east-west offsets */
-              iy = mbna_modelplot_yo_lon -
-                   (int)(mbna_modelplot_yscale * section->globaltie.offset_x /
-                         project.mtodeglon);
-              xg_drawline(pmodp_xgid, ix, mbna_modelplot_yo_lon, ix, iy, pixel_values[ORANGE], XG_SOLIDLINE);
-              xg_fillrectangle(pmodp_xgid, ix - 2, iy - 2, 5, 5, pixel_values[ORANGE], XG_SOLIDLINE);
-              xg_drawrectangle(pmodp_xgid, ix - 2, iy - 2, 5, 5, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-
-              /* north-south offsets */
-              iy = mbna_modelplot_yo_lat -
-                   (int)(mbna_modelplot_yscale * section->globaltie.offset_y /
-                         project.mtodeglat);
-              xg_drawline(pmodp_xgid, ix, mbna_modelplot_yo_lat, ix, iy, pixel_values[ORANGE], XG_SOLIDLINE);
-              xg_fillrectangle(pmodp_xgid, ix - 2, iy - 2, 5, 5, pixel_values[ORANGE], XG_SOLIDLINE);
-              xg_drawrectangle(pmodp_xgid, ix - 2, iy - 2, 5, 5, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-            }
-
-            if (section->globaltie.status != MBNA_TIE_XY) {
-              /* vertical offsets */
-              iy = mbna_modelplot_yo_z -
-                   (int)(mbna_modelplot_yzscale * section->globaltie.offset_z_m);
-              xg_drawline(pmodp_xgid, ix, mbna_modelplot_yo_z, ix, iy, pixel_values[ORANGE], XG_SOLIDLINE);
-              xg_fillrectangle(pmodp_xgid, ix - 2, iy - 2, 5, 5, pixel_values[ORANGE], XG_SOLIDLINE);
-              xg_drawrectangle(pmodp_xgid, ix - 2, iy - 2, 5, 5, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-            }
-          }
-        }
+        if (section->show_in_modelplot) {
+					bool selected = false;
+					if (mbna_file_select == i && mbna_section_select == j) {
+						selected = true;
+					}
+					if (section->globaltie.status != MBNA_TIE_NONE) {
+						struct mbna_globaltie *globaltie = &section->globaltie;
+						
+						int isnav = globaltie->snav;
+						iping = section->modelplot_start_count + section->snav_id[isnav];
+						ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+							
+						double sd; /* uncertainty projected onto x, y, or z directions */
+						int iyl, iyu; /* lower and upper standard deviation bounds */
+						int w = 5;
+						int hw = 2;
+						int color = ORANGE;
+						if (selected) {
+							w = 9;
+							hw = 4;
+							color = RED;
+						}
+						
+						if (section->globaltie.status != MBNA_TIE_Z) {
+							
+							/* east-west offsets */
+							iy = mbna_modelplot_yo_lon -
+									 (int)(mbna_modelplot_yscale * section->globaltie.offset_x /
+												 project.mtodeglon);
+							sd = globaltie->sigmar1 * globaltie->sigmax1[0] 
+										+ globaltie->sigmar2 * globaltie->sigmax2[0] 
+										+ globaltie->sigmar3 * globaltie->sigmax3[0];
+							iyl = iy - (int)(mbna_modelplot_yscale * sd);
+							iyu = iy + (int)(mbna_modelplot_yscale * sd);
+							xg_drawline(pmodp_xgid, ix, iyl, ix, iyu, pixel_values[color], XG_SOLIDLINE);
+							xg_fillrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[color], XG_SOLIDLINE);
+							xg_drawrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+	
+							/* north-south offsets */
+							iy = mbna_modelplot_yo_lat -
+									 (int)(mbna_modelplot_yscale * section->globaltie.offset_y /
+												 project.mtodeglat);
+							sd = globaltie->sigmar1 * globaltie->sigmax1[1] 
+										+ globaltie->sigmar2 * globaltie->sigmax2[1] 
+										+ globaltie->sigmar3 * globaltie->sigmax3[1];
+							iyl = iy - (int)(mbna_modelplot_yscale * sd);
+							iyu = iy + (int)(mbna_modelplot_yscale * sd);
+							xg_drawline(pmodp_xgid, ix, iyl, ix, iyu, pixel_values[color], XG_SOLIDLINE);
+							xg_fillrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[color], XG_SOLIDLINE);
+							xg_drawrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+						}
+	
+						if (section->globaltie.status != MBNA_TIE_XY) {
+							/* vertical offsets */
+							iy = mbna_modelplot_yo_z -
+									 (int)(mbna_modelplot_yzscale * section->globaltie.offset_z_m);
+							sd = globaltie->sigmar1 * globaltie->sigmax1[2] 
+										+ globaltie->sigmar2 * globaltie->sigmax2[2] 
+										+ globaltie->sigmar3 * globaltie->sigmax3[2];
+							iyl = iy - (int)(mbna_modelplot_yzscale * sd);
+							iyu = iy + (int)(mbna_modelplot_yzscale * sd);
+							xg_drawline(pmodp_xgid, ix, iyl, ix, iyu, pixel_values[color], XG_SOLIDLINE);
+							xg_fillrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[color], XG_SOLIDLINE);
+							xg_drawrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+						}
+					}
+	
+					else if (selected) {        	
+						int isnav = 0;
+						iping = section->modelplot_start_count + section->snav_id[isnav];
+						ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+						int w = 9;
+						int hw = 4;
+						int color = RED;
+						
+						/* east-west offsets */
+						iy = mbna_modelplot_yo_lon - (int)(mbna_modelplot_yscale 
+										* section->snav_lon_offset[isnav] / project.mtodeglon);
+						xg_fillrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[color], XG_SOLIDLINE);
+						xg_drawrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+	
+						/* north-south offsets */
+						iy = mbna_modelplot_yo_lat - (int)(mbna_modelplot_yscale 
+										* section->snav_lat_offset[isnav] / project.mtodeglat);
+						xg_fillrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[color], XG_SOLIDLINE);
+						xg_drawrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+	
+						/* vertical offsets */
+						iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[isnav]);
+						xg_fillrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[color], XG_SOLIDLINE);
+						xg_drawrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					}
+				}
       }
     }
 
-    /* plot current tie in red */
-    if (mbna_current_crossing != MBNA_SELECT_NONE && mbna_current_tie != MBNA_SELECT_NONE) {
-      crossing = &(project.crossings[mbna_current_crossing]);
-      tie = &(crossing->ties[mbna_current_tie]);
-
-      file = &project.files[crossing->file_id_1];
-      section = &file->sections[crossing->section_1];
-      iping = section->modelplot_start_count + section->snav_id[tie->snav_1];
-
-      if (section->show_in_modelplot &&
-          (!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-        ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-        iy = mbna_modelplot_yo_lon -
-             (int)(mbna_modelplot_yscale * section->snav_lon_offset[tie->snav_1] / project.mtodeglon);
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_lat -
-             (int)(mbna_modelplot_yscale * section->snav_lat_offset[tie->snav_1] / project.mtodeglat);
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[tie->snav_1]);
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-      }
-
-      file = &project.files[crossing->file_id_2];
-      section = &file->sections[crossing->section_2];
-      iping = section->modelplot_start_count + section->snav_id[tie->snav_2];
-
-      if (section->show_in_modelplot &&
-          (!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-        ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-        iy = mbna_modelplot_yo_lon -
-             (int)(mbna_modelplot_yscale * section->snav_lon_offset[tie->snav_2] / project.mtodeglon);
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_lat -
-             (int)(mbna_modelplot_yscale * section->snav_lat_offset[tie->snav_2] / project.mtodeglat);
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[tie->snav_2]);
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-      }
-    }
-
-    /* or if tie not selected then plot current crossing in red */
-    else if (mbna_current_crossing != MBNA_SELECT_NONE) {
-      crossing = &(project.crossings[mbna_current_crossing]);
-
-      file = &project.files[crossing->file_id_1];
-      section = &file->sections[crossing->section_1];
-      iping = section->modelplot_start_count + section->snav_id[section->num_snav / 2];
-
-      if (section->show_in_modelplot &&
-          (!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-        ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-        iy = mbna_modelplot_yo_lon -
-             (int)(mbna_modelplot_yscale * section->snav_lon_offset[section->num_snav / 2] / project.mtodeglon);
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_lat -
-             (int)(mbna_modelplot_yscale * section->snav_lat_offset[section->num_snav / 2] / project.mtodeglat);
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[section->num_snav / 2]);
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-      }
-
-      file = &project.files[crossing->file_id_2];
-      section = &file->sections[crossing->section_2];
-      iping = section->modelplot_start_count + section->snav_id[section->num_snav / 2];
-
-      if (section->show_in_modelplot &&
-          (!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-        ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-        iy = mbna_modelplot_yo_lon -
-             (int)(mbna_modelplot_yscale * section->snav_lon_offset[section->num_snav / 2] / project.mtodeglon);
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_lat -
-             (int)(mbna_modelplot_yscale * section->snav_lat_offset[section->num_snav / 2] / project.mtodeglat);
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[section->num_snav / 2]);
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-      }
-    }
-
-    /* if a modelplot pick did not resolve a single tie, plot the options for a second pick */
-    if (mbna_modelplot_pickfile != MBNA_SELECT_NONE) {
-      for (int i = 0; i < project.num_crossings; i++) {
-        /* check if this crossing includes the picked snav */
-        crossing = &(project.crossings[i]);
-
-        /* check first snav */
-        if (crossing->file_id_1 == mbna_modelplot_pickfile && crossing->section_1 == mbna_modelplot_picksection) {
-          /* loop over the ties */
-          for (int j = 0; j < crossing->num_ties; j++) {
-            tie = &(crossing->ties[j]);
-            if (crossing->file_id_1 == mbna_modelplot_pickfile && crossing->section_1 == mbna_modelplot_picksection &&
-                tie->snav_1 == mbna_modelplot_picksnav) {
-              file = &project.files[crossing->file_id_1];
-              section = &file->sections[crossing->section_1];
-              iping = section->modelplot_start_count + section->snav_id[tie->snav_1];
-
-              if (section->show_in_modelplot &&
-                  (!mbna_modelplot_zoom ||
-                   (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-                ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-                iy = mbna_modelplot_yo_lon -
-                     (int)(mbna_modelplot_yscale * section->snav_lon_offset[tie->snav_1] / project.mtodeglon);
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_lat -
-                     (int)(mbna_modelplot_yscale * section->snav_lat_offset[tie->snav_1] / project.mtodeglat);
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[tie->snav_1]);
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-              }
-
-              file = &project.files[crossing->file_id_2];
-              section = &file->sections[crossing->section_2];
-              iping = section->modelplot_start_count + section->snav_id[tie->snav_2];
-
-              if (section->show_in_modelplot &&
-                  (!mbna_modelplot_zoom ||
-                   (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-                ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-                iy = mbna_modelplot_yo_lon -
-                     (int)(mbna_modelplot_yscale * section->snav_lon_offset[tie->snav_2] / project.mtodeglon);
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_lat -
-                     (int)(mbna_modelplot_yscale * section->snav_lat_offset[tie->snav_2] / project.mtodeglat);
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[tie->snav_2]);
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-              }
-            }
-          }
-        }
-
-        /* check second snav */
-        if (crossing->file_id_2 == mbna_modelplot_pickfile && crossing->section_2 == mbna_modelplot_picksection) {
-          /* loop over the ties */
-          for (int j = 0; j < crossing->num_ties; j++) {
-            tie = &(crossing->ties[j]);
-            if (crossing->file_id_2 == mbna_modelplot_pickfile && crossing->section_2 == mbna_modelplot_picksection &&
-                tie->snav_2 == mbna_modelplot_picksnav) {
-              file = &project.files[crossing->file_id_2];
-              section = &file->sections[crossing->section_2];
-              iping = section->modelplot_start_count + section->snav_id[tie->snav_2];
-
-              if (section->show_in_modelplot &&
-                  (!mbna_modelplot_zoom ||
-                   (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-                ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-                iy = mbna_modelplot_yo_lon -
-                     (int)(mbna_modelplot_yscale * section->snav_lon_offset[tie->snav_2] / project.mtodeglon);
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_lat -
-                     (int)(mbna_modelplot_yscale * section->snav_lat_offset[tie->snav_2] / project.mtodeglat);
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[tie->snav_2]);
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-              }
-
-              file = &project.files[crossing->file_id_1];
-              section = &file->sections[crossing->section_1];
-              iping = section->modelplot_start_count + section->snav_id[tie->snav_1];
-
-              if (section->show_in_modelplot &&
-                  (!mbna_modelplot_zoom ||
-                   (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-                ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-                iy = mbna_modelplot_yo_lon -
-                     (int)(mbna_modelplot_yscale * section->snav_lon_offset[tie->snav_1] / project.mtodeglon);
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_lat -
-                     (int)(mbna_modelplot_yscale * section->snav_lat_offset[tie->snav_1] / project.mtodeglat);
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[tie->snav_1]);
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-              }
-            }
-          }
-        }
-      }
-    }
+    /* plot current crossing tie in red */
+		if (mbna_modelplot_mode == MBNA_MODELPLOT_MODE_CROSSINGS) {
+			if (mbna_current_crossing != MBNA_SELECT_NONE && mbna_current_tie != MBNA_SELECT_NONE) {
+				crossing = &(project.crossings[mbna_current_crossing]);
+				tie = &(crossing->ties[mbna_current_tie]);
+	
+				file = &project.files[crossing->file_id_1];
+				section = &file->sections[crossing->section_1];
+				iping = section->modelplot_start_count + section->snav_id[tie->snav_1];
+	
+				if (section->show_in_modelplot &&
+						(!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+					ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+					iy = mbna_modelplot_yo_lon -
+							 (int)(mbna_modelplot_yscale * section->snav_lon_offset[tie->snav_1] / project.mtodeglon);
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_lat -
+							 (int)(mbna_modelplot_yscale * section->snav_lat_offset[tie->snav_1] / project.mtodeglat);
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[tie->snav_1]);
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+				}
+	
+				file = &project.files[crossing->file_id_2];
+				section = &file->sections[crossing->section_2];
+				iping = section->modelplot_start_count + section->snav_id[tie->snav_2];
+	
+				if (section->show_in_modelplot &&
+						(!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+					ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+					iy = mbna_modelplot_yo_lon -
+							 (int)(mbna_modelplot_yscale * section->snav_lon_offset[tie->snav_2] / project.mtodeglon);
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_lat -
+							 (int)(mbna_modelplot_yscale * section->snav_lat_offset[tie->snav_2] / project.mtodeglat);
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[tie->snav_2]);
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+				}
+			}
+	
+			/* or if crossing selected but not tie then plot current crossing in red */
+			else if (mbna_current_crossing != MBNA_SELECT_NONE) {
+				crossing = &(project.crossings[mbna_current_crossing]);
+	
+				file = &project.files[crossing->file_id_1];
+				section = &file->sections[crossing->section_1];
+				iping = section->modelplot_start_count + section->snav_id[section->num_snav / 2];
+	
+				if (section->show_in_modelplot &&
+						(!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+					ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+					iy = mbna_modelplot_yo_lon -
+							 (int)(mbna_modelplot_yscale * section->snav_lon_offset[section->num_snav / 2] / project.mtodeglon);
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_lat -
+							 (int)(mbna_modelplot_yscale * section->snav_lat_offset[section->num_snav / 2] / project.mtodeglat);
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[section->num_snav / 2]);
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+				}
+	
+				file = &project.files[crossing->file_id_2];
+				section = &file->sections[crossing->section_2];
+				iping = section->modelplot_start_count + section->snav_id[section->num_snav / 2];
+	
+				if (section->show_in_modelplot &&
+						(!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+					ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+					iy = mbna_modelplot_yo_lon -
+							 (int)(mbna_modelplot_yscale * section->snav_lon_offset[section->num_snav / 2] / project.mtodeglon);
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_lat -
+							 (int)(mbna_modelplot_yscale * section->snav_lat_offset[section->num_snav / 2] / project.mtodeglat);
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[section->num_snav / 2]);
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+				}
+			}
+	
+			/* if a modelplot pick did not resolve a single tie, plot the options for a second pick */
+			if (mbna_modelplot_pickfile != MBNA_SELECT_NONE) {
+				for (int i = 0; i < project.num_crossings; i++) {
+					/* check if this crossing includes the picked snav */
+					crossing = &(project.crossings[i]);
+	
+					/* check first snav */
+					if (crossing->file_id_1 == mbna_modelplot_pickfile && crossing->section_1 == mbna_modelplot_picksection) {
+						/* loop over the ties */
+						for (int j = 0; j < crossing->num_ties; j++) {
+							tie = &(crossing->ties[j]);
+							if (crossing->file_id_1 == mbna_modelplot_pickfile && crossing->section_1 == mbna_modelplot_picksection &&
+									tie->snav_1 == mbna_modelplot_picksnav) {
+								file = &project.files[crossing->file_id_1];
+								section = &file->sections[crossing->section_1];
+								iping = section->modelplot_start_count + section->snav_id[tie->snav_1];
+	
+								if (section->show_in_modelplot &&
+										(!mbna_modelplot_zoom ||
+										 (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+									ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+									iy = mbna_modelplot_yo_lon -
+											 (int)(mbna_modelplot_yscale * section->snav_lon_offset[tie->snav_1] / project.mtodeglon);
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_lat -
+											 (int)(mbna_modelplot_yscale * section->snav_lat_offset[tie->snav_1] / project.mtodeglat);
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[tie->snav_1]);
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+								}
+	
+								file = &project.files[crossing->file_id_2];
+								section = &file->sections[crossing->section_2];
+								iping = section->modelplot_start_count + section->snav_id[tie->snav_2];
+	
+								if (section->show_in_modelplot &&
+										(!mbna_modelplot_zoom ||
+										 (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+									ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+									iy = mbna_modelplot_yo_lon -
+											 (int)(mbna_modelplot_yscale * section->snav_lon_offset[tie->snav_2] / project.mtodeglon);
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_lat -
+											 (int)(mbna_modelplot_yscale * section->snav_lat_offset[tie->snav_2] / project.mtodeglat);
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[tie->snav_2]);
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+								}
+							}
+						}
+					}
+	
+					/* check second snav */
+					if (crossing->file_id_2 == mbna_modelplot_pickfile && crossing->section_2 == mbna_modelplot_picksection) {
+						/* loop over the ties */
+						for (int j = 0; j < crossing->num_ties; j++) {
+							tie = &(crossing->ties[j]);
+							if (crossing->file_id_2 == mbna_modelplot_pickfile && crossing->section_2 == mbna_modelplot_picksection &&
+									tie->snav_2 == mbna_modelplot_picksnav) {
+								file = &project.files[crossing->file_id_2];
+								section = &file->sections[crossing->section_2];
+								iping = section->modelplot_start_count + section->snav_id[tie->snav_2];
+	
+								if (section->show_in_modelplot &&
+										(!mbna_modelplot_zoom ||
+										 (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+									ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+									iy = mbna_modelplot_yo_lon -
+											 (int)(mbna_modelplot_yscale * section->snav_lon_offset[tie->snav_2] / project.mtodeglon);
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_lat -
+											 (int)(mbna_modelplot_yscale * section->snav_lat_offset[tie->snav_2] / project.mtodeglat);
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[tie->snav_2]);
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+								}
+	
+								file = &project.files[crossing->file_id_1];
+								section = &file->sections[crossing->section_1];
+								iping = section->modelplot_start_count + section->snav_id[tie->snav_1];
+	
+								if (section->show_in_modelplot &&
+										(!mbna_modelplot_zoom ||
+										 (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+									ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+									iy = mbna_modelplot_yo_lon -
+											 (int)(mbna_modelplot_yscale * section->snav_lon_offset[tie->snav_1] / project.mtodeglon);
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_lat -
+											 (int)(mbna_modelplot_yscale * section->snav_lat_offset[tie->snav_1] / project.mtodeglat);
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale * section->snav_z_offset[tie->snav_1]);
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
 
     /* plot zoom if active */
     if (mbna_modelplot_zoom_x1 != 0 || mbna_modelplot_zoom_x2 != 0) {
       imodelplot_start = (MIN(mbna_modelplot_zoom_x1, mbna_modelplot_zoom_x2) - mbna_modelplot_xo) / mbna_modelplot_xscale +
                          mbna_modelplot_start;
-      imodelplot_start = MIN(MAX(imodelplot_start, 0), project.num_pings - 1);
+      imodelplot_start = MIN(MAX(imodelplot_start, 0), mbna_modelplot_count - 1);
       imodelplot_end = (MAX(mbna_modelplot_zoom_x1, mbna_modelplot_zoom_x2) - mbna_modelplot_xo) / mbna_modelplot_xscale +
                        mbna_modelplot_start;
-      imodelplot_end = MIN(MAX(imodelplot_end, 0), project.num_pings - 1);
+      imodelplot_end = MIN(MAX(imodelplot_end, 0), mbna_modelplot_count - 1);
 
       ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (imodelplot_start - mbna_modelplot_start));
       xg_drawline(pmodp_xgid, ix, mbna_modelplot_yo_lon - plot_height / 2, ix, mbna_modelplot_yo_lon + plot_height / 2,
@@ -14056,8 +14560,14 @@ int mbnavadjust_modelplot_plot_perturbation() {
                 pixel_values[mbna_color_foreground], XG_DASHLINE);
 
     /* plot title */
-    if (mbna_view_mode == MBNA_VIEW_MODE_SURVEY) {
+    if (mbna_view_mode == MBNA_VIEW_MODE_ALL) {
+      snprintf(label, sizeof(label), "Display All Data");
+    }
+    else if (mbna_view_mode == MBNA_VIEW_MODE_SURVEY) {
       snprintf(label, sizeof(label), "Display Only Selected Survey - Selected Survey:%d", mbna_survey_select);
+    }
+    else if (mbna_view_mode == MBNA_VIEW_MODE_BLOCK) {
+      snprintf(label, sizeof(label), "Display Only Selected Survey-vs-Survey Block - Selected Block: %4.4d %2.2d vs %2.2d", mbna_block_select, mbna_block_select1, mbna_block_select2);
     }
     else if (mbna_view_mode == MBNA_VIEW_MODE_FILE) {
       snprintf(label, sizeof(label), "Display Only Selected File - Selected Survey/File:%d/%d", mbna_survey_select, mbna_file_select);
@@ -14072,13 +14582,22 @@ int mbnavadjust_modelplot_plot_perturbation() {
       snprintf(label, sizeof(label), "Display With Selected Section: Selected Survey/File/Section:%d/%d/%d", mbna_survey_select,
               mbna_file_select, mbna_section_select);
     }
-    else if (mbna_view_mode == MBNA_VIEW_MODE_ALL) {
-      snprintf(label, sizeof(label), "Display All Data");
-    }
 
     xg_justify(pmodp_xgid, label, &stringwidth, &stringascent, &stringdescent);
     ix = mbna_modelplot_xo + (plot_width - stringwidth) / 2;
     iy = MBNA_MODELPLOT_Y_SPACE - 2 * stringascent;
+    xg_drawstring(pmodp_xgid, ix, iy, label, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+    
+    /* plot pick mode */
+		if (mbna_modelplot_mode == MBNA_MODELPLOT_MODE_CROSSINGS) {
+    	snprintf(label, sizeof(label), "Pick Mode: Crossings & crossing ties");
+    }
+    else {
+    	snprintf(label, sizeof(label), "Pick Mode: Sections & global ties");
+    }
+    xg_justify(pmodp_xgid, label, &stringwidth, &stringascent, &stringdescent);
+    ix = mbna_modelplot_xo;
+    iy = mbna_modelplot_yo_lon - plot_height / 2 - stringascent / 4;
     xg_drawstring(pmodp_xgid, ix, iy, label, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
 
     /* plot labels */
@@ -14381,297 +14900,355 @@ int mbnavadjust_modelplot_plot_perturbation() {
       }
     }
 
-    /* Loop over all files plotting global ties */
+    /* Loop over all files plotting global ties in orange - if a tie is selected plot it larger in red
+    		- if an untied section is selected plot it large in red */
     for (int i = 0; i < project.num_files; i++) {
       file = &project.files[i];
       for (int j = 0; j < file->num_sections; j++) {
         section = &file->sections[j];
-        if (section->show_in_modelplot && section->globaltie.status != MBNA_TIE_NONE) {
-          for (int isnav = 0; isnav < section->num_snav; isnav++) {
-            iping = section->modelplot_start_count + section->snav_id[section->globaltie.snav];
-            ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-
-            if (section->globaltie.status != MBNA_TIE_Z) {
-              /* east-west offsets */
-              iy = mbna_modelplot_yo_lon -
-                   (int)(mbna_modelplot_yscale *
-                         (section->snav_lon_offset[section->globaltie.snav] / project.mtodeglon -
-                          file->block_offset_x));
-              xg_drawline(pmodp_xgid, ix, mbna_modelplot_yo_lon, ix, iy, pixel_values[ORANGE], XG_SOLIDLINE);
-              xg_fillrectangle(pmodp_xgid, ix - 2, iy - 2, 5, 5, pixel_values[ORANGE], XG_SOLIDLINE);
-              xg_drawrectangle(pmodp_xgid, ix - 2, iy - 2, 5, 5, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-
-              /* north-south offsets */
-              iy = mbna_modelplot_yo_lat -
-                   (int)(mbna_modelplot_yscale *
-                         (section->snav_lat_offset[section->globaltie.snav] / project.mtodeglat -
-                          file->block_offset_y));
-              xg_drawline(pmodp_xgid, ix, mbna_modelplot_yo_lat, ix, iy, pixel_values[ORANGE], XG_SOLIDLINE);
-              xg_fillrectangle(pmodp_xgid, ix - 2, iy - 2, 5, 5, pixel_values[ORANGE], XG_SOLIDLINE);
-              xg_drawrectangle(pmodp_xgid, ix - 2, iy - 2, 5, 5, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-            }
-
-            if (section->globaltie.status != MBNA_TIE_XY) {
-              /* vertical offsets */
-              iy = mbna_modelplot_yo_z -
-                   (int)(mbna_modelplot_yzscale *
-                         (section->snav_z_offset[section->globaltie.snav] - file->block_offset_z));
-              xg_drawline(pmodp_xgid, ix, mbna_modelplot_yo_z, ix, iy, pixel_values[ORANGE], XG_SOLIDLINE);
-              xg_fillrectangle(pmodp_xgid, ix - 2, iy - 2, 5, 5, pixel_values[ORANGE], XG_SOLIDLINE);
-              xg_drawrectangle(pmodp_xgid, ix - 2, iy - 2, 5, 5, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-            }
-          }
+        if (section->show_in_modelplot) {
+					bool selected = false;
+					if (mbna_file_select == i && mbna_section_select == j) {
+						selected = true;
+					}
+					if (section->globaltie.status != MBNA_TIE_NONE) {
+						struct mbna_globaltie *globaltie = &section->globaltie;
+						
+						int isnav = globaltie->snav;
+						iping = section->modelplot_start_count + section->snav_id[isnav];
+						ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+							
+						double sd; /* uncertainty projected onto x, y, or z directions */
+						int iyl, iyu; /* lower and upper standard deviation bounds */
+						int w = 5;
+						int hw = 2;
+						int color = ORANGE;
+						if (selected) {
+							w = 9;
+							hw = 4;
+							color = RED;
+						}
+	
+						if (section->globaltie.status != MBNA_TIE_Z) {
+							/* east-west offsets */
+							iy = mbna_modelplot_yo_lon - (int)(mbna_modelplot_yscale 
+										* (section->globaltie.offset_x / project.mtodeglon - file->block_offset_x));
+							sd = globaltie->sigmar1 * globaltie->sigmax1[0] 
+										+ globaltie->sigmar2 * globaltie->sigmax2[0] 
+										+ globaltie->sigmar3 * globaltie->sigmax3[0];
+							iyl = iy - (int)(mbna_modelplot_yscale * sd);
+							iyu = iy + (int)(mbna_modelplot_yscale * sd);
+							xg_drawline(pmodp_xgid, ix, iyl, ix, iyu, pixel_values[color], XG_SOLIDLINE);
+							xg_fillrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[color], XG_SOLIDLINE);
+							xg_drawrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+	
+							/* north-south offsets */
+							iy = mbna_modelplot_yo_lat - (int)(mbna_modelplot_yscale 
+										* (section->globaltie.offset_y / project.mtodeglat - file->block_offset_y));
+							sd = globaltie->sigmar1 * globaltie->sigmax1[1] 
+										+ globaltie->sigmar2 * globaltie->sigmax2[1] 
+										+ globaltie->sigmar3 * globaltie->sigmax3[1];
+							iyl = iy - (int)(mbna_modelplot_yscale * sd);
+							iyu = iy + (int)(mbna_modelplot_yscale * sd);
+							xg_drawline(pmodp_xgid, ix, iyl, ix, iyu, pixel_values[color], XG_SOLIDLINE);
+							xg_fillrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[color], XG_SOLIDLINE);
+							xg_drawrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+						}
+	
+						if (section->globaltie.status != MBNA_TIE_XY) {
+							/* vertical offsets */
+							iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale 
+										* (section->globaltie.offset_z_m - file->block_offset_z));
+							sd = globaltie->sigmar1 * globaltie->sigmax1[2] 
+										+ globaltie->sigmar2 * globaltie->sigmax2[2] 
+										+ globaltie->sigmar3 * globaltie->sigmax3[2];
+							iyl = iy - (int)(mbna_modelplot_yzscale * sd);
+							iyu = iy + (int)(mbna_modelplot_yzscale * sd);
+							xg_drawline(pmodp_xgid, ix, iyl, ix, iyu, pixel_values[color], XG_SOLIDLINE);
+							xg_fillrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[color], XG_SOLIDLINE);
+							xg_drawrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+						}
+					}
+	
+					else if (selected) {
+						int isnav = 0;
+						iping = section->modelplot_start_count + section->snav_id[isnav];
+						ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+						int w = 9;
+						int hw = 4;
+						int color = RED;
+	
+						/* east-west offsets */
+						iy = mbna_modelplot_yo_lon - (int)(mbna_modelplot_yscale 
+										* (section->snav_lon_offset[isnav] / project.mtodeglon - file->block_offset_x));
+						xg_fillrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[color], XG_SOLIDLINE);
+						xg_drawrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+	
+						/* north-south offsets */
+						iy = mbna_modelplot_yo_lat - (int)(mbna_modelplot_yscale 
+										* (section->snav_lat_offset[isnav] / project.mtodeglat - file->block_offset_y));
+						xg_fillrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[color], XG_SOLIDLINE);
+						xg_drawrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+	
+						/* vertical offsets */
+						iy = mbna_modelplot_yo_z - (int)(mbna_modelplot_yzscale 
+									* (section->snav_z_offset[isnav] - file->block_offset_z));
+						xg_fillrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[color], XG_SOLIDLINE);
+						xg_drawrectangle(pmodp_xgid, ix - hw, iy - hw, w, w, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					}
         }
       }
     }
 
-    /* plot current tie in red */
-    if (mbna_current_crossing != MBNA_SELECT_NONE && mbna_current_tie != MBNA_SELECT_NONE) {
-      crossing = &(project.crossings[mbna_current_crossing]);
-      tie = &(crossing->ties[mbna_current_tie]);
-
-      file = &project.files[crossing->file_id_1];
-      section = &file->sections[crossing->section_1];
-      iping = section->modelplot_start_count + section->snav_id[tie->snav_1];
-
-      if (section->show_in_modelplot &&
-          (!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-        ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-        iy = mbna_modelplot_yo_lon -
-             (int)(mbna_modelplot_yscale *
-                   (section->snav_lon_offset[tie->snav_1] / project.mtodeglon - file->block_offset_x));
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_lat -
-             (int)(mbna_modelplot_yscale *
-                   (section->snav_lat_offset[tie->snav_1] / project.mtodeglat - file->block_offset_y));
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_z -
-             (int)(mbna_modelplot_yzscale * (section->snav_z_offset[tie->snav_1] - file->block_offset_z));
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-      }
-
-      file = &project.files[crossing->file_id_2];
-      section = &file->sections[crossing->section_2];
-      iping = section->modelplot_start_count + section->snav_id[tie->snav_2];
-
-      if (section->show_in_modelplot &&
-          (!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-        ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-        iy = mbna_modelplot_yo_lon -
-             (int)(mbna_modelplot_yscale *
-                   (section->snav_lon_offset[tie->snav_2] / project.mtodeglon - file->block_offset_x));
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_lat -
-             (int)(mbna_modelplot_yscale *
-                   (section->snav_lat_offset[tie->snav_2] / project.mtodeglat - file->block_offset_y));
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_z -
-             (int)(mbna_modelplot_yzscale * (section->snav_z_offset[tie->snav_2] - file->block_offset_z));
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-      }
-    }
-
-    /* or if tie not selected then plot current crossing in red */
-    else if (mbna_current_crossing != MBNA_SELECT_NONE) {
-      crossing = &(project.crossings[mbna_current_crossing]);
-
-      file = &project.files[crossing->file_id_1];
-      section = &file->sections[crossing->section_1];
-      iping = section->modelplot_start_count + section->snav_id[section->num_snav / 2];
-
-      if (section->show_in_modelplot &&
-          (!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-        ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-        iy = mbna_modelplot_yo_lon -
-             (int)(mbna_modelplot_yscale *
-                   (section->snav_lon_offset[section->num_snav / 2] / project.mtodeglon - file->block_offset_x));
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_lat -
-             (int)(mbna_modelplot_yscale *
-                   (section->snav_lat_offset[section->num_snav / 2] / project.mtodeglat - file->block_offset_y));
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_z -
-             (int)(mbna_modelplot_yzscale * (section->snav_z_offset[section->num_snav / 2] - file->block_offset_z));
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-      }
-
-      file = &project.files[crossing->file_id_2];
-      section = &file->sections[crossing->section_2];
-      iping = section->modelplot_start_count + section->snav_id[section->num_snav / 2];
-
-      if (section->show_in_modelplot &&
-          (!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-        ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-        iy = mbna_modelplot_yo_lon -
-             (int)(mbna_modelplot_yscale *
-                   (section->snav_lon_offset[section->num_snav / 2] / project.mtodeglon - file->block_offset_x));
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_lat -
-             (int)(mbna_modelplot_yscale *
-                   (section->snav_lat_offset[section->num_snav / 2] / project.mtodeglat - file->block_offset_y));
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-        iy = mbna_modelplot_yo_z -
-             (int)(mbna_modelplot_yzscale * (section->snav_z_offset[section->num_snav / 2] - file->block_offset_z));
-        xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
-        xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
-      }
-    }
-
-    /* if a modelplot pick did not resolve a single tie, plot the options for a second pick */
-    if (mbna_modelplot_pickfile != MBNA_SELECT_NONE) {
-      for (int i = 0; i < project.num_crossings; i++) {
-        /* check if this crossing includes the picked snav */
-        crossing = &(project.crossings[i]);
-
-        /* check first snav */
-        if (crossing->file_id_1 == mbna_modelplot_pickfile && crossing->section_1 == mbna_modelplot_picksection) {
-          /* loop over the ties */
-          for (int j = 0; j < crossing->num_ties; j++) {
-            tie = &(crossing->ties[j]);
-            if (crossing->file_id_1 == mbna_modelplot_pickfile && crossing->section_1 == mbna_modelplot_picksection &&
-                tie->snav_1 == mbna_modelplot_picksnav) {
-              file = &project.files[crossing->file_id_1];
-              section = &file->sections[crossing->section_1];
-              iping = section->modelplot_start_count + section->snav_id[tie->snav_1];
-
-              if (section->show_in_modelplot &&
-                  (!mbna_modelplot_zoom ||
-                   (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-                ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-                iy = mbna_modelplot_yo_lon -
-                     (int)(mbna_modelplot_yscale *
-                           (section->snav_lon_offset[tie->snav_1] / project.mtodeglon - file->block_offset_x));
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_lat -
-                     (int)(mbna_modelplot_yscale *
-                           (section->snav_lat_offset[tie->snav_1] / project.mtodeglat - file->block_offset_y));
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_z -
-                     (int)(mbna_modelplot_yzscale * (section->snav_z_offset[tie->snav_1] - file->block_offset_z));
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-              }
-
-              file = &project.files[crossing->file_id_2];
-              section = &file->sections[crossing->section_2];
-              iping = section->modelplot_start_count + section->snav_id[tie->snav_2];
-
-              if (section->show_in_modelplot &&
-                  (!mbna_modelplot_zoom ||
-                   (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-                ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-                iy = mbna_modelplot_yo_lon -
-                     (int)(mbna_modelplot_yscale *
-                           (section->snav_lon_offset[tie->snav_2] / project.mtodeglon - file->block_offset_x));
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_lat -
-                     (int)(mbna_modelplot_yscale *
-                           (section->snav_lat_offset[tie->snav_2] / project.mtodeglat - file->block_offset_y));
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_z -
-                     (int)(mbna_modelplot_yzscale * (section->snav_z_offset[tie->snav_2] - file->block_offset_z));
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-              }
-            }
-          }
-        }
-
-        /* check second snav */
-        if (crossing->file_id_2 == mbna_modelplot_pickfile && crossing->section_2 == mbna_modelplot_picksection) {
-          /* loop over the ties */
-          for (int j = 0; j < crossing->num_ties; j++) {
-            tie = &(crossing->ties[j]);
-            if (crossing->file_id_2 == mbna_modelplot_pickfile && crossing->section_2 == mbna_modelplot_picksection &&
-                tie->snav_2 == mbna_modelplot_picksnav) {
-              file = &project.files[crossing->file_id_2];
-              section = &file->sections[crossing->section_2];
-              iping = section->modelplot_start_count + section->snav_id[tie->snav_2];
-
-              if (section->show_in_modelplot &&
-                  (!mbna_modelplot_zoom ||
-                   (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-                ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-                iy = mbna_modelplot_yo_lon -
-                     (int)(mbna_modelplot_yscale *
-                           (section->snav_lon_offset[tie->snav_2] / project.mtodeglon - file->block_offset_x));
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_lat -
-                     (int)(mbna_modelplot_yscale *
-                           (section->snav_lat_offset[tie->snav_2] / project.mtodeglat - file->block_offset_y));
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_z -
-                     (int)(mbna_modelplot_yzscale * (section->snav_z_offset[tie->snav_2] - file->block_offset_z));
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-              }
-
-              file = &project.files[crossing->file_id_1];
-              section = &file->sections[crossing->section_1];
-              iping = section->modelplot_start_count + section->snav_id[tie->snav_1];
-
-              if (section->show_in_modelplot &&
-                  (!mbna_modelplot_zoom ||
-                   (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
-                ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
-                iy = mbna_modelplot_yo_lon -
-                     (int)(mbna_modelplot_yscale *
-                           (section->snav_lon_offset[tie->snav_1] / project.mtodeglon - file->block_offset_x));
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_lat -
-                     (int)(mbna_modelplot_yscale *
-                           (section->snav_lat_offset[tie->snav_1] / project.mtodeglat - file->block_offset_y));
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-                iy = mbna_modelplot_yo_z -
-                     (int)(mbna_modelplot_yzscale * (section->snav_z_offset[tie->snav_1] - file->block_offset_z));
-                xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
-                xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
-                                 XG_SOLIDLINE);
-              }
-            }
-          }
-        }
-      }
+    /* plot current crossing tie in red */
+    if (mbna_modelplot_mode == MBNA_MODELPLOT_MODE_CROSSINGS) {
+			if (mbna_current_crossing != MBNA_SELECT_NONE && mbna_current_tie != MBNA_SELECT_NONE) {
+				crossing = &(project.crossings[mbna_current_crossing]);
+				tie = &(crossing->ties[mbna_current_tie]);
+	
+				file = &project.files[crossing->file_id_1];
+				section = &file->sections[crossing->section_1];
+				iping = section->modelplot_start_count + section->snav_id[tie->snav_1];
+	
+				if (section->show_in_modelplot &&
+						(!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+					ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+					iy = mbna_modelplot_yo_lon -
+							 (int)(mbna_modelplot_yscale *
+										 (section->snav_lon_offset[tie->snav_1] / project.mtodeglon - file->block_offset_x));
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_lat -
+							 (int)(mbna_modelplot_yscale *
+										 (section->snav_lat_offset[tie->snav_1] / project.mtodeglat - file->block_offset_y));
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_z -
+							 (int)(mbna_modelplot_yzscale * (section->snav_z_offset[tie->snav_1] - file->block_offset_z));
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+				}
+	
+				file = &project.files[crossing->file_id_2];
+				section = &file->sections[crossing->section_2];
+				iping = section->modelplot_start_count + section->snav_id[tie->snav_2];
+	
+				if (section->show_in_modelplot &&
+						(!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+					ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+					iy = mbna_modelplot_yo_lon -
+							 (int)(mbna_modelplot_yscale *
+										 (section->snav_lon_offset[tie->snav_2] / project.mtodeglon - file->block_offset_x));
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_lat -
+							 (int)(mbna_modelplot_yscale *
+										 (section->snav_lat_offset[tie->snav_2] / project.mtodeglat - file->block_offset_y));
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_z -
+							 (int)(mbna_modelplot_yzscale * (section->snav_z_offset[tie->snav_2] - file->block_offset_z));
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+				}
+			}
+	
+			/* or if crossing selected but not tie then plot current crossing in red */
+			else if (mbna_current_crossing != MBNA_SELECT_NONE) {
+				crossing = &(project.crossings[mbna_current_crossing]);
+	
+				file = &project.files[crossing->file_id_1];
+				section = &file->sections[crossing->section_1];
+				iping = section->modelplot_start_count + section->snav_id[section->num_snav / 2];
+	
+				if (section->show_in_modelplot &&
+						(!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+					ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+					iy = mbna_modelplot_yo_lon -
+							 (int)(mbna_modelplot_yscale *
+										 (section->snav_lon_offset[section->num_snav / 2] / project.mtodeglon - file->block_offset_x));
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_lat -
+							 (int)(mbna_modelplot_yscale *
+										 (section->snav_lat_offset[section->num_snav / 2] / project.mtodeglat - file->block_offset_y));
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_z -
+							 (int)(mbna_modelplot_yzscale * (section->snav_z_offset[section->num_snav / 2] - file->block_offset_z));
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+				}
+	
+				file = &project.files[crossing->file_id_2];
+				section = &file->sections[crossing->section_2];
+				iping = section->modelplot_start_count + section->snav_id[section->num_snav / 2];
+	
+				if (section->show_in_modelplot &&
+						(!mbna_modelplot_zoom || (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+					ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+					iy = mbna_modelplot_yo_lon -
+							 (int)(mbna_modelplot_yscale *
+										 (section->snav_lon_offset[section->num_snav / 2] / project.mtodeglon - file->block_offset_x));
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_lat -
+							 (int)(mbna_modelplot_yscale *
+										 (section->snav_lat_offset[section->num_snav / 2] / project.mtodeglat - file->block_offset_y));
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+					iy = mbna_modelplot_yo_z -
+							 (int)(mbna_modelplot_yzscale * (section->snav_z_offset[section->num_snav / 2] - file->block_offset_z));
+					xg_fillrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[RED], XG_SOLIDLINE);
+					xg_drawrectangle(pmodp_xgid, ix - 3, iy - 3, 7, 7, pixel_values[mbna_color_foreground], XG_SOLIDLINE);
+				}
+			}
+	
+			/* if a modelplot pick did not resolve a single tie, plot the options for a second pick */
+			if (mbna_modelplot_pickfile != MBNA_SELECT_NONE) {
+				for (int i = 0; i < project.num_crossings; i++) {
+					/* check if this crossing includes the picked snav */
+					crossing = &(project.crossings[i]);
+	
+					/* check first snav */
+					if (crossing->file_id_1 == mbna_modelplot_pickfile && crossing->section_1 == mbna_modelplot_picksection) {
+						/* loop over the ties */
+						for (int j = 0; j < crossing->num_ties; j++) {
+							tie = &(crossing->ties[j]);
+							if (crossing->file_id_1 == mbna_modelplot_pickfile && crossing->section_1 == mbna_modelplot_picksection &&
+									tie->snav_1 == mbna_modelplot_picksnav) {
+								file = &project.files[crossing->file_id_1];
+								section = &file->sections[crossing->section_1];
+								iping = section->modelplot_start_count + section->snav_id[tie->snav_1];
+	
+								if (section->show_in_modelplot &&
+										(!mbna_modelplot_zoom ||
+										 (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+									ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+									iy = mbna_modelplot_yo_lon -
+											 (int)(mbna_modelplot_yscale *
+														 (section->snav_lon_offset[tie->snav_1] / project.mtodeglon - file->block_offset_x));
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_lat -
+											 (int)(mbna_modelplot_yscale *
+														 (section->snav_lat_offset[tie->snav_1] / project.mtodeglat - file->block_offset_y));
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_z -
+											 (int)(mbna_modelplot_yzscale * (section->snav_z_offset[tie->snav_1] - file->block_offset_z));
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+								}
+	
+								file = &project.files[crossing->file_id_2];
+								section = &file->sections[crossing->section_2];
+								iping = section->modelplot_start_count + section->snav_id[tie->snav_2];
+	
+								if (section->show_in_modelplot &&
+										(!mbna_modelplot_zoom ||
+										 (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+									ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+									iy = mbna_modelplot_yo_lon -
+											 (int)(mbna_modelplot_yscale *
+														 (section->snav_lon_offset[tie->snav_2] / project.mtodeglon - file->block_offset_x));
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_lat -
+											 (int)(mbna_modelplot_yscale *
+														 (section->snav_lat_offset[tie->snav_2] / project.mtodeglat - file->block_offset_y));
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_z -
+											 (int)(mbna_modelplot_yzscale * (section->snav_z_offset[tie->snav_2] - file->block_offset_z));
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+								}
+							}
+						}
+					}
+	
+					/* check second snav */
+					if (crossing->file_id_2 == mbna_modelplot_pickfile && crossing->section_2 == mbna_modelplot_picksection) {
+						/* loop over the ties */
+						for (int j = 0; j < crossing->num_ties; j++) {
+							tie = &(crossing->ties[j]);
+							if (crossing->file_id_2 == mbna_modelplot_pickfile && crossing->section_2 == mbna_modelplot_picksection &&
+									tie->snav_2 == mbna_modelplot_picksnav) {
+								file = &project.files[crossing->file_id_2];
+								section = &file->sections[crossing->section_2];
+								iping = section->modelplot_start_count + section->snav_id[tie->snav_2];
+	
+								if (section->show_in_modelplot &&
+										(!mbna_modelplot_zoom ||
+										 (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+									ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+									iy = mbna_modelplot_yo_lon -
+											 (int)(mbna_modelplot_yscale *
+														 (section->snav_lon_offset[tie->snav_2] / project.mtodeglon - file->block_offset_x));
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_lat -
+											 (int)(mbna_modelplot_yscale *
+														 (section->snav_lat_offset[tie->snav_2] / project.mtodeglat - file->block_offset_y));
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_z -
+											 (int)(mbna_modelplot_yzscale * (section->snav_z_offset[tie->snav_2] - file->block_offset_z));
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[RED], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+								}
+	
+								file = &project.files[crossing->file_id_1];
+								section = &file->sections[crossing->section_1];
+								iping = section->modelplot_start_count + section->snav_id[tie->snav_1];
+	
+								if (section->show_in_modelplot &&
+										(!mbna_modelplot_zoom ||
+										 (iping >= mbna_modelplot_startzoom && iping <= mbna_modelplot_endzoom))) {
+									ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (iping - mbna_modelplot_start));
+									iy = mbna_modelplot_yo_lon -
+											 (int)(mbna_modelplot_yscale *
+														 (section->snav_lon_offset[tie->snav_1] / project.mtodeglon - file->block_offset_x));
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_lat -
+											 (int)(mbna_modelplot_yscale *
+														 (section->snav_lat_offset[tie->snav_1] / project.mtodeglat - file->block_offset_y));
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+									iy = mbna_modelplot_yo_z -
+											 (int)(mbna_modelplot_yzscale * (section->snav_z_offset[tie->snav_1] - file->block_offset_z));
+									xg_fillrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[6], XG_SOLIDLINE);
+									xg_drawrectangle(pmodp_xgid, ix - 5, iy - 5, 11, 11, pixel_values[mbna_color_foreground],
+																	 XG_SOLIDLINE);
+								}
+							}
+						}
+					}
+				}
+			}
     }
 
     /* plot zoom if active */
     if (mbna_modelplot_zoom_x1 != 0 || mbna_modelplot_zoom_x2 != 0) {
       imodelplot_start = (MIN(mbna_modelplot_zoom_x1, mbna_modelplot_zoom_x2) - mbna_modelplot_xo) / mbna_modelplot_xscale +
                          mbna_modelplot_start;
-      imodelplot_start = MIN(MAX(imodelplot_start, 0), project.num_pings - 1);
+      imodelplot_start = MIN(MAX(imodelplot_start, 0), mbna_modelplot_count - 1);
       imodelplot_end = (MAX(mbna_modelplot_zoom_x1, mbna_modelplot_zoom_x2) - mbna_modelplot_xo) / mbna_modelplot_xscale +
                        mbna_modelplot_start;
-      imodelplot_end = MIN(MAX(imodelplot_end, 0), project.num_pings - 1);
+      imodelplot_end = MIN(MAX(imodelplot_end, 0), mbna_modelplot_count - 1);
 
       ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (imodelplot_start - mbna_modelplot_start));
       xg_drawline(pmodp_xgid, ix, mbna_modelplot_yo_lon - plot_height / 2, ix, mbna_modelplot_yo_lon + plot_height / 2,
@@ -14875,7 +15452,7 @@ int mbnavadjust_modelplot_plot_tieoffsets() {
       mbna_modelplot_yxmid = 0.5 * (lon_offset_max + lon_offset_min);
       mbna_modelplot_yymid = 0.5 * (lat_offset_max + lat_offset_min);
       mbna_modelplot_yzmid = 0.5 * (z_offset_max + z_offset_min);
-      mbna_modelplot_xscale = ((double)plot_width) / (mbna_modelplot_tieend - mbna_modelplot_tiestart);
+      mbna_modelplot_xscale = ((double)plot_width) / (mbna_modelplot_tieend - mbna_modelplot_tiestart + 1);
       mbna_modelplot_yscale = ((double)plot_height) / (yrange);
       mbna_modelplot_yzscale = ((double)plot_height) / (yzrange);
 
@@ -15293,7 +15870,7 @@ int mbnavadjust_modelplot_plot_tieoffsets() {
       mbna_modelplot_yxmid = 0.5 * (lon_offset_max + lon_offset_min);
       mbna_modelplot_yymid = 0.5 * (lat_offset_max + lat_offset_min);
       mbna_modelplot_yzmid = 0.5 * (z_offset_max + z_offset_min);
-      mbna_modelplot_xscale = ((double)plot_width) / (mbna_modelplot_tieend - mbna_modelplot_tiestart);
+      mbna_modelplot_xscale = ((double)plot_width) / (mbna_modelplot_tieend - mbna_modelplot_tiestart + 1);
       mbna_modelplot_yscale = ((double)plot_height) / (yrange);
       mbna_modelplot_yzscale = ((double)plot_height) / (yzrange);
       /*
@@ -15488,7 +16065,7 @@ int mbnavadjust_modelplot_plot_tieoffsets() {
                   pixel = pixel_values[BLUE];
 
                 ix = mbna_modelplot_xo +
-                     (int)(mbna_modelplot_xscale * (tie->isurveyplotindex - mbna_modelplot_tiestart + 1));
+                     (int)(mbna_modelplot_xscale * (tie->isurveyplotindex - mbna_modelplot_tiestart + 0.5));
 
                 iy = mbna_modelplot_yo_lon - (int)(mbna_modelplot_yscale * (tie->offset_x_m - mbna_modelplot_yxmid));
                 if (i == mbna_current_crossing && j == mbna_current_tie) {
@@ -15554,7 +16131,7 @@ int mbnavadjust_modelplot_plot_tieoffsets() {
                       pixel = pixel_values[BLUE];
 
                     ix = mbna_modelplot_xo +
-                         (int)(mbna_modelplot_xscale * (tie->isurveyplotindex - mbna_modelplot_tiestart + 1));
+                         (int)(mbna_modelplot_xscale * (tie->isurveyplotindex - mbna_modelplot_tiestart + 0.5));
 
                     iy = mbna_modelplot_yo_lon - (int)(mbna_modelplot_yscale * (tie->offset_x_m - mbna_modelplot_yxmid));
                     if (i == mbna_current_crossing && j == mbna_current_tie) {
@@ -15617,7 +16194,7 @@ int mbnavadjust_modelplot_plot_tieoffsets() {
                   mbna_modelplot_tiestart;
         itieend = MIN(MAX(itieend, 0), mbna_num_ties_plot - 1);
 
-        ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (itiestart - mbna_modelplot_tiestart + 1));
+        ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (itiestart - mbna_modelplot_tiestart + 0.5));
         xg_drawline(pmodp_xgid, ix, mbna_modelplot_yo_lon - plot_height / 2, ix, mbna_modelplot_yo_lon + plot_height / 2,
                     pixel_values[mbna_color_foreground], XG_DASHLINE);
         xg_drawline(pmodp_xgid, ix, mbna_modelplot_yo_lat - plot_height / 2, ix, mbna_modelplot_yo_lat + plot_height / 2,
@@ -15625,7 +16202,7 @@ int mbnavadjust_modelplot_plot_tieoffsets() {
         xg_drawline(pmodp_xgid, ix, mbna_modelplot_yo_z - plot_height / 2, ix, mbna_modelplot_yo_z + plot_height / 2,
                     pixel_values[mbna_color_foreground], XG_DASHLINE);
 
-        ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (itieend - mbna_modelplot_tiestart + 1));
+        ix = mbna_modelplot_xo + (int)(mbna_modelplot_xscale * (itieend - mbna_modelplot_tiestart + 0.5));
         xg_drawline(pmodp_xgid, ix, mbna_modelplot_yo_lon - plot_height / 2, ix, mbna_modelplot_yo_lon + plot_height / 2,
                     pixel_values[mbna_color_foreground], XG_DASHLINE);
         xg_drawline(pmodp_xgid, ix, mbna_modelplot_yo_lat - plot_height / 2, ix, mbna_modelplot_yo_lat + plot_height / 2,
@@ -15661,8 +16238,9 @@ int mbnavadjust_open_visualization(int which_grid) {
 
   int status = MB_SUCCESS;
   size_t instance;
-  int projectionid, utmzone;
-  double reference_lon;
+  int projectionid;
+  double lon_origin;
+  double lat_origin;
 
   /* mbview parameters */
   mb_pathplus mbv_file_name;
@@ -15688,6 +16266,7 @@ int mbnavadjust_open_visualization(int which_grid) {
   int mbv_site_view_mode;
   int mbv_route_view_mode;
   int mbv_nav_view_mode;
+  int mbv_navswathbounds_view_mode;
   int mbv_navdrape_view_mode;
   int mbv_vector_view_mode;
   int mbv_primary_colortable;
@@ -15764,7 +16343,7 @@ int mbnavadjust_open_visualization(int which_grid) {
   struct mbna_section *section;
   int year, month, day, hour, minute;
   double seconds, roll, pitch, heave;
-  double sonardepth;
+  double sensordepth;
   int nscan;
 
   /* destroy any pre-existing visualization */
@@ -15830,6 +16409,7 @@ int mbnavadjust_open_visualization(int which_grid) {
       mbv_site_view_mode = MBV_VIEW_OFF;
       mbv_route_view_mode = MBV_VIEW_OFF;
       mbv_nav_view_mode = MBV_VIEW_OFF;
+      mbv_navswathbounds_view_mode = MBV_VIEW_OFF;
       mbv_navdrape_view_mode = MBV_VIEW_OFF;
       mbv_vector_view_mode = MBV_VIEW_OFF;
       mbv_primary_colortable = MBV_COLORTABLE_HAXBY;
@@ -15879,18 +16459,12 @@ int mbnavadjust_open_visualization(int which_grid) {
         snprintf(mbv_display_projection_id, sizeof(mbv_display_projection_id), "SPHEROID");
       }
 
-      /* else if grid geographic then use appropriate UTM zone for non-polar grids */
+      /* else if grid geographic and non-polar then use LTM projection */
       else if (mbv_primary_ymax > -80.0 && mbv_primary_ymin < 84.0) {
         mbv_display_projection_mode = MBV_PROJECTION_PROJECTED;
-        reference_lon = 0.5 * (mbv_primary_xmin + mbv_primary_xmax);
-        if (reference_lon > 180.0)
-          reference_lon -= 360.0;
-        utmzone = (int)(((reference_lon + 183.0) / 6.0) + 0.5);
-        if (0.5 * (mbv_primary_ymin + mbv_primary_ymax) >= 0.0)
-          projectionid = 32600 + utmzone;
-        else
-          projectionid = 32700 + utmzone;
-        snprintf(mbv_display_projection_id, sizeof(mbv_display_projection_id), "EPSG:%d", projectionid);
+        lon_origin = 0.5 * (mbv_primary_xmin + mbv_primary_xmax);
+        lat_origin = 0.5 * (mbv_primary_ymin + mbv_primary_ymax);
+        snprintf(mbv_display_projection_id, sizeof(mbv_display_projection_id), "LTM%.5f/%.5f", lon_origin, lat_origin);
       }
 
       /* else if grid geographic and more northerly than 84 deg N then use
@@ -15921,8 +16495,9 @@ int mbnavadjust_open_visualization(int which_grid) {
       status = mbview_setviewcontrols(
           mbna_verbose, instance, mbv_display_mode, mbv_mouse_mode, mbv_grid_mode, mbv_primary_histogram,
           mbv_primaryslope_histogram, mbv_secondary_histogram, mbv_primary_shade_mode, mbv_slope_shade_mode,
-          mbv_secondary_shade_mode, mbv_grid_contour_mode, mbv_site_view_mode, mbv_route_view_mode, mbv_nav_view_mode,
-          mbv_navdrape_view_mode, mbv_vector_view_mode, mbv_exageration, mbv_modelelevation3d, mbv_modelazimuth3d,
+          mbv_secondary_shade_mode, mbv_grid_contour_mode, mbv_site_view_mode, mbv_route_view_mode, 
+          mbv_nav_view_mode, mbv_navswathbounds_view_mode, mbv_navdrape_view_mode, mbv_vector_view_mode, 
+          mbv_exageration, mbv_modelelevation3d, mbv_modelazimuth3d,
           mbv_viewelevation3d, mbv_viewazimuth3d, mbv_illuminate_magnitude, mbv_illuminate_elevation,
           mbv_illuminate_azimuth, mbv_slope_magnitude, mbv_overlay_shade_magnitude, mbv_overlay_shade_center,
           mbv_overlay_shade_mode, mbv_contour_interval, mbv_display_projection_mode, mbv_display_projection_id, &error);
@@ -16081,11 +16656,11 @@ int mbnavadjust_open_visualization(int which_grid) {
                     nscan = sscanf(line, "%d %d %d %d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf",
                                          &year, &month, &day, &hour, &minute, &seconds, &navtime_d[mbv_navpings],
                                          &navlon[mbv_navpings], &navlat[mbv_navpings], &navheading[mbv_navpings],
-                                         &navspeed[mbv_navpings], &sonardepth, &roll, &pitch, &heave,
+                                         &navspeed[mbv_navpings], &sensordepth, &roll, &pitch, &heave,
                                          &navportlon[mbv_navpings], &navportlat[mbv_navpings],
                                          &navstbdlon[mbv_navpings], &navstbdlat[mbv_navpings]);
                     if (nscan >= 15) {
-                      navz[mbv_navpings] = -sonardepth;
+                      navz[mbv_navpings] = -sensordepth;
                       navline[mbv_navpings] = i;
                       navshot[mbv_navpings] = j;
                       navcdp[mbv_navpings] = mbv_navpings;
@@ -16187,7 +16762,6 @@ int mbnavadjust_reset_visualization_navties() {
   struct mbna_crossing *crossing;
   struct mbna_tie *tie;
   size_t instance;
-  int num_navties, num_globalties;
   int npoint;
   int snav_1, snav_2;
   double navtielon[2];
@@ -16207,8 +16781,6 @@ int mbnavadjust_reset_visualization_navties() {
     /* count and allocate for the the navties to be displayed according
         to the current settings */
     instance = 0;
-    num_navties = 0;
-    num_globalties = 0;
     npoint = 2;
     waypoint[0] = 1;
     waypoint[1] = 1;
@@ -16240,8 +16812,6 @@ int mbnavadjust_reset_visualization_navties() {
                     crossing->section_1, file_2->block, crossing->file_id_2, crossing->section_2);
             status = mbview_addroute(mbna_verbose, instance, npoint, navtielon, navtielat, waypoint, navtiecolor,
                                      navtiesize, navtieeditmode, navtiename, &id, &error);
-            if (status == MB_SUCCESS)
-              num_navties++;
           }
         }
       }
@@ -16266,8 +16836,6 @@ int mbnavadjust_reset_visualization_navties() {
           snprintf(navtiename, sizeof(navtiename), "%2.2d:%4.4d:%2.2d", file->block, i, j);
           status = mbview_addroute(mbna_verbose, instance, npoint, navtielon, navtielat, waypoint, navtiecolor,
                                    navtiesize, navtieeditmode, navtiename, &id, &error);
-          if (status == MB_SUCCESS)
-            num_globalties++;
         }
       }
     }
@@ -16360,7 +16928,9 @@ int mbnavadjust_visualization_selectcrossingfromroute(int icrossing, int itie) {
   /* load the crossing */
   if (mbna_current_crossing >= 0) {
     /* put up message */
-    snprintf(message, sizeof(message), "Loading crossing %d...", mbna_current_crossing);
+    snprintf(message, sizeof(message), "Loading crossing %d  %2.2d:%4.4d:%2.2d %2.2d:%4.4d:%2.2d...", 
+    			mbna_current_crossing, project.files[mbna_file_id_1].block, mbna_file_id_1, mbna_section_1, 
+    			project.files[mbna_file_id_2].block, mbna_file_id_2, mbna_section_2);
     do_message_on(message);
 
     mbnavadjust_crossing_load();

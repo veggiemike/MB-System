@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mb_time.c	10/30/2000
   *
- *    Copyright (c) 2000-2020 by
+ *    Copyright (c) 2000-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * mb_navint.c includes the "mb_" functions used to interpolate
@@ -64,12 +74,13 @@ int mb_navint_add(int verbose, void *mbio_ptr, double time_d, double lon_easting
 	if (mb_io_ptr->nfix == 0 || (time_d > mb_io_ptr->fix_time_d[mb_io_ptr->nfix - 1])) {
 		/* if list if full make room for another nav fix */
 		if (mb_io_ptr->nfix >= MB_ASYNCH_SAVE_MAX) {
-			mb_io_ptr->nfix = MB_ASYNCH_SAVE_MAX - 1;
-			for (int i = 0; i < mb_io_ptr->nfix; i++) {
-				mb_io_ptr->fix_time_d[i] = mb_io_ptr->fix_time_d[i + 1];
-				mb_io_ptr->fix_lon[i] = mb_io_ptr->fix_lon[i + 1];
-				mb_io_ptr->fix_lat[i] = mb_io_ptr->fix_lat[i + 1];
+			int shift = MB_ASYNCH_SAVE_MAX / 2;
+			for (int i = 0; i < mb_io_ptr->nfix - shift; i++) {
+				mb_io_ptr->fix_time_d[i] = mb_io_ptr->fix_time_d[i + shift];
+				mb_io_ptr->fix_lon[i] = mb_io_ptr->fix_lon[i + shift];
+				mb_io_ptr->fix_lat[i] = mb_io_ptr->fix_lat[i + shift];
 			}
+			mb_io_ptr->nfix -= shift;
 		}
 
 		/* add new fix to list */
@@ -426,17 +437,18 @@ int mb_attint_add(int verbose, void *mbio_ptr, double time_d, double heave, doub
 	/* get pointers to mbio descriptor and data structures */
 	struct mb_io_struct *mb_io_ptr = (struct mb_io_struct *)mbio_ptr;
 
-	/* add another fix only if time stamp has changed */
+	/* add another attitude fix only if time stamp has changed */
 	if (mb_io_ptr->nattitude == 0 || (time_d > mb_io_ptr->attitude_time_d[mb_io_ptr->nattitude - 1])) {
 		/* if list if full make room for another attitude fix */
 		if (mb_io_ptr->nattitude >= MB_ASYNCH_SAVE_MAX) {
-			mb_io_ptr->nattitude = MB_ASYNCH_SAVE_MAX - 1;
-			for (int i = 0; i < mb_io_ptr->nattitude; i++) {
-				mb_io_ptr->attitude_time_d[i] = mb_io_ptr->attitude_time_d[i + 1];
-				mb_io_ptr->attitude_heave[i] = mb_io_ptr->attitude_heave[i + 1];
-				mb_io_ptr->attitude_roll[i] = mb_io_ptr->attitude_roll[i + 1];
-				mb_io_ptr->attitude_pitch[i] = mb_io_ptr->attitude_pitch[i + 1];
+			int shift = MB_ASYNCH_SAVE_MAX / 2;
+			for (int i = 0; i < mb_io_ptr->nattitude - shift; i++) {
+				mb_io_ptr->attitude_time_d[i] = mb_io_ptr->attitude_time_d[i  + shift];
+				mb_io_ptr->attitude_heave[i] = mb_io_ptr->attitude_heave[i  + shift];
+				mb_io_ptr->attitude_roll[i] = mb_io_ptr->attitude_roll[i  + shift];
+				mb_io_ptr->attitude_pitch[i] = mb_io_ptr->attitude_pitch[i  + shift];
 			}
+			mb_io_ptr->nattitude -= shift;
 		}
 
 		/* add new fix to list */
@@ -480,7 +492,6 @@ int mb_attint_add(int verbose, void *mbio_ptr, double time_d, double heave, doub
         list used for interpolation/extrapolation. */
 int mb_attint_nadd(int verbose, void *mbio_ptr, int nsamples, double *time_d, double *heave, double *roll, double *pitch,
                    int *error) {
-	int shift;
 
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -498,7 +509,9 @@ int mb_attint_nadd(int verbose, void *mbio_ptr, int nsamples, double *time_d, do
 
 	/* if necessary make room for attitude fixes */
 	if (mb_io_ptr->nattitude + nsamples >= MB_ASYNCH_SAVE_MAX) {
-		shift = mb_io_ptr->nattitude + nsamples - MB_ASYNCH_SAVE_MAX;
+		int shift = MB_ASYNCH_SAVE_MAX / 2;
+		if (mb_io_ptr->nattitude - shift + nsamples >= MB_ASYNCH_SAVE_MAX)
+			shift = mb_io_ptr->nattitude + nsamples - MB_ASYNCH_SAVE_MAX;
 		for (int i = 0; i < mb_io_ptr->nattitude - shift; i++) {
 			mb_io_ptr->attitude_time_d[i] = mb_io_ptr->attitude_time_d[i + shift];
 			mb_io_ptr->attitude_heave[i] = mb_io_ptr->attitude_heave[i + shift];
@@ -664,11 +677,12 @@ int mb_hedint_add(int verbose, void *mbio_ptr, double time_d, double heading, in
 	if (mb_io_ptr->nheading == 0 || (time_d > mb_io_ptr->heading_time_d[mb_io_ptr->nheading - 1])) {
 		/* if list if full make room for another heading fix */
 		if (mb_io_ptr->nheading >= MB_ASYNCH_SAVE_MAX) {
-			mb_io_ptr->nheading = MB_ASYNCH_SAVE_MAX - 1;
-			for (int i = 0; i < mb_io_ptr->nheading; i++) {
-				mb_io_ptr->heading_time_d[i] = mb_io_ptr->heading_time_d[i + 1];
-				mb_io_ptr->heading_heading[i] = mb_io_ptr->heading_heading[i + 1];
+			int shift = MB_ASYNCH_SAVE_MAX / 2;
+			for (int i = 0; i < mb_io_ptr->nheading - shift; i++) {
+				mb_io_ptr->heading_time_d[i] = mb_io_ptr->heading_time_d[i + shift];
+				mb_io_ptr->heading_heading[i] = mb_io_ptr->heading_heading[i + shift];
 			}
+			mb_io_ptr->nheading -= shift;
 		}
 
 		/* add new fix to list */
@@ -706,7 +720,6 @@ int mb_hedint_add(int verbose, void *mbio_ptr, double time_d, double heading, in
 /* 	function mb_hedint_nadd adds multiple heading fixes to the internal
         list used for interpolation/extrapolation. */
 int mb_hedint_nadd(int verbose, void *mbio_ptr, int nsamples, double *time_d, double *heading, int *error) {
-	int shift;
 
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -724,7 +737,9 @@ int mb_hedint_nadd(int verbose, void *mbio_ptr, int nsamples, double *time_d, do
 
 	/* if necessary make room for heading fixes */
 	if (mb_io_ptr->nheading + nsamples >= MB_ASYNCH_SAVE_MAX) {
-		shift = mb_io_ptr->nheading + nsamples - MB_ASYNCH_SAVE_MAX;
+		int shift = MB_ASYNCH_SAVE_MAX / 2;
+		if (mb_io_ptr->nheading - shift + nsamples >= MB_ASYNCH_SAVE_MAX)
+			shift = mb_io_ptr->nheading + nsamples - MB_ASYNCH_SAVE_MAX;
 		for (int i = 0; i < mb_io_ptr->nheading - shift; i++) {
 			mb_io_ptr->heading_time_d[i] = mb_io_ptr->heading_time_d[i + shift];
 			mb_io_ptr->heading_heading[i] = mb_io_ptr->heading_heading[i + shift];
@@ -861,45 +876,46 @@ int mb_hedint_interp(int verbose, void *mbio_ptr, double time_d, double *heading
 /*--------------------------------------------------------------------*/
 /* 	function mb_depint_add adds a sonar depth fix to the internal
         list used for interpolation/extrapolation. */
-int mb_depint_add(int verbose, void *mbio_ptr, double time_d, double sonardepth, int *error) {
+int mb_depint_add(int verbose, void *mbio_ptr, double time_d, double sensordepth, int *error) {
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       verbose:    %d\n", verbose);
 		fprintf(stderr, "dbg2       mbio_ptr:   %p\n", (void *)mbio_ptr);
 		fprintf(stderr, "dbg2       time_d:     %f\n", time_d);
-		fprintf(stderr, "dbg2       sonardepth: %f\n", sonardepth);
+		fprintf(stderr, "dbg2       sensordepth: %f\n", sensordepth);
 	}
 
 	/* get pointers to mbio descriptor and data structures */
 	struct mb_io_struct *mb_io_ptr = (struct mb_io_struct *)mbio_ptr;
 
 	/* add another fix only if time stamp has changed */
-	if (mb_io_ptr->nsonardepth == 0 || (time_d > mb_io_ptr->sonardepth_time_d[mb_io_ptr->nsonardepth - 1])) {
-		/* if list if full make room for another sonardepth fix */
-		if (mb_io_ptr->nsonardepth >= MB_ASYNCH_SAVE_MAX) {
-			mb_io_ptr->nsonardepth = MB_ASYNCH_SAVE_MAX - 1;
-			for (int i = 0; i < mb_io_ptr->nsonardepth; i++) {
-				mb_io_ptr->sonardepth_time_d[i] = mb_io_ptr->sonardepth_time_d[i + 1];
-				mb_io_ptr->sonardepth_sonardepth[i] = mb_io_ptr->sonardepth_sonardepth[i + 1];
+	if (mb_io_ptr->nsensordepth == 0 || (time_d > mb_io_ptr->sensordepth_time_d[mb_io_ptr->nsensordepth - 1])) {
+		/* if list if full make room for another sensordepth fix */
+		if (mb_io_ptr->nsensordepth >= MB_ASYNCH_SAVE_MAX) {
+			int shift = MB_ASYNCH_SAVE_MAX / 2;
+			for (int i = 0; i < mb_io_ptr->nsensordepth - shift; i++) {
+				mb_io_ptr->sensordepth_time_d[i] = mb_io_ptr->sensordepth_time_d[i + shift];
+				mb_io_ptr->sensordepth_sensordepth[i] = mb_io_ptr->sensordepth_sensordepth[i + shift];
 			}
+			mb_io_ptr->nsensordepth -= shift;
 		}
 
 		/* add new fix to list */
-		mb_io_ptr->sonardepth_time_d[mb_io_ptr->nsonardepth] = time_d;
-		mb_io_ptr->sonardepth_sonardepth[mb_io_ptr->nsonardepth] = sonardepth;
-		mb_io_ptr->nsonardepth++;
+		mb_io_ptr->sensordepth_time_d[mb_io_ptr->nsensordepth] = time_d;
+		mb_io_ptr->sensordepth_sensordepth[mb_io_ptr->nsensordepth] = sensordepth;
+		mb_io_ptr->nsensordepth++;
 #ifdef MB_DEPINT_DEBUG
-		fprintf(stderr, "mb_depint_add:    sonardepth fix %d %f added\n", mb_io_ptr->nsonardepth, sonardepth);
+		fprintf(stderr, "mb_depint_add:    sensordepth fix %d %f added\n", mb_io_ptr->nsensordepth, sensordepth);
 #endif
 
 		if (verbose >= 4) {
 			fprintf(stderr, "\ndbg4  Sonar depth fix added to list by MBIO function <%s>\n", __func__);
 			fprintf(stderr, "dbg4  New fix values:\n");
-			fprintf(stderr, "dbg4       nsonardepth:       %d\n", mb_io_ptr->nsonardepth);
-			fprintf(stderr, "dbg4       time_d:     %f\n", mb_io_ptr->sonardepth_time_d[mb_io_ptr->nsonardepth - 1]);
-			fprintf(stderr, "dbg4       sonardepth_sonardepth:  %f\n",
-			        mb_io_ptr->sonardepth_sonardepth[mb_io_ptr->nsonardepth - 1]);
+			fprintf(stderr, "dbg4       nsensordepth:       %d\n", mb_io_ptr->nsensordepth);
+			fprintf(stderr, "dbg4       time_d:     %f\n", mb_io_ptr->sensordepth_time_d[mb_io_ptr->nsensordepth - 1]);
+			fprintf(stderr, "dbg4       sensordepth_sensordepth:  %f\n",
+			        mb_io_ptr->sensordepth_sensordepth[mb_io_ptr->nsensordepth - 1]);
 		}
 	}
 
@@ -920,7 +936,7 @@ int mb_depint_add(int verbose, void *mbio_ptr, double time_d, double sonardepth,
 /*--------------------------------------------------------------------*/
 /* 	function mb_depint_interp interpolates or extrapolates a
         sonar depth fix from the internal list. */
-int mb_depint_interp(int verbose, void *mbio_ptr, double time_d, double *sonardepth, int *error) {
+int mb_depint_interp(int verbose, void *mbio_ptr, double time_d, double *sensordepth, int *error) {
 	double factor;
 	int ifix;
 
@@ -938,62 +954,62 @@ int mb_depint_interp(int verbose, void *mbio_ptr, double time_d, double *sonarde
 	int status = MB_SUCCESS;
 
 	/* interpolate if possible */
-	if (mb_io_ptr->nsonardepth > 1 && (mb_io_ptr->sonardepth_time_d[mb_io_ptr->nsonardepth - 1] >= time_d) &&
-	    (mb_io_ptr->sonardepth_time_d[0] <= time_d)) {
+	if (mb_io_ptr->nsensordepth > 1 && (mb_io_ptr->sensordepth_time_d[mb_io_ptr->nsensordepth - 1] >= time_d) &&
+	    (mb_io_ptr->sensordepth_time_d[0] <= time_d)) {
 		/* get interpolated position */
-		ifix = (mb_io_ptr->nsonardepth - 1) * (time_d - mb_io_ptr->sonardepth_time_d[0]) /
-		       (mb_io_ptr->sonardepth_time_d[mb_io_ptr->nsonardepth - 1] - mb_io_ptr->sonardepth_time_d[0]);
-		while (time_d > mb_io_ptr->sonardepth_time_d[ifix])
+		ifix = (mb_io_ptr->nsensordepth - 1) * (time_d - mb_io_ptr->sensordepth_time_d[0]) /
+		       (mb_io_ptr->sensordepth_time_d[mb_io_ptr->nsensordepth - 1] - mb_io_ptr->sensordepth_time_d[0]);
+		while (time_d > mb_io_ptr->sensordepth_time_d[ifix])
 			ifix++;
-		while (time_d < mb_io_ptr->sonardepth_time_d[ifix - 1])
+		while (time_d < mb_io_ptr->sensordepth_time_d[ifix - 1])
 			ifix--;
 
-		factor = (time_d - mb_io_ptr->sonardepth_time_d[ifix - 1]) /
-		         (mb_io_ptr->sonardepth_time_d[ifix] - mb_io_ptr->sonardepth_time_d[ifix - 1]);
-		*sonardepth = mb_io_ptr->sonardepth_sonardepth[ifix - 1] +
-		              factor * (mb_io_ptr->sonardepth_sonardepth[ifix] - mb_io_ptr->sonardepth_sonardepth[ifix - 1]);
+		factor = (time_d - mb_io_ptr->sensordepth_time_d[ifix - 1]) /
+		         (mb_io_ptr->sensordepth_time_d[ifix] - mb_io_ptr->sensordepth_time_d[ifix - 1]);
+		*sensordepth = mb_io_ptr->sensordepth_sensordepth[ifix - 1] +
+		              factor * (mb_io_ptr->sensordepth_sensordepth[ifix] - mb_io_ptr->sensordepth_sensordepth[ifix - 1]);
 		status = MB_SUCCESS;
 #ifdef MB_DEPINT_DEBUG
-		fprintf(stderr, "mb_depint_interp: sonardepth %f interpolated at fix %d of %d with factor:%f\n", *sonardepth, ifix,
-		        mb_io_ptr->nsonardepth, factor);
+		fprintf(stderr, "mb_depint_interp: sensordepth %f interpolated at fix %d of %d with factor:%f\n", *sensordepth, ifix,
+		        mb_io_ptr->nsensordepth, factor);
 #endif
 	}
 
 	/* extrapolate from last value */
-	else if (mb_io_ptr->nsonardepth > 1 && (mb_io_ptr->sonardepth_time_d[mb_io_ptr->nsonardepth - 1] < time_d)) {
+	else if (mb_io_ptr->nsensordepth > 1 && (mb_io_ptr->sensordepth_time_d[mb_io_ptr->nsensordepth - 1] < time_d)) {
 		/* extrapolated depth using last value */
-		*sonardepth = mb_io_ptr->sonardepth_sonardepth[mb_io_ptr->nsonardepth - 1];
+		*sensordepth = mb_io_ptr->sensordepth_sensordepth[mb_io_ptr->nsensordepth - 1];
 		status = MB_SUCCESS;
 #ifdef MB_DEPINT_DEBUG
-		fprintf(stderr, "mb_depint_interp: sonardepth %f extrapolated from last fix of %d\n", *sonardepth,
-		        mb_io_ptr->nsonardepth);
+		fprintf(stderr, "mb_depint_interp: sensordepth %f extrapolated from last fix of %d\n", *sensordepth,
+		        mb_io_ptr->nsensordepth);
 #endif
 	}
 
 	/* extrapolate from first fix */
-	else if (mb_io_ptr->nsonardepth >= 1) {
-		*sonardepth = mb_io_ptr->sonardepth_sonardepth[0];
+	else if (mb_io_ptr->nsensordepth >= 1) {
+		*sensordepth = mb_io_ptr->sensordepth_sensordepth[0];
 		status = MB_SUCCESS;
 #ifdef MB_DEPINT_DEBUG
-		fprintf(stderr, "mb_depint_interp: sonardepth %f extrapolated from first fix of %d\n", *sonardepth,
-		        mb_io_ptr->nsonardepth);
+		fprintf(stderr, "mb_depint_interp: sensordepth %f extrapolated from first fix of %d\n", *sensordepth,
+		        mb_io_ptr->nsensordepth);
 #endif
 	}
 
 	/* else no fix */
 	else {
-		*sonardepth = 0.0;
+		*sensordepth = 0.0;
 		status = MB_FAILURE;
 		*error = MB_ERROR_NOT_ENOUGH_DATA;
 #ifdef MB_DEPINT_DEBUG
-		fprintf(stderr, "mb_depint_interp: sonardepth zeroed\n");
+		fprintf(stderr, "mb_depint_interp: sensordepth zeroed\n");
 #endif
 	}
 
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBIO function <%s> completed\n", __func__);
 		fprintf(stderr, "dbg2  Return value:\n");
-		fprintf(stderr, "dbg2       sonardepth:   %f\n", *sonardepth);
+		fprintf(stderr, "dbg2       sensordepth:   %f\n", *sensordepth);
 		fprintf(stderr, "dbg2       error:        %d\n", *error);
 		fprintf(stderr, "dbg2  Return status:\n");
 		fprintf(stderr, "dbg2       status:       %d\n", status);
@@ -1022,11 +1038,12 @@ int mb_altint_add(int verbose, void *mbio_ptr, double time_d, double altitude, i
 	if (mb_io_ptr->naltitude == 0 || (time_d > mb_io_ptr->altitude_time_d[mb_io_ptr->naltitude - 1])) {
 		/* if list if full make room for another altitude fix */
 		if (mb_io_ptr->naltitude >= MB_ASYNCH_SAVE_MAX) {
-			mb_io_ptr->naltitude = MB_ASYNCH_SAVE_MAX - 1;
-			for (int i = 0; i < mb_io_ptr->naltitude; i++) {
-				mb_io_ptr->altitude_time_d[i] = mb_io_ptr->altitude_time_d[i + 1];
-				mb_io_ptr->altitude_altitude[i] = mb_io_ptr->altitude_altitude[i + 1];
+			int shift = MB_ASYNCH_SAVE_MAX / 2;
+			for (int i = 0; i < mb_io_ptr->naltitude - shift; i++) {
+				mb_io_ptr->altitude_time_d[i] = mb_io_ptr->altitude_time_d[i + shift];
+				mb_io_ptr->altitude_altitude[i] = mb_io_ptr->altitude_altitude[i + shift];
 			}
+			mb_io_ptr->naltitude -= shift;
 		}
 
 		/* add new fix to list */
@@ -1246,7 +1263,7 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 				nav_ok = false;
 
 				/* deal with nav in form: time_d lon lat speed */
-				if (merge_nav_format == 1) {
+				if (merge_nav_format == MB_PR_NAV_FORMAT_TLLS) {
 					nget = sscanf(buffer, "%lf %lf %lf %lf", &n_time_d[nrecord], &n_lon[nrecord], &n_lat[nrecord],
 					              &n_speed[nrecord]);
 					if (nget == 3)
@@ -1256,7 +1273,7 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 				}
 
 				/* deal with nav in form: yr mon day hour min sec lon lat */
-				else if (merge_nav_format == 2) {
+				else if (merge_nav_format == MB_PR_NAV_FORMAT_YMDHMSLL) {
 					nget = sscanf(buffer, "%d %d %d %d %d %lf %lf %lf", &time_i[0], &time_i[1], &time_i[2], &time_i[3],
 					              &time_i[4], &sec, &n_lon[nrecord], &n_lat[nrecord]);
 					time_i[5] = (int)sec;
@@ -1269,7 +1286,7 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 				}
 
 				/* deal with nav in form: yr jday hour min sec lon lat */
-				else if (merge_nav_format == 3) {
+				else if (merge_nav_format == MB_PR_NAV_FORMAT_YJHMSLL) {
 					nget = sscanf(buffer, "%d %d %d %d %lf %lf %lf", &time_j[0], &time_j[1], &ihr, &time_j[2], &sec,
 					              &n_lon[nrecord], &n_lat[nrecord]);
 					time_j[2] = time_j[2] + 60 * ihr;
@@ -1284,7 +1301,7 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 				}
 
 				/* deal with nav in form: yr jday daymin sec lon lat */
-				else if (merge_nav_format == 4) {
+				else if (merge_nav_format == MB_PR_NAV_FORMAT_YJMSLL) {
 					nget = sscanf(buffer, "%d %d %d %lf %lf %lf", &time_j[0], &time_j[1], &time_j[2], &sec, &n_lon[nrecord],
 					              &n_lat[nrecord]);
 					time_j[3] = (int)sec;
@@ -1298,7 +1315,7 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 				}
 
 				/* deal with nav in L-DEO processed nav format */
-				else if (merge_nav_format == 5) {
+				else if (merge_nav_format == MB_PR_NAV_FORMAT_LDEO) {
 					strncpy(dummy, "", 128);
 					if (buffer[2] == '+') {
 						time_j[0] = strtol(strncpy(dummy, buffer, 2), NULL, 10);
@@ -1354,7 +1371,7 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 				}
 
 				/* deal with nav in real and pseudo NMEA 0183 format */
-				else if (merge_nav_format == 6 || merge_nav_format == 7) {
+				else if (merge_nav_format == MB_PR_NAV_FORMAT_NMEAGLL || merge_nav_format == MB_PR_NAV_FORMAT_NMEAGGA) {
 					/* check if real sentence */
 					len = strlen(buffer);
 					if (strncmp(buffer, "$", 1) == 0) {
@@ -1393,8 +1410,8 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 								}
 							}
 						}
-						else if (((merge_nav_format == 6 && strncmp(&buffer[3], "GLL", 3) == 0) ||
-						          (merge_nav_format == 7 && strncmp(&buffer[3], "GGA", 3) == 0)) &&
+						else if (((merge_nav_format == MB_PR_NAV_FORMAT_NMEAGLL && strncmp(&buffer[3], "GLL", 3) == 0) ||
+						          (merge_nav_format == MB_PR_NAV_FORMAT_NMEAGGA && strncmp(&buffer[3], "GGA", 3) == 0)) &&
 						         time_set && len > 26) {
 							time_set = false;
 							/* find start of ",ddmm.mm,N,ddmm.mm,E" */
@@ -1432,7 +1449,7 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 				}
 
 				/* deal with nav in Simrad 90 format */
-				else if (merge_nav_format == 8) {
+				else if (merge_nav_format == MB_PR_NAV_FORMAT_SIMRAD90) {
 					mb_get_int(&(time_i[2]), buffer + 2, 2);
 					mb_get_int(&(time_i[1]), buffer + 4, 2);
 					mb_get_int(&(time_i[0]), buffer + 6, 2);
@@ -1461,8 +1478,8 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 					nav_ok = true;
 				}
 
-				/* deal with nav in form: yr mon day hour min sec time_d lon lat heading speed sensordepth */
-				else if (merge_nav_format == 9) {
+				/* deal with nav in form: yr mon day hour min sec time_d lon lat heading speed sensordepth roll pitch heave */
+				else if (merge_nav_format == MB_PR_NAV_FORMAT_FBT) {
 					nget = sscanf(buffer, "%d %d %d %d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", &time_i[0], &time_i[1],
 					              &time_i[2], &time_i[3], &time_i[4], &sec, &n_time_d[nrecord], &n_lon[nrecord], &n_lat[nrecord],
 					              &heading, &n_speed[nrecord], &sensordepth, &roll, &pitch, &heave);
@@ -1474,7 +1491,7 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 
 				/* deal with nav in r2rnav form:
 				    yyyy-mm-ddThh:mm:ss.sssZ decimalLongitude decimalLatitude quality nsat dilution height */
-				else if (merge_nav_format == 10) {
+				else if (merge_nav_format == MB_PR_NAV_FORMAT_R2NAV) {
 					nget =
 					    sscanf(buffer, "%d-%d-%dT%d:%d:%lfZ %lf %lf %d %d %d %d", &time_i[0], &time_i[1], &time_i[2], &time_i[3],
 					           &time_i[4], &sec, &n_lon[nrecord], &n_lat[nrecord], &quality, &nsatellite, &dilution, &gpsheight);
@@ -1490,6 +1507,31 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 					n_time_d[nrecord] = time_d;
 					n_speed[nrecord] = 0.0;
 					if (nget >= 8)
+						nav_ok = true;
+				}
+
+				/* deal with nav in Schmidt Ocean Institute RVDAS form:
+				    Timestamp,Header,Roll_deg,Pitch_deg,HeadingTrue_deg,OrientStatus,Latitude_ddeg,Longitude_ddeg,PositionStatus,VelocityFwd_m/s,VelocityStbd_m/s,VelocityDown_m/s,Altitude_m,Altitude_Status,Depth_m,Depth_Used
+				    2024-03-02T07:05:39.312291Z,$SPRINT,-2.7356,-1.87866,17.0837,1,-25.21617622,-90.36081369,1,0.004,0.002,-0.005,0.55,1,1076.81,1,
+				     */
+				else if (merge_nav_format == MB_PR_NAV_FORMAT_RVDAS) {
+					int position_status;
+					int attitude_status;
+					int altitude_status;
+					int depth_status;
+					double vel_fwd, vel_stbd, vel_down;
+					double altitude;
+					double depth;
+					nget =
+					    sscanf(buffer, "%d-%d-%dT%d:%d:%lfZ,$SPRINT,%lf,%lf,%lf,%d,%lf,%lf,%d,%lf,%lf,%lf,%lf,%d,%lf,%d", 
+					    	&time_i[0], &time_i[1], &time_i[2], &time_i[3], &time_i[4], &sec, 
+					    	&roll, &pitch, &heading, &attitude_status, &n_lat[nrecord], &n_lon[nrecord], &position_status, &vel_fwd, &vel_stbd, &vel_down, &altitude, &altitude_status, &depth, &depth_status);
+					time_i[5] = (int)floor(sec);
+					time_i[6] = (int)((sec - time_i[5]) * 1000000);
+					mb_get_time(verbose, time_i, &time_d);
+					n_time_d[nrecord] = time_d;
+					n_speed[nrecord] = 0.0;
+					if (nget == 20)
 						nav_ok = true;
 				}
 
@@ -1638,14 +1680,14 @@ int mb_loadsensordepthdata(int verbose, char *merge_sensordepth_file, int merge_
 				sensordepth_ok = false;
 
 				/* deal with sensordepth in form: time_d sensordepth */
-				if (merge_sensordepth_format == 1) {
+				if (merge_sensordepth_format == MB_PR_SENSORDEPTH_FORMAT_TD) {
 					nget = sscanf(buffer, "%lf %lf", &n_time_d[nrecord], &n_sensordepth[nrecord]);
 					if (nget == 2)
 						sensordepth_ok = true;
 				}
 
 				/* deal with sensordepth in form: yr mon day hour min sec sensordepth */
-				else if (merge_sensordepth_format == 2) {
+				else if (merge_sensordepth_format == MB_PR_SENSORDEPTH_FORMAT_YMDHMSD) {
 					nget = sscanf(buffer, "%d %d %d %d %d %lf %lf", &time_i[0], &time_i[1], &time_i[2], &time_i[3], &time_i[4],
 					              &sec, &n_sensordepth[nrecord]);
 					time_i[5] = (int)sec;
@@ -1657,7 +1699,7 @@ int mb_loadsensordepthdata(int verbose, char *merge_sensordepth_file, int merge_
 				}
 
 				/* deal with sensordepth in form: yr jday hour min sec sensordepth */
-				else if (merge_sensordepth_format == 3) {
+				else if (merge_sensordepth_format == MB_PR_SENSORDEPTH_FORMAT_YJHMSD) {
 					nget = sscanf(buffer, "%d %d %d %d %lf %lf", &time_j[0], &time_j[1], &ihr, &time_j[2], &sec,
 					              &n_sensordepth[nrecord]);
 					time_j[2] = time_j[2] + 60 * ihr;
@@ -1671,7 +1713,7 @@ int mb_loadsensordepthdata(int verbose, char *merge_sensordepth_file, int merge_
 				}
 
 				/* deal with sensordepth in form: yr jday daymin sec sensordepth */
-				else if (merge_sensordepth_format == 4) {
+				else if (merge_sensordepth_format == MB_PR_SENSORDEPTH_FORMAT_YJMSD) {
 					nget = sscanf(buffer, "%d %d %d %lf %lf", &time_j[0], &time_j[1], &time_j[2], &sec, &n_sensordepth[nrecord]);
 					time_j[3] = (int)sec;
 					time_j[4] = 1000000 * (sec - time_j[3]);
@@ -1683,7 +1725,7 @@ int mb_loadsensordepthdata(int verbose, char *merge_sensordepth_file, int merge_
 				}
 
 				/* deal with sensordepth in form: yr mon day hour min sec time_d lon lat heading speed draft*/
-				else if (merge_sensordepth_format == 9) {
+				else if (merge_sensordepth_format == MB_PR_SENSORDEPTH_FORMAT_FBT) {
 					nget = sscanf(buffer, "%d %d %d %d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", &time_i[0], &time_i[1],
 					              &time_i[2], &time_i[3], &time_i[4], &sec, &n_time_d[nrecord], &lon, &lat, &heading, &speed,
 					              &n_sensordepth[nrecord], &roll, &pitch, &heave);
@@ -1691,6 +1733,31 @@ int mb_loadsensordepthdata(int verbose, char *merge_sensordepth_file, int merge_
 						sensordepth_ok = true;
 					if (nrecord > 0 && n_time_d[nrecord] <= n_time_d[nrecord - 1])
 						sensordepth_ok = false;
+				}
+
+				/* deal with nav in Schmidt Ocean Institute RVDAS form:
+				    Timestamp,Header,Roll_deg,Pitch_deg,HeadingTrue_deg,OrientStatus,Latitude_ddeg,Longitude_ddeg,PositionStatus,VelocityFwd_m/s,VelocityStbd_m/s,VelocityDown_m/s,Altitude_m,Altitude_Status,Depth_m,Depth_Used
+				    2024-03-02T07:05:39.312291Z,$SPRINT,-2.7356,-1.87866,17.0837,1,-25.21617622,-90.36081369,1,0.004,0.002,-0.005,0.55,1,1076.81,1,
+				     */
+				else if (merge_sensordepth_format == MB_PR_SENSORDEPTH_FORMAT_RVDAS) {
+					int position_status;
+					int attitude_status;
+					int altitude_status;
+					int depth_status;
+					double vel_fwd, vel_stbd, vel_down;
+					double altitude;
+					double lon, lat;
+					nget =
+					    sscanf(buffer, "%d-%d-%dT%d:%d:%lfZ,$SPRINT,%lf,%lf,%lf,%d,%lf,%lf,%d,%lf,%lf,%lf,%lf,%d,%lf,%d", 
+					    	&time_i[0], &time_i[1], &time_i[2], &time_i[3], &time_i[4], &sec, 
+					    	&roll, &pitch, &heading, &attitude_status, &lat, &lon, &position_status, 
+					    	&vel_fwd, &vel_stbd, &vel_down, &altitude, &altitude_status, &n_sensordepth[nrecord], &depth_status);
+					time_i[5] = (int)floor(sec);
+					time_i[6] = (int)((sec - time_i[5]) * 1000000);
+					mb_get_time(verbose, time_i, &time_d);
+					n_time_d[nrecord] = time_d;
+					if (nget == 20)
+						sensordepth_ok = true;
 				}
 
 				/* output some debug values */
@@ -1823,14 +1890,14 @@ int mb_loadaltitudedata(int verbose, char *merge_altitude_file, int merge_altitu
 				altitude_ok = false;
 
 				/* deal with altitude in form: time_d altitude */
-				if (merge_altitude_format == 1) {
+				if (merge_altitude_format == MB_PR_ALTITUDE_FORMAT_TA) {
 					nget = sscanf(buffer, "%lf %lf", &n_time_d[nrecord], &n_altitude[nrecord]);
 					if (nget == 2)
 						altitude_ok = true;
 				}
 
 				/* deal with altitude in form: yr mon day hour min sec altitude */
-				else if (merge_altitude_format == 2) {
+				else if (merge_altitude_format == MB_PR_ALTITUDE_FORMAT_YMDHMSA) {
 					nget = sscanf(buffer, "%d %d %d %d %d %lf %lf", &time_i[0], &time_i[1], &time_i[2], &time_i[3], &time_i[4],
 					              &sec, &n_altitude[nrecord]);
 					time_i[5] = (int)sec;
@@ -1842,7 +1909,7 @@ int mb_loadaltitudedata(int verbose, char *merge_altitude_file, int merge_altitu
 				}
 
 				/* deal with altitude in form: yr jday hour min sec altitude */
-				else if (merge_altitude_format == 3) {
+				else if (merge_altitude_format == MB_PR_ALTITUDE_FORMAT_YJHMSA) {
 					nget = sscanf(buffer, "%d %d %d %d %lf %lf", &time_j[0], &time_j[1], &ihr, &time_j[2], &sec,
 					              &n_altitude[nrecord]);
 					time_j[2] = time_j[2] + 60 * ihr;
@@ -1856,7 +1923,7 @@ int mb_loadaltitudedata(int verbose, char *merge_altitude_file, int merge_altitu
 				}
 
 				/* deal with altitude in form: yr jday daymin sec altitude */
-				else if (merge_altitude_format == 4) {
+				else if (merge_altitude_format == MB_PR_ALTITUDE_FORMAT_YJMSA) {
 					nget = sscanf(buffer, "%d %d %d %lf %lf", &time_j[0], &time_j[1], &time_j[2], &sec, &n_altitude[nrecord]);
 					time_j[3] = (int)sec;
 					time_j[4] = 1000000 * (sec - time_j[3]);
@@ -1996,14 +2063,14 @@ int mb_loadheadingdata(int verbose, char *merge_heading_file, int merge_heading_
 				heading_ok = false;
 
 				/* deal with heading in form: time_d heading */
-				if (merge_heading_format == 1) {
+				if (merge_heading_format == MB_PR_HEADING_FORMAT_TH) {
 					nget = sscanf(buffer, "%lf %lf", &n_time_d[nrecord], &n_heading[nrecord]);
 					if (nget == 2)
 						heading_ok = true;
 				}
 
 				/* deal with heading in form: yr mon day hour min sec heading */
-				else if (merge_heading_format == 2) {
+				else if (merge_heading_format == MB_PR_HEADING_FORMAT_YMDHMSH) {
 					nget = sscanf(buffer, "%d %d %d %d %d %lf %lf", &time_i[0], &time_i[1], &time_i[2], &time_i[3], &time_i[4],
 					              &sec, &n_heading[nrecord]);
 					time_i[5] = (int)sec;
@@ -2015,7 +2082,7 @@ int mb_loadheadingdata(int verbose, char *merge_heading_file, int merge_heading_
 				}
 
 				/* deal with heading in form: yr jday hour min sec heading */
-				else if (merge_heading_format == 3) {
+				else if (merge_heading_format == MB_PR_HEADING_FORMAT_YJHMSH) {
 					nget = sscanf(buffer, "%d %d %d %d %lf %lf", &time_j[0], &time_j[1], &ihr, &time_j[2], &sec,
 					              &n_heading[nrecord]);
 					time_j[2] = time_j[2] + 60 * ihr;
@@ -2029,7 +2096,7 @@ int mb_loadheadingdata(int verbose, char *merge_heading_file, int merge_heading_
 				}
 
 				/* deal with heading in form: yr jday daymin sec heading */
-				else if (merge_heading_format == 4) {
+				else if (merge_heading_format == MB_PR_HEADING_FORMAT_YJMSH) {
 					nget = sscanf(buffer, "%d %d %d %lf %lf", &time_j[0], &time_j[1], &time_j[2], &sec, &n_heading[nrecord]);
 					time_j[3] = (int)sec;
 					time_j[4] = 1000000 * (sec - time_j[3]);
@@ -2041,7 +2108,7 @@ int mb_loadheadingdata(int verbose, char *merge_heading_file, int merge_heading_
 				}
 
 				/* deal with heading in form: yr mon day hour min sec time_d lon lat heading speed draft*/
-				else if (merge_heading_format == 9) {
+				else if (merge_heading_format == MB_PR_HEADING_FORMAT_FBT) {
 					nget = sscanf(buffer, "%d %d %d %d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", &time_i[0], &time_i[1],
 					              &time_i[2], &time_i[3], &time_i[4], &sec, &n_time_d[nrecord], &lon, &lat, &n_heading[nrecord],
 					              &speed, &sensordepth, &roll, &pitch, &heave);
@@ -2049,6 +2116,31 @@ int mb_loadheadingdata(int verbose, char *merge_heading_file, int merge_heading_
 						heading_ok = true;
 					if (nrecord > 0 && n_time_d[nrecord] <= n_time_d[nrecord - 1])
 						heading_ok = false;
+				}
+
+				/* deal with nav in Schmidt Ocean Institute RVDAS form:
+				    Timestamp,Header,Roll_deg,Pitch_deg,HeadingTrue_deg,OrientStatus,Latitude_ddeg,Longitude_ddeg,PositionStatus,VelocityFwd_m/s,VelocityStbd_m/s,VelocityDown_m/s,Altitude_m,Altitude_Status,Depth_m,Depth_Used
+				    2024-03-02T07:05:39.312291Z,$SPRINT,-2.7356,-1.87866,17.0837,1,-25.21617622,-90.36081369,1,0.004,0.002,-0.005,0.55,1,1076.81,1,
+				     */
+				else if (merge_heading_format == MB_PR_HEADING_FORMAT_RVDAS) {
+					int position_status;
+					int attitude_status;
+					int altitude_status;
+					int depth_status;
+					double vel_fwd, vel_stbd, vel_down;
+					double altitude;
+					double lon, lat;
+					nget =
+					    sscanf(buffer, "%d-%d-%dT%d:%d:%lfZ,$SPRINT,%lf,%lf,%lf,%d,%lf,%lf,%d,%lf,%lf,%lf,%lf,%d,%lf,%d", 
+					    	&time_i[0], &time_i[1], &time_i[2], &time_i[3], &time_i[4], &sec, 
+					    	&roll, &pitch, &n_heading[nrecord], &attitude_status, &lat, &lon, &position_status, 
+					    	&vel_fwd, &vel_stbd, &vel_down, &altitude, &altitude_status, &sensordepth, &depth_status);
+					time_i[5] = (int)floor(sec);
+					time_i[6] = (int)((sec - time_i[5]) * 1000000);
+					mb_get_time(verbose, time_i, &time_d);
+					n_time_d[nrecord] = time_d;
+					if (nget == 20)
+						heading_ok = true;
 				}
 
 				/* output some debug values */
@@ -2193,7 +2285,7 @@ int mb_loadattitudedata(int verbose, char *merge_attitude_file, int merge_attitu
 				attitude_ok = false;
 
 				/* deal with attitude in form: time_d roll pitch heave */
-				if (merge_attitude_format == 1) {
+				if (merge_attitude_format == MB_PR_ATTITUDE_FORMAT_TRPH) {
 					nget = sscanf(buffer, "%lf %lf %lf %lf", &n_time_d[nrecord], &n_roll[nrecord], &n_pitch[nrecord],
 					              &n_heave[nrecord]);
 					if (nget == 4)
@@ -2201,7 +2293,7 @@ int mb_loadattitudedata(int verbose, char *merge_attitude_file, int merge_attitu
 				}
 
 				/* deal with attitude in form: yr mon day hour min sec roll pitch heave */
-				else if (merge_attitude_format == 2) {
+				else if (merge_attitude_format == MB_PR_ATTITUDE_FORMAT_YMDHMSRPH) {
 					nget = sscanf(buffer, "%d %d %d %d %d %lf %lf %lf %lf", &time_i[0], &time_i[1], &time_i[2], &time_i[3],
 					              &time_i[4], &sec, &n_roll[nrecord], &n_pitch[nrecord], &n_heave[nrecord]);
 					time_i[5] = (int)sec;
@@ -2213,7 +2305,7 @@ int mb_loadattitudedata(int verbose, char *merge_attitude_file, int merge_attitu
 				}
 
 				/* deal with attitude in form: yr jday hour min sec roll pitch heave */
-				else if (merge_attitude_format == 3) {
+				else if (merge_attitude_format == MB_PR_ATTITUDE_FORMAT_YJHMSRPH) {
 					nget = sscanf(buffer, "%d %d %d %d %lf %lf %lf %lf", &time_j[0], &time_j[1], &ihr, &time_j[2], &sec,
 					              &n_roll[nrecord], &n_pitch[nrecord], &n_heave[nrecord]);
 					time_j[2] = time_j[2] + 60 * ihr;
@@ -2227,7 +2319,7 @@ int mb_loadattitudedata(int verbose, char *merge_attitude_file, int merge_attitu
 				}
 
 				/* deal with attitude in form: yr jday daymin sec roll pitch heave */
-				else if (merge_attitude_format == 4) {
+				else if (merge_attitude_format == MB_PR_ATTITUDE_FORMAT_YJMSRPH) {
 					nget = sscanf(buffer, "%d %d %d %lf %lf %lf %lf", &time_j[0], &time_j[1], &time_j[2], &sec, &n_roll[nrecord],
 					              &n_pitch[nrecord], &n_heave[nrecord]);
 					time_j[3] = (int)sec;
@@ -2241,7 +2333,7 @@ int mb_loadattitudedata(int verbose, char *merge_attitude_file, int merge_attitu
 
 				/* deal with attitude in form: yr mon day hour min sec time_d lon lat heading speed sensordepth roll pitch heave
 				 */
-				else if (merge_attitude_format == 9) {
+				else if (merge_attitude_format == MB_PR_ATTITUDE_FORMAT_FBT) {
 					nget = sscanf(buffer, "%d %d %d %d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", &time_i[0], &time_i[1],
 					              &time_i[2], &time_i[3], &time_i[4], &sec, &n_time_d[nrecord], &lon, &lat, &heading, &speed,
 					              &sensordepth, &n_roll[nrecord], &n_pitch[nrecord], &n_heave[nrecord]);
@@ -2249,6 +2341,32 @@ int mb_loadattitudedata(int verbose, char *merge_attitude_file, int merge_attitu
 						attitude_ok = true;
 					if (nrecord > 0 && n_time_d[nrecord] <= n_time_d[nrecord - 1])
 						attitude_ok = false;
+				}
+
+				/* deal with nav in Schmidt Ocean Institute RVDAS form:
+				    Timestamp,Header,Roll_deg,Pitch_deg,HeadingTrue_deg,OrientStatus,Latitude_ddeg,Longitude_ddeg,PositionStatus,VelocityFwd_m/s,VelocityStbd_m/s,VelocityDown_m/s,Altitude_m,Altitude_Status,Depth_m,Depth_Used
+				    2024-03-02T07:05:39.312291Z,$SPRINT,-2.7356,-1.87866,17.0837,1,-25.21617622,-90.36081369,1,0.004,0.002,-0.005,0.55,1,1076.81,1,
+				     */
+				else if (merge_attitude_format == MB_PR_ATTITUDE_FORMAT_RVDAS) {
+					int position_status;
+					int attitude_status;
+					int altitude_status;
+					int depth_status;
+					double vel_fwd, vel_stbd, vel_down;
+					double altitude;
+					double lon, lat;
+					nget =
+					    sscanf(buffer, "%d-%d-%dT%d:%d:%lfZ,$SPRINT,%lf,%lf,%lf,%d,%lf,%lf,%d,%lf,%lf,%lf,%lf,%d,%lf,%d", 
+					    	&time_i[0], &time_i[1], &time_i[2], &time_i[3], &time_i[4], &sec, 
+					    	&n_roll[nrecord], &n_pitch[nrecord], &heading, &attitude_status, &lat, &lon, &position_status, 
+					    	&vel_fwd, &vel_stbd, &vel_down, &altitude, &altitude_status, &sensordepth, &depth_status);
+					time_i[5] = (int)floor(sec);
+					time_i[6] = (int)((sec - time_i[5]) * 1000000);
+					mb_get_time(verbose, time_i, &time_d);
+					n_time_d[nrecord] = time_d;
+					n_heave[nrecord] = 0.0;
+					if (nget == 20)
+						attitude_ok = true;
 				}
 
 				/* output some debug values */
@@ -2384,14 +2502,14 @@ int mb_loadsoundspeeddata(int verbose, char *merge_soundspeed_file, int merge_so
 				soundspeed_ok = false;
 
 				/* deal with soundspeed in form: time_d soundspeed */
-				if (merge_soundspeed_format == 1) {
+				if (merge_soundspeed_format == MB_PR_SOUNDSPEED_FORMAT_TS) {
 					nget = sscanf(buffer, "%lf %lf", &n_time_d[nrecord], &n_soundspeed[nrecord]);
 					if (nget == 2)
 						soundspeed_ok = true;
 				}
 
 				/* deal with soundspeed in form: yr mon day hour min sec soundspeed */
-				else if (merge_soundspeed_format == 2) {
+				else if (merge_soundspeed_format == MB_PR_SOUNDSPEED_FORMAT_YMDHMSS) {
 					nget = sscanf(buffer, "%d %d %d %d %d %lf %lf", &time_i[0], &time_i[1], &time_i[2], &time_i[3], &time_i[4],
 					              &sec, &n_soundspeed[nrecord]);
 					time_i[5] = (int)sec;
@@ -2403,7 +2521,7 @@ int mb_loadsoundspeeddata(int verbose, char *merge_soundspeed_file, int merge_so
 				}
 
 				/* deal with soundspeed in form: yr jday hour min sec soundspeed */
-				else if (merge_soundspeed_format == 3) {
+				else if (merge_soundspeed_format == MB_PR_SOUNDSPEED_FORMAT_YJHMSS) {
 					nget = sscanf(buffer, "%d %d %d %d %lf %lf", &time_j[0], &time_j[1], &ihr, &time_j[2], &sec,
 					              &n_soundspeed[nrecord]);
 					time_j[2] = time_j[2] + 60 * ihr;
@@ -2417,7 +2535,7 @@ int mb_loadsoundspeeddata(int verbose, char *merge_soundspeed_file, int merge_so
 				}
 
 				/* deal with soundspeed in form: yr jday daymin sec soundspeed */
-				else if (merge_soundspeed_format == 4) {
+				else if (merge_soundspeed_format == MB_PR_SOUNDSPEED_FORMAT_YJMSS) {
 					nget = sscanf(buffer, "%d %d %d %lf %lf", &time_j[0], &time_j[1], &time_j[2], &sec, &n_soundspeed[nrecord]);
 					time_j[3] = (int)sec;
 					time_j[4] = 1000000 * (sec - time_j[3]);
@@ -2558,14 +2676,14 @@ int mb_loadtimeshiftdata(int verbose, char *merge_timeshift_file, int merge_time
 				timeshift_ok = false;
 
 				/* deal with timeshift in form: time_d timeshift */
-				if (merge_timeshift_format == 1) {
+				if (merge_timeshift_format == MB_PR_TIMESHIFT_FORMAT_TT) {
 					nget = sscanf(buffer, "%lf %lf", &n_time_d[nrecord], &n_timeshift[nrecord]);
 					if (nget == 2)
 						timeshift_ok = true;
 				}
 
 				/* deal with timeshift in form: yr mon day hour min sec timeshift */
-				else if (merge_timeshift_format == 2) {
+				else if (merge_timeshift_format == MB_PR_TIMESHIFT_FORMAT_YMDHMST) {
 					nget = sscanf(buffer, "%d %d %d %d %d %lf %lf", &time_i[0], &time_i[1], &time_i[2], &time_i[3], &time_i[4],
 					              &sec, &n_timeshift[nrecord]);
 					time_i[5] = (int)sec;
@@ -2577,7 +2695,7 @@ int mb_loadtimeshiftdata(int verbose, char *merge_timeshift_file, int merge_time
 				}
 
 				/* deal with timeshift in form: yr jday hour min sec timeshift */
-				else if (merge_timeshift_format == 3) {
+				else if (merge_timeshift_format == MB_PR_TIMESHIFT_FORMAT_YJHMST) {
 					nget = sscanf(buffer, "%d %d %d %d %lf %lf", &time_j[0], &time_j[1], &ihr, &time_j[2], &sec,
 					              &n_timeshift[nrecord]);
 					time_j[2] = time_j[2] + 60 * ihr;
@@ -2591,7 +2709,7 @@ int mb_loadtimeshiftdata(int verbose, char *merge_timeshift_file, int merge_time
 				}
 
 				/* deal with timeshift in form: yr jday daymin sec timeshift */
-				else if (merge_timeshift_format == 4) {
+				else if (merge_timeshift_format == MB_PR_TIMESHIFT_FORMAT_YJMST) {
 					nget = sscanf(buffer, "%d %d %d %lf %lf", &time_j[0], &time_j[1], &time_j[2], &sec, &n_timeshift[nrecord]);
 					time_j[3] = (int)sec;
 					time_j[4] = 1000000 * (sec - time_j[3]);

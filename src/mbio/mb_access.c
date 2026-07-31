@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:  mb_access.c  11/1/00
   *
- *    Copyright (c) 2000-2020 by
+ *    Copyright (c) 2000-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * This source file includes the functions used to extract data from
@@ -1910,7 +1920,7 @@ int mb_extract_segytraceheader(int verbose, void *mbio_ptr, void *store_ptr, int
     fprintf(stderr, "dbg2       dummy1:            %f\n", mb_segytraceheader_ptr->dummy1);
     fprintf(stderr, "dbg2       dummy2:            %f\n", mb_segytraceheader_ptr->dummy2);
     fprintf(stderr, "dbg2       dummy3:            %f\n", mb_segytraceheader_ptr->dummy3);
-    fprintf(stderr, "dbg2       dummy4:            %f\n", mb_segytraceheader_ptr->dummy4);
+    fprintf(stderr, "dbg2       sensordepthtime:   %f\n", mb_segytraceheader_ptr->sensordepthtime);
     fprintf(stderr, "dbg2       soundspeed:        %f\n", mb_segytraceheader_ptr->soundspeed);
     fprintf(stderr, "dbg2       distance:          %f\n", mb_segytraceheader_ptr->distance);
     fprintf(stderr, "dbg2       dummy7:            %f\n", mb_segytraceheader_ptr->roll);
@@ -2015,7 +2025,7 @@ int mb_extract_segy(int verbose, void *mbio_ptr, void *store_ptr, int *samplefor
     fprintf(stderr, "dbg2       dummy1:         %f\n", mb_segytraceheader_ptr->dummy1);
     fprintf(stderr, "dbg2       dummy2:         %f\n", mb_segytraceheader_ptr->dummy2);
     fprintf(stderr, "dbg2       dummy3:         %f\n", mb_segytraceheader_ptr->dummy3);
-    fprintf(stderr, "dbg2       dummy4:         %f\n", mb_segytraceheader_ptr->dummy4);
+    fprintf(stderr, "dbg2       sensordepthtime:%f\n", mb_segytraceheader_ptr->sensordepthtime);
     fprintf(stderr, "dbg2       soundspeed:     %f\n", mb_segytraceheader_ptr->soundspeed);
     fprintf(stderr, "dbg2       distance:       %f\n", mb_segytraceheader_ptr->distance);
     fprintf(stderr, "dbg2       dummy7:         %f\n", mb_segytraceheader_ptr->roll);
@@ -2104,7 +2114,7 @@ int mb_insert_segy(int verbose, void *mbio_ptr, void *store_ptr, int kind, void 
     fprintf(stderr, "dbg2       dummy1:         %f\n", mb_segytraceheader_ptr->dummy1);
     fprintf(stderr, "dbg2       dummy2:         %f\n", mb_segytraceheader_ptr->dummy2);
     fprintf(stderr, "dbg2       dummy3:         %f\n", mb_segytraceheader_ptr->dummy3);
-    fprintf(stderr, "dbg2       dummy4:         %f\n", mb_segytraceheader_ptr->dummy4);
+    fprintf(stderr, "dbg2       sensordepthtime:%f\n", mb_segytraceheader_ptr->sensordepthtime);
     fprintf(stderr, "dbg2       soundspeed:     %f\n", mb_segytraceheader_ptr->soundspeed);
     fprintf(stderr, "dbg2       distance:       %f\n", mb_segytraceheader_ptr->distance);
     fprintf(stderr, "dbg2       roll:           %f\n", mb_segytraceheader_ptr->roll);

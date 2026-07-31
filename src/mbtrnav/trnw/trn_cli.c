@@ -63,6 +63,7 @@
 // Headers 
 /////////////////////////
 #include "trn_cli.h"
+#include "mxdebug.h"
 
 /////////////////////////
 // Macros
@@ -119,8 +120,8 @@ static int32_t s_trncli_send_recv(trncli_t *self, byte *msg, int32_t len, bool b
         }
     }
 
-    PDPRINT((stderr,"%s - send ret[%"PRId32"]\n",__FUNCTION__,sret));
-    PDPRINT((stderr,"%s - recv ret[%"PRId32"]\n",__FUNCTION__,rret));
+    MX_DEBUG("%s - send ret[%"PRId32"]\n",__FUNCTION__, sret);
+    MX_DEBUG("%s - recv ret[%"PRId32"]\n",__FUNCTION__, rret);
 
     return retval;
 }// end function s_trncli_send_recv
@@ -134,7 +135,21 @@ trncli_t *trncli_new(long int utm_zone)
         instance->utm_zone=utm_zone;
         instance->trn = msock_connection_new();
     }
-    
+
+    return instance;
+}// end function trncli_new
+
+trncli_t *trncli_gcnew(wgeocon_t *gcon)
+{
+    trncli_t *instance=(trncli_t *)malloc(sizeof(trncli_t));
+    if(NULL!=instance){
+        memset(instance,0,sizeof(trncli_t));
+        instance->measurement = NULL;
+        instance->utm_zone=0;
+        instance->trn = msock_connection_new();
+        instance->geocon = gcon;
+    }
+
     return instance;
 }// end function trncli_new
 
@@ -203,13 +218,15 @@ int trncli_send_update(trncli_t *self, mb1_t *src, wposet_t **pt_out, wmeast_t *
 
     if(NULL!=self && NULL!=src && NULL!=pt_out && NULL!=mt_out){
         int test=-1;
-        if( (test=wmeast_mb1_to_meas(mt_out, src, self->utm_zone)) == 0){
+        if( (test = wmeast_mb1_to_meas(mt_out, src, self->geocon)) == 0){
+        // if( (test = wmeast_mb1_to_meas(mt_out, src, self->utm_zone)) == 0){
 
-            if( (test=wposet_mb1_to_pose(pt_out, src, self->utm_zone)) == 0){
+            if( (test = wposet_mb1_to_pose(pt_out, src, self->geocon)) == 0){
+            // if( (test = wposet_mb1_to_pose(pt_out, src, self->utm_zone)) == 0){
                 // must do motion update first if pt time <= mt time
 
-                if(trncli_update_motion(self,*pt_out)>0){
-                    if(trncli_update_measurement(self, *mt_out)>0){
+                if(trncli_update_motion(self, *pt_out) > 0){
+                    if(trncli_update_measurement(self, *mt_out) > 0){
                         retval=0;
                     }else{
                         fprintf(stderr,"trncli_update_measurement failed [%d]\n",test);
@@ -241,9 +258,11 @@ int trncli_get_bias_estimates(trncli_t *self, wposet_t *pt, pt_cdata_t **pt_out,
     if(NULL!=self && NULL!=pt && NULL!=mle_out && NULL!=mse_out){
 
         int32_t uret = trncli_estimate_pose(self, &mle, TRN_MSG_MLE);
+
         if(uret > 0){
 
             uret = trncli_estimate_pose(self, &mse, TRN_MSG_MMSE);
+
             if(uret > 0){
                 retval=0;
             }else{
@@ -276,6 +295,8 @@ int trncli_get_bias_estimates(trncli_t *self, wposet_t *pt, pt_cdata_t **pt_out,
         wposet_destroy(mle);
         wposet_destroy(mse);
 
+    } else {
+        fprintf(stderr,"%s:%d ERR - invalid input cli[%p] pt[%p] mle_out[%p] mse_out[%p] \n", __func__, __LINE__, self, pt, mle_out, mse_out);
     }
 
     return retval;
@@ -422,7 +443,7 @@ int trncli_triplet_set(trncli_t *self, int msg_type, d_triplet_t *src)
                 if( wcommst_cdata_unserialize(&ct_dat,(char *)msg)==0 && NULL!=ct_dat){
                     retval = ( (ct_dat->msg_type==TRN_MSG_ACK) ? 0 : -1);
                 }
-                // release cdata resources
+                // release cdata resourcess
                 if(NULL!=ct_dat){
                     wcommst_cdata_destroy(&ct_dat);
                 }
@@ -437,10 +458,10 @@ int trncli_triplet_set(trncli_t *self, int msg_type, d_triplet_t *src)
     return retval;
 }// end function trncli_triplet_set
 
-int trncli_mb1_to_meas(wmeast_t **dest, mb1_t *src, long int utmZone)
-{
-    return wmeast_mb1_to_meas(dest, src,utmZone);
-}// end function trncli_mb1_to_meas
+//int trncli_mb1_to_meas(wmeast_t **dest, mb1_t *src, long int utmZone)
+//{
+//    return wmeast_mb1_to_meas(dest, src,utmZone);
+//}// end function trncli_mb1_to_meas
 
 int trncli_cdata_to_pose(wposet_t **dest, pt_cdata_t *src)
 {

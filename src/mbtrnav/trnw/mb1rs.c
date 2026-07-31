@@ -69,8 +69,6 @@
 #include "mb1_msg.h"
 #include "mthread.h"
 #include "msocket.h"
-#include "mmdebug.h"
-#include "medebug.h"
 #include "merror.h"
 #include "mtime.h"
 
@@ -159,7 +157,7 @@ int64_t s_file_frame_fn(mb1rs_ctx_t *ctx, byte *r_buf, uint32_t len)
             uint32_t readlen = 1;
             uint32_t record_bytes=0;
             int64_t read_bytes=0;
-            uint32_t sync_bytes=0;
+//            uint32_t sync_bytes=0;
             mb1_t *dest = mb1_new(MB1_MAX_BEAMS);
 
             // sync to start of record
@@ -172,9 +170,10 @@ int64_t s_file_frame_fn(mb1rs_ctx_t *ctx, byte *r_buf, uint32_t len)
                     bp++;
                     readlen=MB1_HEADER_BYTES-1;
                     break;
-                }else{
-                    sync_bytes++;
                 }
+//                else{
+//                    sync_bytes++;
+//                }
             }
 
             // if start of sync found, read header (fixed-length sounding bytes)
@@ -278,7 +277,7 @@ int64_t s_auto_frame_fn(mb1rs_ctx_t *ctx, byte *dest, uint32_t len)
         snd->nbeams = nbeams_hint;
         snd->ping_number = cx;
         snd->ts = stime;
-        unsigned int k=0;
+        int k=0;
         for(k=0;k<nbeams_hint;k++){
             snd->beams[k].beam_num=k;
             snd->beams[k].rhox = RX-0.02*k*nbeams_hint+0.01*k*k;
@@ -652,3 +651,5 @@ int mb1rs_stop(mb1rs_ctx_t *self)
     }
     return retval;
 }
+
+

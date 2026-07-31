@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:  mbgrdviz_callbacks.c    10/9/2002
  *
- *    Copyright (c) 2002-2020 by
+ *    Copyright (c) 2002-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 
 #include <ctype.h>
@@ -68,16 +78,18 @@
 #define MBGRDVIZ_SAVEROUTEREVERSED 8
 #define MBGRDVIZ_SAVERISISCRIPTHEADING 9
 #define MBGRDVIZ_SAVERISISCRIPTNOHEADING 10
-#define MBGRDVIZ_SAVEWINFROGPTS 11
-#define MBGRDVIZ_SAVEWINFROGWPT 12
+#define MBGRDVIZ_SAVERISI2SCRIPTHEADING 11
+#define MBGRDVIZ_SAVERISI2SCRIPTNOHEADING 12
 #define MBGRDVIZ_SAVEDEGDECMIN 13
 #define MBGRDVIZ_SAVELNW 14
 #define MBGRDVIZ_SAVEGREENSEAYML 15
 #define MBGRDVIZ_SAVETECDISLST 16
-#define MBGRDVIZ_SAVESITE 17
-#define MBGRDVIZ_SAVESITEWPT 18
-#define MBGRDVIZ_SAVEPROFILE 19
-#define MBGRDVIZ_REALTIME 20
+#define MBGRDVIZ_SAVEKONGSBERGDP 17
+#define MBGRDVIZ_SAVESISASCIIPLAN1 18
+#define MBGRDVIZ_SAVESISASCIIPLAN2 19
+#define MBGRDVIZ_SAVESITE 20
+#define MBGRDVIZ_SAVEPROFILE 21
+#define MBGRDVIZ_REALTIME 22
 
 /* Projection defines */
 #define ModelTypeProjected 1
@@ -85,10 +97,13 @@
 #define GCS_WGS_84 4326
 
 /* Site and route file versions */
-#define MBGRDVIZ_SITE_VERSION "1.00"
-#define MBGRDVIZ_ROUTE_VERSION "1.00"
+#define MBGRDVIZ_SITE_VERSION_MAJOR 2
+#define MBGRDVIZ_SITE_VERSION_MINOR 0
+#define MBGRDVIZ_ROUTE_VERSION_MAJOR 2
+#define MBGRDVIZ_ROUTE_VERSION_MINOR 0
 #define MBGRDVIZ_PROFILE_VERSION "1.00"
 #define MBGRDVIZ_RISISCRIPT_VERSION "1.00"
+#define MBGRDVIZ_RISI2SCRIPT_VERSION "2.00"
 
 /* Survey planning parameters */
 #define MBGRDVIZ_SURVEY_MODE_UNIFORM 0
@@ -150,11 +165,12 @@ void do_mbgrdviz_fileSelectionBox_savesitewpt(Widget w, XtPointer client_data, X
 void do_mbgrdviz_fileSelectionBox_saveroute(Widget w, XtPointer client_data, XtPointer call_data);
 void do_mbgrdviz_fileSelectionBox_saverisiscriptheading(Widget w, XtPointer client_data, XtPointer call_data);
 void do_mbgrdviz_fileSelectionBox_saverisiscriptnoheading(Widget w, XtPointer client_data, XtPointer call_data);
-void do_mbgrdviz_fileSelectionBox_savewinfrogpts(Widget w, XtPointer client_data, XtPointer call_data);
-void do_mbgrdviz_fileSelectionBox_savewinfrogwpt(Widget w, XtPointer client_data, XtPointer call_data);
 void do_mbgrdviz_fileSelectionBox_savedegdecmin(Widget w, XtPointer client_data, XtPointer call_data);
 void do_mbgrdviz_fileSelectionBox_savelnw(Widget w, XtPointer client_data, XtPointer call_data);
 void do_mbgrdviz_fileSelectionBox_savetecdislst(Widget w, XtPointer client_data, XtPointer call_data);
+void do_mbgrdviz_fileSelectionBox_savekongsbergdp(Widget w, XtPointer client_data, XtPointer call_data);
+void do_mbgrdviz_fileSelectionBox_savesisasciiplan1(Widget w, XtPointer client_data, XtPointer call_data);
+void do_mbgrdviz_fileSelectionBox_savesisasciiplan2(Widget w, XtPointer client_data, XtPointer call_data);
 void do_mbgrdviz_fileSelectionBox_saveprofile(Widget w, XtPointer client_data, XtPointer call_data);
 void do_mbgrdviz_fileSelectionBox_realtime(Widget w, XtPointer client_data, XtPointer call_data);
 void do_mbgrdviz_openfile(Widget w, XtPointer client_data, XtPointer call_data);
@@ -172,12 +188,15 @@ int do_mbgrdviz_saveroute(size_t instance, char *output_file_ptr);
 int do_mbgrdviz_saveroutereversed(size_t instance, char *output_file_ptr);
 int do_mbgrdviz_saverisiscriptheading(size_t instance, char *output_file_ptr);
 int do_mbgrdviz_saverisiscriptnoheading(size_t instance, char *output_file_ptr);
-int do_mbgrdviz_savewinfrogpts(size_t instance, char *output_file_ptr);
-int do_mbgrdviz_savewinfrogwpt(size_t instance, char *output_file_ptr);
+int do_mbgrdviz_saverisi2scriptheading(size_t instance, char *output_file_ptr);
+int do_mbgrdviz_saverisi2scriptnoheading(size_t instance, char *output_file_ptr);
 int do_mbgrdviz_savedegdecmin(size_t instance, char *output_file_ptr);
 int do_mbgrdviz_savelnw(size_t instance, char *output_file_ptr);
 int do_mbgrdviz_savegreenseayml(size_t instance, char *output_file_ptr);
 int do_mbgrdviz_savetecdislst(size_t instance, char *output_file_ptr);
+int do_mbgrdviz_savekongsbergdp(size_t instance, char *output_file_ptr);
+int do_mbgrdviz_savesisasciiplan1(size_t instance, char *output_file_ptr);
+int do_mbgrdviz_savesisasciiplan2(size_t instance, char *output_file_ptr);
 int do_mbgrdviz_saveprofile(size_t instance, char *output_file_ptr);
 int do_mbgrdviz_readnav(size_t instance, char *swathfile, int pathstatus, char *pathraw, char *pathprocessed, int format,
                         int formatorg, double weight, int *error);
@@ -412,7 +431,7 @@ int do_mbgrdviz_init(int argc, char **argv, int verbosity) {
 
   /* set about version label */
   char value_text[MB_PATH_MAXLINE];
-  sprintf(value_text, "::#TimesMedium14:t\"MB-System Release %s\"#TimesMedium14\"%s\"", MB_VERSION, MB_BUILD_DATE);
+  sprintf(value_text, "::#TimesMedium14:t\"MB-System Release %s\"#TimesMedium14\"%s\"", MB_VERSION, MB_VERSION_DATE);
   set_mbview_label_multiline_string(label_about_version, value_text);
 
   /* get additional widgets */
@@ -885,39 +904,6 @@ void do_mbgrdviz_fileSelectionBox_savesite(Widget w, XtPointer client_data, XtPo
   XmStringFree((XmString)tmp0);
 }
 /*---------------------------------------------------------------------------------------*/
-void do_mbgrdviz_fileSelectionBox_savesitewpt(Widget w, XtPointer client_data, XtPointer call_data) {
-
-  if (verbose >= 2) {
-    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
-    fprintf(stderr, "dbg2  Input arguments:\n");
-    fprintf(stderr, "dbg2       w:           %p\n", w);
-    fprintf(stderr, "dbg2       client_data: %p\n", client_data);
-    fprintf(stderr, "dbg2       call_data:   %p\n", call_data);
-  }
-
-  const size_t instance = (size_t)client_data;
-
-  /* set title to open file dialog  */
-  Cardinal ac = 0;
-  Arg args[256];
-  XtSetArg(args[ac], XmNtitle, "Save Sites as Winfrog WPT File");
-  ac++;
-  XtSetValues(dialogShell_open, args, ac);
-  BxManageCB(w, (XtPointer) "fileSelectionBox", call_data);
-
-  /* set fileSelectionBox parameters */
-  ac = 0;
-  Boolean argok;
-  XmString tmp0 = (XmString)BX_CONVERT(dialogShell_open, "*", XmRXmString, 0, &argok);
-  XtSetArg(args[ac], XmNpattern, tmp0);
-  ac++;
-  const size_t actionid = MBGRDVIZ_SAVESITEWPT * MBV_MAX_WINDOWS + instance;
-  XtSetArg(args[ac], XmNuserData, (XtPointer)actionid);
-  ac++;
-  XtSetValues(fileSelectionBox, args, ac);
-  XmStringFree((XmString)tmp0);
-}
-/*---------------------------------------------------------------------------------------*/
 void do_mbgrdviz_fileSelectionBox_saveroute(Widget w, XtPointer client_data, XtPointer call_data) {
 
   if (verbose >= 2) {
@@ -1050,7 +1036,7 @@ void do_mbgrdviz_fileSelectionBox_saverisiscriptnoheading(Widget w, XtPointer cl
   XmStringFree((XmString)tmp0);
 }
 /*---------------------------------------------------------------------------------------*/
-void do_mbgrdviz_fileSelectionBox_savewinfrogpts(Widget w, XtPointer client_data, XtPointer call_data) {
+void do_mbgrdviz_fileSelectionBox_saverisi2scriptheading(Widget w, XtPointer client_data, XtPointer call_data) {
 
   if (verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -1065,7 +1051,7 @@ void do_mbgrdviz_fileSelectionBox_savewinfrogpts(Widget w, XtPointer client_data
   /* set title to open file dialog  */
   Cardinal ac = 0;
   Arg args[256];
-  XtSetArg(args[ac], XmNtitle, "Save Route as Winfrog PTS File");
+  XtSetArg(args[ac], XmNtitle, "Save Risi Script File (heading varies)");
   ac++;
   XtSetValues(dialogShell_open, args, ac);
   BxManageCB(w, (XtPointer) "fileSelectionBox", call_data);
@@ -1076,14 +1062,14 @@ void do_mbgrdviz_fileSelectionBox_savewinfrogpts(Widget w, XtPointer client_data
   XmString tmp0 = (XmString)BX_CONVERT(dialogShell_open, "*", XmRXmString, 0, &argok);
   XtSetArg(args[ac], XmNpattern, tmp0);
   ac++;
-  const size_t actionid = MBGRDVIZ_SAVEWINFROGPTS * MBV_MAX_WINDOWS + instance;
+  const size_t actionid = MBGRDVIZ_SAVERISI2SCRIPTHEADING * MBV_MAX_WINDOWS + instance;
   XtSetArg(args[ac], XmNuserData, (XtPointer)actionid);
   ac++;
   XtSetValues(fileSelectionBox, args, ac);
   XmStringFree((XmString)tmp0);
 }
 /*---------------------------------------------------------------------------------------*/
-void do_mbgrdviz_fileSelectionBox_savewinfrogwpt(Widget w, XtPointer client_data, XtPointer call_data) {
+void do_mbgrdviz_fileSelectionBox_saverisi2scriptnoheading(Widget w, XtPointer client_data, XtPointer call_data) {
 
   if (verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -1098,7 +1084,7 @@ void do_mbgrdviz_fileSelectionBox_savewinfrogwpt(Widget w, XtPointer client_data
   /* set title to open file dialog  */
   Cardinal ac = 0;
   Arg args[256];
-  XtSetArg(args[ac], XmNtitle, "Save Route as Winfrog WPT File");
+  XtSetArg(args[ac], XmNtitle, "Save Risi Script File (heading static)");
   ac++;
   XtSetValues(dialogShell_open, args, ac);
   BxManageCB(w, (XtPointer) "fileSelectionBox", call_data);
@@ -1109,7 +1095,7 @@ void do_mbgrdviz_fileSelectionBox_savewinfrogwpt(Widget w, XtPointer client_data
   XmString tmp0 = (XmString)BX_CONVERT(dialogShell_open, "*", XmRXmString, 0, &argok);
   XtSetArg(args[ac], XmNpattern, tmp0);
   ac++;
-  const size_t actionid = MBGRDVIZ_SAVEWINFROGWPT * MBV_MAX_WINDOWS + instance;
+  const size_t actionid = MBGRDVIZ_SAVERISI2SCRIPTNOHEADING * MBV_MAX_WINDOWS + instance;
   XtSetArg(args[ac], XmNuserData, (XtPointer)actionid);
   ac++;
   XtSetValues(fileSelectionBox, args, ac);
@@ -1242,6 +1228,105 @@ void do_mbgrdviz_fileSelectionBox_savetecdislst(Widget w, XtPointer client_data,
   XtSetArg(args[ac], XmNpattern, tmp0);
   ac++;
   const size_t actionid = MBGRDVIZ_SAVETECDISLST * MBV_MAX_WINDOWS + instance;
+  XtSetArg(args[ac], XmNuserData, (XtPointer)actionid);
+  ac++;
+  XtSetValues(fileSelectionBox, args, ac);
+  XmStringFree((XmString)tmp0);
+}
+/*---------------------------------------------------------------------------------------*/
+void do_mbgrdviz_fileSelectionBox_savekongsbergdp(Widget w, XtPointer client_data, XtPointer call_data) {
+
+  if (verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2  Input arguments:\n");
+    fprintf(stderr, "dbg2       w:           %p\n", w);
+    fprintf(stderr, "dbg2       client_data: %p\n", client_data);
+    fprintf(stderr, "dbg2       call_data:   %p\n", call_data);
+  }
+
+  const size_t instance = (size_t)client_data;
+
+  /* set title to open file dialog  */
+  Cardinal ac = 0;
+  Arg args[256];
+  XtSetArg(args[ac], XmNtitle, "Save Route as Kongsberg DP Waypoint File");
+  ac++;
+  XtSetValues(dialogShell_open, args, ac);
+  BxManageCB(w, (XtPointer) "fileSelectionBox", call_data);
+
+  /* set fileSelectionBox parameters */
+  ac = 0;
+  Boolean argok;
+  XmString tmp0 = (XmString)BX_CONVERT(dialogShell_open, "*", XmRXmString, 0, &argok);
+  XtSetArg(args[ac], XmNpattern, tmp0);
+  ac++;
+  const size_t actionid = MBGRDVIZ_SAVEKONGSBERGDP * MBV_MAX_WINDOWS + instance;
+  XtSetArg(args[ac], XmNuserData, (XtPointer)actionid);
+  ac++;
+  XtSetValues(fileSelectionBox, args, ac);
+  XmStringFree((XmString)tmp0);
+}
+/*---------------------------------------------------------------------------------------*/
+void do_mbgrdviz_fileSelectionBox_savesisasciiplan1(Widget w, XtPointer client_data, XtPointer call_data) {
+
+  if (verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2  Input arguments:\n");
+    fprintf(stderr, "dbg2       w:           %p\n", w);
+    fprintf(stderr, "dbg2       client_data: %p\n", client_data);
+    fprintf(stderr, "dbg2       call_data:   %p\n", call_data);
+  }
+
+  const size_t instance = (size_t)client_data;
+
+  /* set title to open file dialog  */
+  Cardinal ac = 0;
+  Arg args[256];
+  XtSetArg(args[ac], XmNtitle, "Save Route as SIS ASCIIPlan Waypoint File");
+  ac++;
+  XtSetValues(dialogShell_open, args, ac);
+  BxManageCB(w, (XtPointer) "fileSelectionBox", call_data);
+
+  /* set fileSelectionBox parameters */
+  ac = 0;
+  Boolean argok;
+  XmString tmp0 = (XmString)BX_CONVERT(dialogShell_open, "*", XmRXmString, 0, &argok);
+  XtSetArg(args[ac], XmNpattern, tmp0);
+  ac++;
+  const size_t actionid = MBGRDVIZ_SAVESISASCIIPLAN1 * MBV_MAX_WINDOWS + instance;
+  XtSetArg(args[ac], XmNuserData, (XtPointer)actionid);
+  ac++;
+  XtSetValues(fileSelectionBox, args, ac);
+  XmStringFree((XmString)tmp0);
+}
+/*---------------------------------------------------------------------------------------*/
+void do_mbgrdviz_fileSelectionBox_savesisasciiplan2(Widget w, XtPointer client_data, XtPointer call_data) {
+
+  if (verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2  Input arguments:\n");
+    fprintf(stderr, "dbg2       w:           %p\n", w);
+    fprintf(stderr, "dbg2       client_data: %p\n", client_data);
+    fprintf(stderr, "dbg2       call_data:   %p\n", call_data);
+  }
+
+  const size_t instance = (size_t)client_data;
+
+  /* set title to open file dialog  */
+  Cardinal ac = 0;
+  Arg args[256];
+  XtSetArg(args[ac], XmNtitle, "Save Route as SIS ASCIIPlan Waypoint File");
+  ac++;
+  XtSetValues(dialogShell_open, args, ac);
+  BxManageCB(w, (XtPointer) "fileSelectionBox", call_data);
+
+  /* set fileSelectionBox parameters */
+  ac = 0;
+  Boolean argok;
+  XmString tmp0 = (XmString)BX_CONVERT(dialogShell_open, "*", XmRXmString, 0, &argok);
+  XtSetArg(args[ac], XmNpattern, tmp0);
+  ac++;
+  const size_t actionid = MBGRDVIZ_SAVESISASCIIPLAN2 * MBV_MAX_WINDOWS + instance;
   XtSetArg(args[ac], XmNuserData, (XtPointer)actionid);
   ac++;
   XtSetValues(fileSelectionBox, args, ac);
@@ -1483,13 +1568,6 @@ void do_mbgrdviz_openfile(Widget w, XtPointer client_data, XtPointer call_data) 
     /* status = */ do_mbgrdviz_savesite(instance, file_ptr);
   }
 
-  /* else write site data */
-  else if (mode == MBGRDVIZ_SAVESITEWPT) {
-    /* write site file */
-    do_mbview_message_on("Saving site data...", instance);
-    /* status = */ do_mbgrdviz_savesitewpt(instance, file_ptr);
-  }
-
   /* else write route data */
   else if (mode == MBGRDVIZ_SAVEROUTE) {
     /* write route file */
@@ -1518,18 +1596,18 @@ void do_mbgrdviz_openfile(Widget w, XtPointer client_data, XtPointer call_data) 
     /* status = */ do_mbgrdviz_saverisiscriptnoheading(instance, file_ptr);
   }
 
-  /* else write route data as Winfrog pts file */
-  else if (mode == MBGRDVIZ_SAVEWINFROGPTS) {
+  /* else write route data as Risi 2 script with variable heading */
+  else if (mode == MBGRDVIZ_SAVERISI2SCRIPTHEADING) {
     /* write route file */
-    do_mbview_message_on("Saving route as Winfrog PTS file...", instance);
-    /* status = */ do_mbgrdviz_savewinfrogpts(instance, file_ptr);
+    do_mbview_message_on("Saving route as Risi 2 script with variable heading...", instance);
+    /* status = */ do_mbgrdviz_saverisi2scriptheading(instance, file_ptr);
   }
 
-  /* else write route data as Winfrog wpt file */
-  else if (mode == MBGRDVIZ_SAVEWINFROGWPT) {
+  /* else write route data as Risi 2 script with static heading */
+  else if (mode == MBGRDVIZ_SAVERISI2SCRIPTNOHEADING) {
     /* write route file */
-    do_mbview_message_on("Saving route as Winfrog WPT file...", instance);
-    /* status = */ do_mbgrdviz_savewinfrogwpt(instance, file_ptr);
+    do_mbview_message_on("Saving route as Risi 2 script with static heading...", instance);
+    /* status = */ do_mbgrdviz_saverisi2scriptnoheading(instance, file_ptr);
   }
 
   /* else write route data as degrees decimal minutes file */
@@ -1558,6 +1636,27 @@ void do_mbgrdviz_openfile(Widget w, XtPointer client_data, XtPointer call_data) 
     /* write route file */
     do_mbview_message_on("Saving route as TECDIS LST file...", instance);
     /* status = */ do_mbgrdviz_savetecdislst(instance, file_ptr);
+  }
+
+  /* else write route data as Kongsberg DP waypoint file */
+  else if (mode == MBGRDVIZ_SAVEKONGSBERGDP) {
+    /* write route file */
+    do_mbview_message_on("Saving route as Kongsberg DP waypoint file...", instance);
+    /* status = */ do_mbgrdviz_savekongsbergdp(instance, file_ptr);
+  }
+
+  /* else write route data as SIS ASCIIPlan waypoint file */
+  else if (mode == MBGRDVIZ_SAVESISASCIIPLAN1) {
+    /* write route file */
+    do_mbview_message_on("Saving route as SIS ASCIIPlan lines file...", instance);
+    /* status = */ do_mbgrdviz_savesisasciiplan1(instance, file_ptr);
+  }
+
+  /* else write route data as SIS ASCIIPlan waypoint file */
+  else if (mode == MBGRDVIZ_SAVESISASCIIPLAN2) {
+    /* write route file */
+    do_mbview_message_on("Saving route as SIS ASCIIPlan route file...", instance);
+    /* status = */ do_mbgrdviz_savesisasciiplan2(instance, file_ptr);
   }
 
   /* else write route data */
@@ -1590,8 +1689,9 @@ int do_mbgrdviz_openprimary(char *input_file_ptr) {
   char *button_name_ptr;
   size_t instance;
   char *testname = "Internal Test Grid";
-  int projectionid, utmzone;
-  double reference_lon;
+  double lon_origin;
+  double lat_origin;
+  int projectionid;
 
   /* mbview parameters */
   char mbv_title[MB_PATH_MAXLINE];
@@ -1616,6 +1716,7 @@ int do_mbgrdviz_openprimary(char *input_file_ptr) {
   int mbv_site_view_mode;
   int mbv_route_view_mode;
   int mbv_nav_view_mode;
+  int mbv_navswathbounds_view_mode;
   int mbv_navdrape_view_mode;
   int mbv_vector_view_mode;
   int mbv_primary_colortable;
@@ -1733,6 +1834,7 @@ int do_mbgrdviz_openprimary(char *input_file_ptr) {
       mbv_site_view_mode = MBV_VIEW_OFF;
       mbv_route_view_mode = MBV_VIEW_OFF;
       mbv_nav_view_mode = MBV_VIEW_OFF;
+      mbv_navswathbounds_view_mode = MBV_VIEW_OFF;
       mbv_navdrape_view_mode = MBV_VIEW_OFF;
       mbv_vector_view_mode = MBV_VIEW_OFF;
       mbv_primary_colortable = MBV_COLORTABLE_HAXBY;
@@ -1777,23 +1879,20 @@ int do_mbgrdviz_openprimary(char *input_file_ptr) {
       }
 
       /* else if grid geographic and covers much of the world use spheroid */
-      else if (mbv_primary_xmax - mbv_primary_xmin > 15.0 || mbv_primary_ymax - mbv_primary_ymin > 15.0) {
+      else if (mbv_primary_xmax - mbv_primary_xmin > 20.0 || mbv_primary_ymax - mbv_primary_ymin > 20.0) {
         mbv_display_projection_mode = MBV_PROJECTION_SPHEROID;
         sprintf(mbv_display_projection_id, "SPHEROID");
       }
 
-      /* else if grid geographic then use appropriate UTM zone for non-polar grids */
+      /* else if grid geographic then use LTM projection with origin at the center of the 
+      		grid for non-polar grids */
       else if (mbv_primary_ymax > -80.0 && mbv_primary_ymin < 84.0) {
         mbv_display_projection_mode = MBV_PROJECTION_PROJECTED;
-        reference_lon = 0.5 * (mbv_primary_xmin + mbv_primary_xmax);
-        if (reference_lon > 180.0)
-          reference_lon -= 360.0;
-        utmzone = (int)(((reference_lon + 183.0) / 6.0) + 0.5);
-        if (0.5 * (mbv_primary_ymin + mbv_primary_ymax) >= 0.0)
-          projectionid = 32600 + utmzone;
-        else
-          projectionid = 32700 + utmzone;
-        sprintf(mbv_display_projection_id, "EPSG:%d", projectionid);
+        lon_origin = 0.5 * (mbv_primary_xmin + mbv_primary_xmax);
+        lat_origin = 0.5 * (mbv_primary_ymin + mbv_primary_ymax);
+        if (lon_origin > 180.0)
+          lon_origin -= 360.0;
+        sprintf(mbv_display_projection_id, "LTM%.5f/%.5f", lon_origin, lat_origin);
       }
 
       /* else if grid geographic and more northerly than 84 deg N then use
@@ -1822,8 +1921,8 @@ int do_mbgrdviz_openprimary(char *input_file_ptr) {
     if (mbv_primary_grid_projection_mode != MBV_PROJECTION_PROJECTED) {
       double mtodeglon, mtodeglat;
       mb_coor_scale(verbose, 0.5 * (mbv_primary_ymin + mbv_primary_ymax), &mtodeglon, &mtodeglat);
-      fprintf(stderr, "Geographic grid bounds: %f %f %f %f   Longitude scaling: %.8f m/deg  Latitude scaling: %.8f m/deg\n",
-          mbv_primary_xmin, mbv_primary_xmax, mbv_primary_ymin, mbv_primary_ymax, mtodeglon, mtodeglat);
+      //fprintf(stderr, "Geographic grid bounds: %f %f %f %f   Longitude scaling: %.8f m/deg  Latitude scaling: %.8f m/deg\n",
+      //    mbv_primary_xmin, mbv_primary_xmax, mbv_primary_ymin, mbv_primary_ymax, mtodeglon, mtodeglat);
     }
 
     /* set basic mbview view controls */
@@ -1831,8 +1930,9 @@ int do_mbgrdviz_openprimary(char *input_file_ptr) {
       status = mbview_setviewcontrols(
           verbose, instance, mbv_display_mode, mbv_mouse_mode, mbv_grid_mode, mbv_primary_histogram,
           mbv_primaryslope_histogram, mbv_secondary_histogram, mbv_primary_shade_mode, mbv_slope_shade_mode,
-          mbv_secondary_shade_mode, mbv_grid_contour_mode, mbv_site_view_mode, mbv_route_view_mode, mbv_nav_view_mode,
-          mbv_navdrape_view_mode, mbv_vector_view_mode, mbv_exageration, mbv_modelelevation3d, mbv_modelazimuth3d,
+          mbv_secondary_shade_mode, mbv_grid_contour_mode, mbv_site_view_mode, mbv_route_view_mode, 
+          mbv_nav_view_mode, mbv_navswathbounds_view_mode, mbv_navdrape_view_mode, mbv_vector_view_mode, 
+          mbv_exageration, mbv_modelelevation3d, mbv_modelazimuth3d,
           mbv_viewelevation3d, mbv_viewazimuth3d, mbv_illuminate_magnitude, mbv_illuminate_elevation,
           mbv_illuminate_azimuth, mbv_slope_magnitude, mbv_overlay_shade_magnitude, mbv_overlay_shade_center,
           mbv_overlay_shade_mode, mbv_contour_interval, mbv_display_projection_mode, mbv_display_projection_id, &error);
@@ -1886,8 +1986,6 @@ int do_mbgrdviz_openprimary(char *input_file_ptr) {
                          MBV_PICKMASK_NONE, &error);
         mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savesite, "Save Site File", MBV_EXISTMASK_SITE,
                          &error);
-        mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savesitewpt, "Save Sites as Winfrog WPT File", MBV_EXISTMASK_SITE,
-                         &error);
         mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_saveroute, "Save Route File",
                          MBV_EXISTMASK_ROUTE, &error);
         mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_saveroutereversed, "Save Route File Reversed",
@@ -1896,9 +1994,9 @@ int do_mbgrdviz_openprimary(char *input_file_ptr) {
                          MBV_EXISTMASK_ROUTE, &error);
         mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_saverisiscriptnoheading, "Save Risi Script File (static heading)",
                          MBV_EXISTMASK_ROUTE, &error);
-        mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savewinfrogpts, "Save Route as Winfrog PTS File",
+        mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_saverisi2scriptheading, "Save Risi 2 Script File (variable heading)",
                          MBV_EXISTMASK_ROUTE, &error);
-        mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savewinfrogwpt, "Save Route as Winfrog WPT File",
+        mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_saverisi2scriptnoheading, "Save Risi 2 Script File (static heading)",
                          MBV_EXISTMASK_ROUTE, &error);
         mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savedegdecmin,
                          "Save Route as Degrees + Decimal Minutes File", MBV_EXISTMASK_ROUTE, &error);
@@ -1907,6 +2005,12 @@ int do_mbgrdviz_openprimary(char *input_file_ptr) {
         mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savegreenseayml, "Save Route as Greensea YML File",
                           MBV_EXISTMASK_ROUTE, &error);
         mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savetecdislst, "Save Route as TECDIS LST File",
+                          MBV_EXISTMASK_ROUTE, &error);
+        mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savekongsbergdp, "Save Route as Kongsberg DP waypoint File",
+                          MBV_EXISTMASK_ROUTE, &error);
+        mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savesisasciiplan1, "Save Route as SIS ASCIIPlan line File",
+                          MBV_EXISTMASK_ROUTE, &error);
+        mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savesisasciiplan2, "Save Route as SIS ASCIIPlan route File",
                           MBV_EXISTMASK_ROUTE, &error);
         mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_saveprofile, "Save Profile File",
                          MBV_PICKMASK_TWOPOINT + MBV_PICKMASK_ROUTE + MBV_PICKMASK_NAVTWOPOINT, &error);
@@ -2041,6 +2145,8 @@ int do_mbgrdviz_opensite(size_t instance, char *input_file_ptr) {
   int nget;
   bool site_ok;
   double londeg, lonmin, latdeg, latmin;
+  int site_version_major = 0;
+  int site_version_minor = 0;
 
   if (verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -2102,9 +2208,22 @@ int do_mbgrdviz_opensite(size_t instance, char *input_file_ptr) {
         site_ok = false;
 
         /* deal with site in form: lon lat topo color size name */
-        if (buffer[0] != '#') {
-          nget = sscanf(buffer, "%s %s %lf %d %d %[^\n]", lonstring, latstring, &sitetopo[nsite],
+        if (strncmp(buffer, "## Site File Version", 2) == 0) {
+          nget = sscanf(buffer, "## Site File Version %d.%d", &site_version_major, &site_version_minor);
+        }
+        else if (buffer[0] != '#') {
+          if (site_version_major > 1 || (site_version_major == 0 && strchr(buffer, ',') != NULL)) {
+            nget = sscanf(buffer, "%[^','],%[^','],%lf,%d,%d,%[^\n]", 
+                        lonstring, latstring, &sitetopo[nsite],
                         &sitecolor[nsite], &sitesize[nsite], sitename[nsite]);
+            if (nget >= 2)
+            	site_version_major = 2;
+          }
+          else {
+            nget = sscanf(buffer, "%s %s %lf %d %d %[^\n]", 
+                        lonstring, latstring, &sitetopo[nsite],
+                        &sitecolor[nsite], &sitesize[nsite], sitename[nsite]);
+          }
           if (nget >= 2) {
             if (strchr(lonstring, ':') != NULL) {
               if (sscanf(lonstring, "%lf:%lf", &londeg,&lonmin) == 2) {
@@ -2141,13 +2260,13 @@ int do_mbgrdviz_opensite(size_t instance, char *input_file_ptr) {
 
         /* output some debug values */
         if (verbose > 0 && site_ok) {
-          fprintf(stderr, "\ndbg5  Site point read in program <%s>\n", program_name);
-          fprintf(stderr, "dbg5       site[%d]: %f %f %f  %d %d  %s\n", nsite, sitelon[nsite], sitelat[nsite],
+          fprintf(stderr, "\nSite point read in program <%s>\n", program_name);
+          fprintf(stderr, "     site[%d]: %f %f %f  %d %d  %s\n", nsite, sitelon[nsite], sitelat[nsite],
                   sitetopo[nsite], sitecolor[nsite], sitesize[nsite], sitename[nsite]);
         }
-        else if (verbose > 0 && !site_ok) {
-          fprintf(stderr, "\ndbg5  Unintelligible line read from site file in program <%s>\n", program_name);
-          fprintf(stderr, "dbg5       buffer:  %s\n", buffer);
+        else if (verbose > 0 && !site_ok && buffer[0] != '#') {
+          fprintf(stderr, "\nUnintelligible line read from site file in program <%s>\n", program_name);
+          fprintf(stderr, "     buffer:  %s\n", buffer);
         }
 
         strncpy(buffer, "", sizeof(buffer));
@@ -2242,7 +2361,7 @@ int do_mbgrdviz_savesite(size_t instance, char *output_file_ptr) {
       /* open the output file */
       if ((sfp = fopen(output_file_ptr, "w")) != NULL) {
         /* write the site file header */
-        fprintf(sfp, "## Site File Version %s\n", MBGRDVIZ_SITE_VERSION);
+        fprintf(sfp, "## Site File Version %d.%2.2d\n", MBGRDVIZ_SITE_VERSION_MAJOR, MBGRDVIZ_SITE_VERSION_MINOR);
         fprintf(sfp, "## Output by Program %s\n", program_name);
         fprintf(sfp, "## MB-System Version %s\n", MB_VERSION);
         char user[256], host[256], date[32];
@@ -2259,111 +2378,12 @@ int do_mbgrdviz_savesite(size_t instance, char *output_file_ptr) {
         fprintf(sfp, "##   COLOR_BLUE      6\n");
         fprintf(sfp, "##   COLOR_PURPLE    7\n");
         fprintf(sfp, "## Site point format:\n");
-        fprintf(sfp, "##   <longitude (deg)> <latitude (deg)> <topography (m)> <color> <size> <name>\n");
+        fprintf(sfp, "##   <longitude (deg)>,<latitude (deg)>,<topography (m)>,<color>,<size>,<name>\n");
 
         /* loop over the sites */
         for (i = 0; i < nsite; i++) {
-          fprintf(sfp, "%12.7f %12.7f %10.3f %2d %2d %s\n", sitelon[i], sitelat[i], sitetopo[i], sitecolor[i],
+          fprintf(sfp, "%12.7f,%12.7f,%10.3f,%2d,%2d,%s\n", sitelon[i], sitelat[i], sitetopo[i], sitecolor[i],
                   sitesize[i], sitename[i]);
-        }
-
-        /* close the output file */
-        fclose(sfp);
-      }
-
-      /* output error message */
-      else {
-        error = MB_ERROR_OPEN_FAIL;
-        fprintf(stderr, "\nUnable to Open Site File <%s> for writing\n", output_file_ptr);
-        XBell((Display *)XtDisplay(mainWindow), 100);
-        status = MB_FAILURE;
-      }
-    }
-
-    /* deallocate arrays for sites */
-    if (nsite > 0) {
-      status = mbview_freesitearrays(verbose, &sitelon, &sitelat, &sitetopo, &sitecolor, &sitesize, &sitename, &error);
-    }
-  }
-
-  /* all done */
-  return (status);
-}
-/*---------------------------------------------------------------------------------------*/
-
-int do_mbgrdviz_savesitewpt(size_t instance, char *output_file_ptr) {
-  int status = MB_SUCCESS;
-  FILE *sfp;
-  int nsite;
-  double *sitelon;
-  double *sitelat;
-  double *sitetopo;
-  int *sitecolor;
-  int *sitesize;
-  mb_path *sitename;
-  int i;
-
-  if (verbose >= 2) {
-    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
-    fprintf(stderr, "dbg2  Input arguments:\n");
-    fprintf(stderr, "dbg2       instance:        %zu\n", instance);
-    fprintf(stderr, "dbg2       output_file_ptr: %s\n", output_file_ptr);
-  }
-
-  /* read data for valid instance */
-  if (instance != MBV_NO_WINDOW) {
-
-    /* get the number of sites to be written to the output file */
-    status = mbview_getsitecount(verbose, instance, &nsite, &error);
-    if (status == MB_SUCCESS && nsite <= 0) {
-      fprintf(stderr, "Unable to write site file...\nCurrently %d sites defined for instance %zu!\n", nsite, instance);
-      XBell((Display *)XtDisplay(mainWindow), 100);
-      status = MB_FAILURE;
-    }
-
-    /* allocate arrays for sites */
-    if (status == MB_SUCCESS && nsite > 0) {
-      /* allocate the arrays */
-      sitelon = NULL;
-      sitelat = NULL;
-      sitetopo = NULL;
-      sitecolor = NULL;
-      sitesize = NULL;
-      sitename = NULL;
-      status =
-          mbview_allocsitearrays(verbose, nsite, &sitelon, &sitelat, &sitetopo, &sitecolor, &sitesize, &sitename, &error);
-
-      /* if error initializing memory then cancel dealing with sites */
-      if (status == MB_FAILURE) {
-        nsite = 0;
-        fprintf(stderr, "Unable to write site file...\nArray allocation for %d sites failed for instance %zu!\n", nsite,
-                instance);
-        XBell((Display *)XtDisplay(mainWindow), 100);
-      }
-    }
-
-    /* get the sites */
-    if (status == MB_SUCCESS) {
-      status =
-          mbview_getsites(verbose, instance, &nsite, sitelon, sitelat, sitetopo, sitecolor, sitesize, sitename, &error);
-    }
-
-    /* write the sites to the output file */
-    if (status == MB_SUCCESS) {
-      /* open the output file */
-      if ((sfp = fopen(output_file_ptr, "w")) != NULL) {
-        /* write the site file header */
-        fprintf(sfp, "## Site File Version %s\n", MBGRDVIZ_SITE_VERSION);
-        fprintf(sfp, "## Output by Program %s\n", program_name);
-        fprintf(sfp, "## MB-System Version %s\n", MB_VERSION);
-        char user[256], host[256], date[32];
-        status = mb_user_host_date(verbose, user, host, date, &error);
-        fprintf(sfp, "## Run by user <%s> on cpu <%s> at <%s>\n", user, host, date);
-        fprintf(sfp, "## Number of sites: %d\n", nsite);
-
-        /* loop over the sites */
-        for (i = 0; i < nsite; i++) {
-          fprintf(sfp, "%s %d,%.10f,%.10f,17,100.0,0.00,0.00,255,0.00\r\n", sitename[i], i, sitelat[i], sitelon[i]);
         }
 
         /* close the output file */
@@ -2410,6 +2430,8 @@ int do_mbgrdviz_openroute(size_t instance, char *input_file_ptr) {
   char *result;
   int nget;
   bool point_ok;
+  int route_version_major = 0;
+  int route_version_minor = 0;
 
   if (verbose >= 2) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -2444,6 +2466,8 @@ int do_mbgrdviz_openroute(size_t instance, char *input_file_ptr) {
         if (buffer[0] == '#') {
           if (rawroutefile && strncmp(buffer, "## Route File Version", 21) == 0) {
             rawroutefile = false;
+            sscanf(buffer, "## Route File Version %d.%d", 
+                    &route_version_major, &route_version_minor);
           }
           else if (strncmp(buffer, "## ROUTENAME", 12) == 0) {
             strcpy(routename, &buffer[13]);
@@ -2465,6 +2489,12 @@ int do_mbgrdviz_openroute(size_t instance, char *input_file_ptr) {
 
         /* deal with route segment marker */
         else if (buffer[0] == '>') {
+          if (strncmp(buffer, "> ## STARTROUTE", 14) == 0 && route_version_major > 1) {
+            int np = 0;
+            nget = sscanf(buffer, "> ## STARTROUTE %d,%d,%d,%d,%[^\n]", 
+                          &np, &routecolor, &routesize, &routeeditmode, routename);
+          }
+
           /* if data accumulated call mbview_addroute() */
           if (npoint > 0) {
             status = mbview_addroute(verbose, instance, npoint, routelon, routelat, routewaypoint, routecolor,
@@ -2476,7 +2506,11 @@ int do_mbgrdviz_openroute(size_t instance, char *input_file_ptr) {
         /* deal with data */
         else {
           /* read the data from the buffer */
-          nget = sscanf(buffer, "%lf %lf %lf %d", &lon, &lat, &topo, &waypoint);
+          if (route_version_major > 1) {
+            nget = sscanf(buffer, "%lf,%lf,%lf,%d", &lon, &lat, &topo, &waypoint);
+          } else {
+            nget = sscanf(buffer, "%lf %lf %lf %d", &lon, &lat, &topo, &waypoint);
+          }
           if ((rawroutefile && nget >= 2) ||
               (!rawroutefile && nget >= 3 && waypoint > MBV_ROUTE_WAYPOINT_NONE))
             point_ok = true;
@@ -2551,6 +2585,7 @@ int do_mbgrdviz_saveroute(size_t instance, char *output_file_ptr) {
   double *slope = NULL;
   int routecolor;
   int routesize;
+  int routeeditmode;
   mb_path routename;
   bool selected;
   int iroute, j;
@@ -2585,13 +2620,36 @@ int do_mbgrdviz_saveroute(size_t instance, char *output_file_ptr) {
       /* open the output file */
       if ((sfp = fopen(output_file_ptr, "w")) != NULL) {
         /* write the route file header */
-        fprintf(sfp, "## Route File Version %s\n", MBGRDVIZ_ROUTE_VERSION);
+        fprintf(sfp, "## Route File Version %d.%2.2d\n", 
+                      MBGRDVIZ_ROUTE_VERSION_MAJOR, MBGRDVIZ_ROUTE_VERSION_MINOR);
         fprintf(sfp, "## Output by Program %s\n", program_name);
         fprintf(sfp, "## MB-System Version %s\n", MB_VERSION);
         char user[256], host[256], date[32];
         status = mb_user_host_date(verbose, user, host, date, &error);
         fprintf(sfp, "## Run by user <%s> on cpu <%s> at <%s>\n", user, host, date);
-        fprintf(sfp, "## Number of routes: %d\n", nroutewrite);
+        fprintf(sfp, "##\n");
+        fprintf(sfp, "## Each route starts with a line of the form:\n");
+        fprintf(sfp, "##   > ## STARTROUTE np,c,s,m,String\n");
+        fprintf(sfp, "## where:\n");
+        fprintf(sfp, "##   np:                   Number of points in route (waypoints plus topography points)\n");
+        fprintf(sfp, "##   c:                    Color\n");
+        fprintf(sfp, "##   s:                    Size\n");
+        fprintf(sfp, "##   m:                    Edit mode\n");
+        fprintf(sfp, "##   String:               Survey name (can have spaces)\n");
+        fprintf(sfp, "## Each route ends with a line of the form:\n");
+        fprintf(sfp, "##   > ## ENDROUTE\n");
+        fprintf(sfp, "## Route color definitions:\n");
+        fprintf(sfp, "##   BLACK                 0\n");
+        fprintf(sfp, "##   WHITE                 1\n");
+        fprintf(sfp, "##   RED                   2\n");
+        fprintf(sfp, "##   YELLOW                3\n");
+        fprintf(sfp, "##   GREEN                 4\n");
+        fprintf(sfp, "##   BLUEGREEN             5\n");
+        fprintf(sfp, "##   BLUE                  6\n");
+        fprintf(sfp, "##   PURPLE                7\n");
+        fprintf(sfp, "##\n");
+        fprintf(sfp, "## Route point format:\n");
+        fprintf(sfp, "##   <longitude (deg)>,<latitude (deg)>,<topography (m)>,<waypoint type>,<bearing (deg)>,<lateral distance (m)>,<distance along topography (m)>,<slope (m/m)>\n");
         fprintf(sfp, "## Route waypoint type definitions:\n");
         fprintf(sfp, "##   WAYPOINT_NONE         0  Defines topography between waypoints\n");
         fprintf(sfp, "##   WAYPOINT_SIMPLE       1  Waypoint along survey line\n");
@@ -2606,9 +2664,8 @@ int do_mbgrdviz_saveroute(size_t instance, char *output_file_ptr) {
         fprintf(sfp, "##   WAYPOINT_ENDLINE4    10  End survey line type 4\n");
         fprintf(sfp, "##   WAYPOINT_STARTLINE5  11  Start survey line type 5\n");
         fprintf(sfp, "##   WAYPOINT_ENDLINE5    12  End survey line type 5\n");
-        fprintf(sfp, "## Route point format:\n");
-        fprintf(sfp, "##   <longitude (deg)> <latitude (deg)> <topography (m)> <waypoint type> <bearing (deg)> "
-                     "<lateral distance (m)> <distance along topography (m)> <slope (m/m)>\n");
+        fprintf(sfp, "##\n");
+        fprintf(sfp, "## Number of routes: %d\n", nroutewrite);
       }
 
       /* output error message */
@@ -2658,18 +2715,15 @@ int do_mbgrdviz_saveroute(size_t instance, char *output_file_ptr) {
           /* extract data for route */
           status = mbview_getroute(verbose, instance, iroute, &npointtotal, routelon, routelat, routewaypoint,
                                    routetopo, routebearing, distlateral, distovertopo, slope, &routecolor, &routesize,
-                                   routename, &error);
+                                   &routeeditmode, routename, &error);
 
           /* write the route header */
-          fprintf(sfp, "## ROUTENAME %s\n", routename);
-          fprintf(sfp, "## ROUTESIZE %d\n", routesize);
-          fprintf(sfp, "## ROUTECOLOR %d\n", routecolor);
-          fprintf(sfp, "## ROUTEPOINTS %d\n", npointtotal);
-          fprintf(sfp, "> ## STARTROUTE\n");
+          fprintf(sfp, "> ## STARTROUTE %d,%d,%d,%d,%s\n", 
+                      npointtotal, routecolor, routesize, routeeditmode, routename);
 
           /* write the route points */
           for (j = 0; j < npointtotal; j++) {
-            fprintf(sfp, "%f %f %f %d %f %f %f %f", routelon[j], routelat[j], routetopo[j], routewaypoint[j],
+            fprintf(sfp, "%f,%f,%f,%d,%f,%f,%f,%f", routelon[j], routelat[j], routetopo[j], routewaypoint[j],
                     routebearing[j], distlateral[j], distovertopo[j], slope[j]);
             if (routewaypoint[j] == MBV_ROUTE_WAYPOINT_SIMPLE)
               fprintf(sfp, " ## WAYPOINT\n");
@@ -2702,16 +2756,16 @@ int do_mbgrdviz_saveroute(size_t instance, char *output_file_ptr) {
           /* write the route end */
           fprintf(sfp, "> ## ENDROUTE\n");
         }
-
-        /* deallocate arrays */
-        if (npointalloc > 0) {
-          status = mbview_freeroutearrays(verbose, &routelon, &routelat, &routewaypoint, &routetopo, &routebearing,
-                                          &distlateral, &distovertopo, &slope, &error);
-        }
       }
 
       /* close the output file */
       fclose(sfp);
+
+	  /* deallocate arrays */
+	  if (npointalloc > 0) {
+		status = mbview_freeroutearrays(verbose, &routelon, &routelat, &routewaypoint, &routetopo, &routebearing,
+										&distlateral, &distovertopo, &slope, &error);
+	  }
     }
   }
 
@@ -2739,6 +2793,7 @@ int do_mbgrdviz_saveroutereversed(size_t instance, char *output_file_ptr) {
   double *slope = NULL;
   int routecolor;
   int routesize;
+  int routeeditmode;
   mb_path routename;
   bool selected;
   int iroute, j;
@@ -2773,13 +2828,36 @@ int do_mbgrdviz_saveroutereversed(size_t instance, char *output_file_ptr) {
       /* open the output file */
       if ((sfp = fopen(output_file_ptr, "w")) != NULL) {
         /* write the route file header */
-        fprintf(sfp, "## Route File Version %s\n", MBGRDVIZ_ROUTE_VERSION);
+        fprintf(sfp, "## Route File Version %d.%2.2d\n", 
+                      MBGRDVIZ_ROUTE_VERSION_MAJOR, MBGRDVIZ_ROUTE_VERSION_MINOR);
         fprintf(sfp, "## Output by Program %s\n", program_name);
         fprintf(sfp, "## MB-System Version %s\n", MB_VERSION);
         char user[256], host[256], date[32];
         status = mb_user_host_date(verbose, user, host, date, &error);
         fprintf(sfp, "## Run by user <%s> on cpu <%s> at <%s>\n", user, host, date);
-        fprintf(sfp, "## Number of routes: %d\n", nroutewrite);
+        fprintf(sfp, "##\n");
+        fprintf(sfp, "## Each route starts with a line of the form:\n");
+        fprintf(sfp, "##   > ## STARTROUTE np,c,s,m,String\n");
+        fprintf(sfp, "## where:\n");
+        fprintf(sfp, "##   np:                   Number of points in route (waypoints plus topography points)\n");
+        fprintf(sfp, "##   c:                    Color\n");
+        fprintf(sfp, "##   s:                    Size\n");
+        fprintf(sfp, "##   m:                    Edit mode\n");
+        fprintf(sfp, "##   String:               Survey name (can have spaces)\n");
+        fprintf(sfp, "## Each route ends with a line of the form:\n");
+        fprintf(sfp, "##   > ## ENDROUTE\n");
+        fprintf(sfp, "## Route color definitions:\n");
+        fprintf(sfp, "##   BLACK                 0\n");
+        fprintf(sfp, "##   WHITE                 1\n");
+        fprintf(sfp, "##   RED                   2\n");
+        fprintf(sfp, "##   YELLOW                3\n");
+        fprintf(sfp, "##   GREEN                 4\n");
+        fprintf(sfp, "##   BLUEGREEN             5\n");
+        fprintf(sfp, "##   BLUE                  6\n");
+        fprintf(sfp, "##   PURPLE                7\n");
+        fprintf(sfp, "##\n");
+        fprintf(sfp, "## Route point format:\n");
+        fprintf(sfp, "##   <longitude (deg)>,<latitude (deg)>,<topography (m)>,<waypoint type>,<bearing (deg)>,<lateral distance (m)>,<distance along topography (m)>,<slope (m/m)>\n");
         fprintf(sfp, "## Route waypoint type definitions:\n");
         fprintf(sfp, "##   WAYPOINT_NONE         0  Defines topography between waypoints\n");
         fprintf(sfp, "##   WAYPOINT_SIMPLE       1  Waypoint along survey line\n");
@@ -2794,9 +2872,8 @@ int do_mbgrdviz_saveroutereversed(size_t instance, char *output_file_ptr) {
         fprintf(sfp, "##   WAYPOINT_ENDLINE4    10  End survey line type 4\n");
         fprintf(sfp, "##   WAYPOINT_STARTLINE5  11  Start survey line type 5\n");
         fprintf(sfp, "##   WAYPOINT_ENDLINE5    12  End survey line type 5\n");
-        fprintf(sfp, "## Route point format:\n");
-        fprintf(sfp, "##   <longitude (deg)> <latitude (deg)> <topography (m)> <waypoint type> <bearing (deg)> "
-                     "<lateral distance (m)> <distance along topography (m)> <slope (m/m)>\n");
+        fprintf(sfp, "##\n");
+        fprintf(sfp, "## Number of routes: %d\n", nroutewrite);
       }
 
       /* output error message */
@@ -2846,21 +2923,18 @@ int do_mbgrdviz_saveroutereversed(size_t instance, char *output_file_ptr) {
           /* extract data for route */
           status = mbview_getroute(verbose, instance, iroute, &npointtotal, routelon, routelat, routewaypoint,
                                    routetopo, routebearing, distlateral, distovertopo, slope, &routecolor, &routesize,
-                                   routename, &error);
+                                   &routeeditmode, routename, &error);
 
-          /* write the route header */
-          fprintf(sfp, "## ROUTENAME %s\n", routename);
-          fprintf(sfp, "## ROUTESIZE %d\n", routesize);
-          fprintf(sfp, "## ROUTECOLOR %d\n", routecolor);
-          fprintf(sfp, "## ROUTEPOINTS %d\n", npointtotal);
-          fprintf(sfp, "> ## STARTROUTE\n");
+           /* write the route header */
+          fprintf(sfp, "> ## STARTROUTE %d,%d,%d,%d,%s\n", 
+                      npointtotal, routecolor, routesize, routeeditmode, routename);
 
           /* write the route points */
           for (j = npointtotal - 1; j >= 0; j-- ) {
             double bearing = *routebearing - 180.0;
             if (bearing < 0.0)
               bearing += 360.0;
-            fprintf(sfp, "%f %f %f %d %f %f %f %f", routelon[j], routelat[j], routetopo[j], routewaypoint[j],
+            fprintf(sfp, "%f,%f,%f,%d,%f,%f,%f,%f", routelon[j], routelat[j], routetopo[j], routewaypoint[j],
                     routebearing[j], distlateral[j], distovertopo[j], slope[j]);
             if (routewaypoint[j] == MBV_ROUTE_WAYPOINT_SIMPLE)
               fprintf(sfp, " ## WAYPOINT\n");
@@ -2930,12 +3004,12 @@ int do_mbgrdviz_saverisiscriptheading(size_t instance, char *output_file_ptr) {
   double *slope = NULL;
   int routecolor;
   int routesize;
+  int routeeditmode;
   mb_path routename;
   bool selected;
   int iroute, j;
   void *pjptr = NULL;
   double origin_x, origin_y;
-  int iscript;
   double vvspeed = 0.2;
   double settlingtime = 3.0;
   double altitude = 3.0;
@@ -3034,51 +3108,39 @@ int do_mbgrdviz_saverisiscriptheading(size_t instance, char *output_file_ptr) {
           /* extract data for route */
           status = mbview_getroute(verbose, instance, iroute, &npointtotal, routelon, routelat, routewaypoint,
                                    routetopo, routebearing, distlateral, distovertopo, slope, &routecolor, &routesize,
-                                   routename, &error);
+                                   &routeeditmode, routename, &error);
 
           /* if this the first route define the projection */
           if (pjptr == NULL && npointtotal > 0) {
-            double reference_lon = 0.0;
-            double reference_lat = 0.0;
-            for (j = 0; j < npointtotal; j++) {
-              reference_lon += routelon[j];
-              reference_lat += routelat[j];
-            }
-            reference_lon = reference_lon / npointtotal;
-            reference_lat = reference_lat / npointtotal;
-
-            /* calculate eastings and northings using the appropriate UTM projection */
-            int projectionid;
+            double reference_lon = routelon[0];
+            double reference_lat = routelat[0];
             mb_path projection_id;
+
+            /* calculate eastings and northings using an LTM projection */
             if (reference_lat > -80.0 && reference_lat < 84.0) {
               if (reference_lon > 180.0)
                 reference_lon -= 360.0;
-              int utmzone = (int)(((reference_lon + 183.0) / 6.0) + 0.5);
-              if (reference_lat >= 0.0)
-                projectionid = 32600 + utmzone;
-              else
-                projectionid = 32700 + utmzone;
-              sprintf(projection_id, "EPSG:%d", projectionid);
+              sprintf(projection_id, "LTM%.5f/%.5f", reference_lon, reference_lat);
             }
 
             /* else if more northerly than 84 deg N then use
                     North Universal Polar Stereographic Projection */
             else if (reference_lat > 84.0) {
-              projectionid = 32661;
+              int projectionid = 32661;
               sprintf(projection_id, "EPSG:%d", projectionid);
             }
 
             /* else if more southerly than 80 deg S then use
                     South Universal Polar Stereographic Projection */
             else if (reference_lat < 80.0) {
-              projectionid = 32761;
+              int projectionid = 32761;
               sprintf(projection_id, "EPSG:%d", projectionid);
             }
             fprintf(stderr, "Reference longitude: %.9f latitude:%.9f Projection ID: %s\n",
                     reference_lon, reference_lat, projection_id);
 
             /* initialize projection */
-            if (mb_proj_init(2, projection_id, &(pjptr), &error) != MB_SUCCESS) {
+            if (mb_proj_init(verbose, projection_id, &(pjptr), &error) != MB_SUCCESS) {
               char *error_message = NULL;
               mb_error(verbose, error, &error_message);
               fprintf(stderr, "\nMBIO Error initializing projection:\n%s\n", error_message);
@@ -3097,7 +3159,6 @@ int do_mbgrdviz_saverisiscriptheading(size_t instance, char *output_file_ptr) {
             fprintf(sfp, "## STARTROUTE\r\n");
 
             /* write the route points */
-            iscript = 0;
             vvspeed = 0.20;
             settlingtime = 3.0;
             altitude = 3.0;
@@ -3121,9 +3182,8 @@ int do_mbgrdviz_saverisiscriptheading(size_t instance, char *output_file_ptr) {
             fprintf(sfp, "HDG, %.3f, %d, 6, %.3f\r\n", heading, turndirection, settlingtime);
             headinglast = heading;
             for (j = 0; j < npointtotal; j++) {
-              if (j > 0 && routewaypoint[j] > MBV_ROUTE_WAYPOINT_NONE) {
+              if (j >= 0 && routewaypoint[j] > MBV_ROUTE_WAYPOINT_NONE) {
                 double xxxx, yyyy, zz;
-                iscript++;
                 mb_proj_forward(verbose, pjptr, routelon[j], routelat[j], &xxxx, &yyyy, &error);
                 xxxx = xxxx - origin_x;
                 yyyy = yyyy - origin_y;
@@ -3194,12 +3254,12 @@ int do_mbgrdviz_saverisiscriptnoheading(size_t instance, char *output_file_ptr) 
   double *slope = NULL;
   int routecolor;
   int routesize;
+  int routeeditmode;
   mb_path routename;
   bool selected;
   int iroute, j;
   void *pjptr = NULL;
   double origin_x, origin_y;
-  int iscript;
   double vvspeed = 0.2;
   double settlingtime = 3.0;
   double altitude = 3.0;
@@ -3298,51 +3358,39 @@ int do_mbgrdviz_saverisiscriptnoheading(size_t instance, char *output_file_ptr) 
           /* extract data for route */
           status = mbview_getroute(verbose, instance, iroute, &npointtotal, routelon, routelat, routewaypoint,
                                    routetopo, routebearing, distlateral, distovertopo, slope, &routecolor, &routesize,
-                                   routename, &error);
+                                   &routeeditmode, routename, &error);
 
-          /* if this the first route define the projection */
+          /* if this the first route define the projection using the starting point */
           if (pjptr == NULL && npointtotal > 0) {
-            double reference_lon = 0.0;
-            double reference_lat = 0.0;
-            for (j = 0; j < npointtotal; j++) {
-              reference_lon += routelon[j];
-              reference_lat += routelat[j];
-            }
-            reference_lon = reference_lon / npointtotal;
-            reference_lat = reference_lat / npointtotal;
-
-            /* calculate eastings and northings using the appropriate UTM projection */
-            int projectionid;
+            double reference_lon = routelon[0];
+            double reference_lat = routelat[0];
             mb_path projection_id;
+
+            /* calculate eastings and northings using an LTM projection */
             if (reference_lat > -80.0 && reference_lat < 84.0) {
               if (reference_lon > 180.0)
                 reference_lon -= 360.0;
-              int utmzone = (int)(((reference_lon + 183.0) / 6.0) + 0.5);
-              if (reference_lat >= 0.0)
-                projectionid = 32600 + utmzone;
-              else
-                projectionid = 32700 + utmzone;
-              sprintf(projection_id, "EPSG:%d", projectionid);
+              sprintf(projection_id, "LTM%.5f/%.5f", reference_lon, reference_lat);
             }
 
             /* else if more northerly than 84 deg N then use
                     North Universal Polar Stereographic Projection */
             else if (reference_lat > 84.0) {
-              projectionid = 32661;
+              int projectionid = 32661;
               sprintf(projection_id, "EPSG:%d", projectionid);
             }
 
             /* else if more southerly than 80 deg S then use
                     South Universal Polar Stereographic Projection */
             else if (reference_lat < 80.0) {
-              projectionid = 32761;
+              int projectionid = 32761;
               sprintf(projection_id, "EPSG:%d", projectionid);
             }
             fprintf(stderr, "Reference longitude: %.9f latitude:%.9f Projection ID: %s\n",
                     reference_lon, reference_lat, projection_id);
 
             /* initialize projection */
-            if (mb_proj_init(2, projection_id, &(pjptr), &error) != MB_SUCCESS) {
+            if (mb_proj_init(verbose, projection_id, &(pjptr), &error) != MB_SUCCESS) {
               char *error_message = NULL;
               mb_error(verbose, error, &error_message);
               fprintf(stderr, "\nMBIO Error initializing projection:\n%s\n", error_message);
@@ -3361,7 +3409,6 @@ int do_mbgrdviz_saverisiscriptnoheading(size_t instance, char *output_file_ptr) 
             fprintf(sfp, "## STARTROUTE\r\n");
 
             /* write the route points */
-            iscript = 0;
             vvspeed = 0.20;
             settlingtime = 3.0;
             altitude = 3.0;
@@ -3385,9 +3432,8 @@ int do_mbgrdviz_saverisiscriptnoheading(size_t instance, char *output_file_ptr) 
             fprintf(sfp, "HDG, %.3f, %d, 6, %.3f\r\n", heading, turndirection, settlingtime);
             headinglast = heading;
             for (j = 0; j < npointtotal; j++) {
-              if (j > 0 && routewaypoint[j] > MBV_ROUTE_WAYPOINT_NONE) {
+              if (j >= 0 && routewaypoint[j] > MBV_ROUTE_WAYPOINT_NONE) {
                 double xxxx, yyyy, zz;
-                iscript++;
                 mb_proj_forward(verbose, pjptr, routelon[j], routelat[j], &xxxx, &yyyy, &error);
                 xxxx = xxxx - origin_x;
                 yyyy = yyyy - origin_y;
@@ -3439,10 +3485,11 @@ int do_mbgrdviz_saverisiscriptnoheading(size_t instance, char *output_file_ptr) 
 }
 /*---------------------------------------------------------------------------------------*/
 
-int do_mbgrdviz_savewinfrogpts(size_t instance, char *output_file_ptr) {
+int do_mbgrdviz_saverisi2scriptheading(size_t instance, char *output_file_ptr) {
   int status = MB_SUCCESS;
   FILE *sfp;
   int nroute = 0;
+  int nroutewrite = 0;
   int npoint = 0;
   int nintpoint = 0;
   int npointtotal = 0;
@@ -3457,10 +3504,18 @@ int do_mbgrdviz_savewinfrogpts(size_t instance, char *output_file_ptr) {
   double *slope = NULL;
   int routecolor;
   int routesize;
+  int routeeditmode;
   mb_path routename;
+  bool selected;
   int iroute, j;
+  void *pjptr = NULL;
+  double origin_x, origin_y;
+  double vvspeed = 0.2;
+  double settlingtime = 3.0;
+  double altitude = 3.0;
+  int turndirection = 1;
 
-  if (verbose >= 2) {
+  if (verbose >= 0) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
     fprintf(stderr, "dbg2  Input arguments:\n");
     fprintf(stderr, "dbg2       instance:        %zu\n", instance);
@@ -3472,6 +3527,13 @@ int do_mbgrdviz_savewinfrogpts(size_t instance, char *output_file_ptr) {
 
     /* get the number of routes to be written to the output file */
     status = mbview_getroutecount(verbose, instance, &nroute, &error);
+    for (iroute = 0; iroute < nroute; iroute++) {
+      mbview_getrouteselected(verbose, instance, iroute, &selected, &error);
+      if (selected)
+        nroutewrite++;
+    }
+    if (nroutewrite == 0)
+      nroutewrite = nroute;
     if (nroute <= 0) {
       fprintf(stderr, "Unable to write route file...\nCurrently %d routes defined for instance %zu!\n", nroute, instance);
       XBell((Display *)XtDisplay(mainWindow), 100);
@@ -3479,66 +3541,178 @@ int do_mbgrdviz_savewinfrogpts(size_t instance, char *output_file_ptr) {
     }
 
     /* initialize the output file */
-    if (status == MB_SUCCESS && nroute > 0) {
+    if (status == MB_SUCCESS && nroutewrite > 0) {
       /* open the output file */
-      if ((sfp = fopen(output_file_ptr, "w")) == NULL) {
+      if ((sfp = fopen(output_file_ptr, "w")) != NULL) {
+        /* write the route file header */
+        fprintf(sfp, "## Risi 2 Script Version %s\r\n", MBGRDVIZ_RISI2SCRIPT_VERSION);
+        fprintf(sfp, "## Output by Program %s\r\n", program_name);
+        fprintf(sfp, "## MB-System Version %s\r\n", MB_VERSION);
+        char user[256], host[256], date[32];
+        status = mb_user_host_date(verbose, user, host, date, &error);
+        fprintf(sfp, "## Run by user <%s> on cpu <%s> at <%s>\r\n", user, host, date);
+        fprintf(sfp, "## Number of routes: %d\r\n", nroutewrite);
+        fprintf(sfp, "## Risi script format:\r\n");
+        fprintf(sfp, "##   altitude <altitude (m)>\r\n");
+        fprintf(sfp, "##   heading rate <rate (deg/sec)>\r\n");
+        fprintf(sfp, "##   heading abs <+/-heading (deg)>, <turn direction +/-1>\r\n");
+        fprintf(sfp, "##   heading rel <+/-heading (deg)>\r\n");
+        fprintf(sfp, "##   move bearing, <range (m)>, <bearing (deg)>\r\n");
+        fprintf(sfp, "##\r\n");
+        fprintf(sfp, "## This script assumes the survey platform starts at the origin with heading 0.0\r\n");
+        fprintf(sfp, "##\r\n");
+      }
+
+      /* output error message */
+      else {
         error = MB_ERROR_OPEN_FAIL;
         status = MB_FAILURE;
-        fprintf(stderr, "\nUnable to Open route file <%s> for writing\n", output_file_ptr);
+        fprintf(stderr, "\nUnable to Open route file <%s> for writing\r\n", output_file_ptr);
         XBell((Display *)XtDisplay(mainWindow), 100);
       }
     }
 
     /* if all ok proceed to extract and output routes */
-    if (status == MB_SUCCESS) {
+    if (status == MB_SUCCESS && nroutewrite > 0) {
       /* loop over routes */
       for (iroute = 0; iroute < nroute; iroute++) {
-        /* get point count for current route */
-        status = mbview_getroutepointcount(verbose, instance, iroute, &npoint, &nintpoint, &error);
+        /* check if this route is selected for writing */
+        if (nroutewrite == nroute)
+          selected = true;
+        else
+          mbview_getrouteselected(verbose, instance, iroute, &selected, &error);
 
-        /* allocate route arrays */
-        npointtotal = npoint + nintpoint;
-        if (status == MB_SUCCESS && npointalloc < npointtotal) {
-          status = mbview_allocroutearrays(verbose, npointtotal, &routelon, &routelat, &routewaypoint, &routetopo,
-                                           &routebearing, &distlateral, &distovertopo, &slope, &error);
-          if (status == MB_SUCCESS) {
-            npointalloc = npointtotal;
+        /* output if selected */
+        if (selected) {
+          /* get point count for current route */
+          status = mbview_getroutepointcount(verbose, instance, iroute, &npoint, &nintpoint, &error);
+
+          /* allocate route arrays */
+          npointtotal = npoint + nintpoint;
+          if (status == MB_SUCCESS && npointalloc < npointtotal) {
+            status = mbview_allocroutearrays(verbose, npointtotal, &routelon, &routelat, &routewaypoint, &routetopo,
+                                             &routebearing, &distlateral, &distovertopo, &slope, &error);
+            if (status == MB_SUCCESS) {
+              npointalloc = npointtotal;
+            }
+
+            /* if error initializing memory then cancel dealing with this route */
+            else {
+              fprintf(stderr, "Unable to write route...\nArray allocation for %d points failed for instance %zu!\n",
+                      npointtotal, instance);
+              XBell((Display *)XtDisplay(mainWindow), 100);
+              npoint = 0;
+              nintpoint = 0;
+              npointtotal = 0;
+            }
           }
 
-          /* if error initializing memory then cancel dealing with this route */
-          else {
-            fprintf(stderr, "Unable to write route...\nArray allocation for %d points failed for instance %zu!\n",
-                    npointtotal, instance);
-            XBell((Display *)XtDisplay(mainWindow), 100);
-            npoint = 0;
-            nintpoint = 0;
-            npointtotal = 0;
+          /* extract data for route */
+          status = mbview_getroute(verbose, instance, iroute, &npointtotal, routelon, routelat, routewaypoint,
+                                   routetopo, routebearing, distlateral, distovertopo, slope, &routecolor, &routesize,
+                                   &routeeditmode, routename, &error);
+
+          /* if this the first route define the projection */
+          if (pjptr == NULL && npointtotal > 0) {
+            double reference_lon = routelon[0];
+            double reference_lat = routelat[0];
+            mb_path projection_id;
+
+            /* calculate eastings and northings using an LTM projection */
+            if (reference_lat > -80.0 && reference_lat < 84.0) {
+              if (reference_lon > 180.0)
+                reference_lon -= 360.0;
+              sprintf(projection_id, "LTM%.5f/%.5f", reference_lon, reference_lat);
+            }
+
+            /* else if more northerly than 84 deg N then use
+                    North Universal Polar Stereographic Projection */
+            else if (reference_lat > 84.0) {
+              int projectionid = 32661;
+              sprintf(projection_id, "EPSG:%d", projectionid);
+            }
+
+            /* else if more southerly than 80 deg S then use
+                    South Universal Polar Stereographic Projection */
+            else if (reference_lat < 80.0) {
+              int projectionid = 32761;
+              sprintf(projection_id, "EPSG:%d", projectionid);
+            }
+            fprintf(stderr, "Reference longitude: %.9f latitude:%.9f Projection ID: %s\n",
+                    reference_lon, reference_lat, projection_id);
+
+            /* initialize projection */
+            if (mb_proj_init(verbose, projection_id, &(pjptr), &error) != MB_SUCCESS) {
+              char *error_message = NULL;
+              mb_error(verbose, error, &error_message);
+              fprintf(stderr, "\nMBIO Error initializing projection:\n%s\n", error_message);
+              fprintf(stderr, "\nProgram terminated in <%s>\n", __func__);
+              mb_memory_clear(verbose, &error);
+              exit(error);
+            }
+            mb_proj_forward(verbose, pjptr, reference_lon, reference_lat, &origin_x, &origin_y, &error);
           }
-        }
 
-        /* extract data for route */
-        status =
-            mbview_getroute(verbose, instance, iroute, &npointtotal, routelon, routelat, routewaypoint, routetopo,
-                            routebearing, distlateral, distovertopo, slope, &routecolor, &routesize, routename, &error);
+          /* output route as Risi 2 script with start at the origin and relative movements */
+          if (pjptr != NULL && npointtotal > 0) {
+            /* write the route header */
+            fprintf(sfp, "## ROUTENAME %s\r\n", routename);
+            fprintf(sfp, "## ROUTEPOINTS %d\r\n", npointtotal);
+            fprintf(sfp, "## STARTROUTE\r\n");
 
-        /* write the route header */
-        fprintf(sfp, "0,%s,0,0.000,0.000,1,2,65280,0,0.200,0,0,1.000\r\n", routename);
+            /* write the route points */
+            fprintf(sfp, "## altitude, %.3f\r\n", altitude);
+            fprintf(sfp, "##\n");
+            fprintf(sfp, "## heading abs 0.0\r\n");
+            double xx0, yy0, xx1, yy1;
+            double heading0, heading1, dheading;
+            for (j = 0; j < npointtotal; j++) {
+              double xxxx, yyyy;
+              double range;
+              double bearing, heading0, heading1;
+              if (routewaypoint[j] > MBV_ROUTE_WAYPOINT_NONE) {
+                mb_proj_forward(verbose, pjptr, routelon[j], routelat[j], &xxxx, &yyyy, &error);
+                xxxx = xxxx - origin_x;
+                yyyy = yyyy - origin_y;
+                if (j == 0) {
+                  xx0 = xxxx;
+                  yy0 = yyyy;
+                  heading0 = routebearing[j];
+                }
+                else {
+                  xx1 = xxxx;
+                  yy1 = yyyy;
+                  range = sqrt((xx1 - xx0) * (xx1 - xx0) + (yy1 - yy0) * (yy1 - yy0));
+                  heading1 = routebearing[j];
+                  dheading = heading1 - heading0;
+                  if (dheading > 180.0) {
+                    dheading -= 360.0;
+                  } else if (dheading < -180.0) {
+                    dheading += 360.0;
+                  }
+                  fprintf(sfp, "move bearing 0.0, %.2f", range);
+                  fprintf(sfp, "heading rel %.2f", dheading);
+                  xx0 = xx1;
+                  yy0 = yy1;
+                  heading0 = heading1;
+                }
+              }
+            }
 
-        /* write the route points */
-        for (j = 0; j < npointtotal; j++) {
-          if (routewaypoint[j] != MBV_ROUTE_WAYPOINT_NONE)
-            fprintf(sfp, "1,%.10f,%.10f,0.00m,0.00m,0.00,0.00,%.3f\r\n", routelat[j], routelon[j], distlateral[j]);
+            /* write the route end */
+            fprintf(sfp, "## End\r\n");
+          }
+
+          /* deallocate arrays */
+          if (npointalloc > 0) {
+            status = mbview_freeroutearrays(verbose, &routelon, &routelat, &routewaypoint, &routetopo, &routebearing,
+                                            &distlateral, &distovertopo, &slope, &error);
+          }
         }
       }
 
       /* close the output file */
       fclose(sfp);
-
-      /* deallocate arrays */
-      if (npointalloc > 0) {
-        status = mbview_freeroutearrays(verbose, &routelon, &routelat, &routewaypoint, &routetopo, &routebearing,
-                                        &distlateral, &distovertopo, &slope, &error);
-      }
     }
   }
 
@@ -3547,10 +3721,11 @@ int do_mbgrdviz_savewinfrogpts(size_t instance, char *output_file_ptr) {
 }
 /*---------------------------------------------------------------------------------------*/
 
-int do_mbgrdviz_savewinfrogwpt(size_t instance, char *output_file_ptr) {
+int do_mbgrdviz_saverisi2scriptnoheading(size_t instance, char *output_file_ptr) {
   int status = MB_SUCCESS;
   FILE *sfp;
   int nroute = 0;
+  int nroutewrite = 0;
   int npoint = 0;
   int nintpoint = 0;
   int npointtotal = 0;
@@ -3565,10 +3740,18 @@ int do_mbgrdviz_savewinfrogwpt(size_t instance, char *output_file_ptr) {
   double *slope = NULL;
   int routecolor;
   int routesize;
+  int routeeditmode;
   mb_path routename;
-  int iroute, j, n;
+  bool selected;
+  int iroute, j;
+  void *pjptr = NULL;
+  double origin_x, origin_y;
+  double vvspeed = 0.2;
+  double settlingtime = 3.0;
+  double altitude = 3.0;
+  int turndirection = 1;
 
-  if (verbose >= 2) {
+  if (verbose >= 0) {
     fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
     fprintf(stderr, "dbg2  Input arguments:\n");
     fprintf(stderr, "dbg2       instance:        %zu\n", instance);
@@ -3580,6 +3763,13 @@ int do_mbgrdviz_savewinfrogwpt(size_t instance, char *output_file_ptr) {
 
     /* get the number of routes to be written to the output file */
     status = mbview_getroutecount(verbose, instance, &nroute, &error);
+    for (iroute = 0; iroute < nroute; iroute++) {
+      mbview_getrouteselected(verbose, instance, iroute, &selected, &error);
+      if (selected)
+        nroutewrite++;
+    }
+    if (nroutewrite == 0)
+      nroutewrite = nroute;
     if (nroute <= 0) {
       fprintf(stderr, "Unable to write route file...\nCurrently %d routes defined for instance %zu!\n", nroute, instance);
       XBell((Display *)XtDisplay(mainWindow), 100);
@@ -3587,66 +3777,178 @@ int do_mbgrdviz_savewinfrogwpt(size_t instance, char *output_file_ptr) {
     }
 
     /* initialize the output file */
-    if (status == MB_SUCCESS && nroute > 0) {
+    if (status == MB_SUCCESS && nroutewrite > 0) {
       /* open the output file */
-      if ((sfp = fopen(output_file_ptr, "w")) == NULL) {
+      if ((sfp = fopen(output_file_ptr, "w")) != NULL) {
+        /* write the route file header */
+        fprintf(sfp, "## Risi 2 Script Version %s\r\n", MBGRDVIZ_RISI2SCRIPT_VERSION);
+        fprintf(sfp, "## Output by Program %s\r\n", program_name);
+        fprintf(sfp, "## MB-System Version %s\r\n", MB_VERSION);
+        char user[256], host[256], date[32];
+        status = mb_user_host_date(verbose, user, host, date, &error);
+        fprintf(sfp, "## Run by user <%s> on cpu <%s> at <%s>\r\n", user, host, date);
+        fprintf(sfp, "## Number of routes: %d\r\n", nroutewrite);
+        fprintf(sfp, "## Risi script format:\r\n");
+        fprintf(sfp, "##   altitude <altitude (m)>\r\n");
+        fprintf(sfp, "##   heading rate <rate (deg/sec)>\r\n");
+        fprintf(sfp, "##   heading abs <+/-heading (deg)>, <turn direction +/-1>\r\n");
+        fprintf(sfp, "##   heading rel <+/-heading (deg)>\r\n");
+        fprintf(sfp, "##   move bearing, <range (m)>, <bearing (deg)>\r\n");
+        fprintf(sfp, "##\r\n");
+        fprintf(sfp, "## This script assumes the survey platform starts at the origin with heading 0.0\r\n");
+        fprintf(sfp, "##\r\n");
+      }
+
+      /* output error message */
+      else {
         error = MB_ERROR_OPEN_FAIL;
         status = MB_FAILURE;
-        fprintf(stderr, "\nUnable to Open route file <%s> for writing\n", output_file_ptr);
+        fprintf(stderr, "\nUnable to Open route file <%s> for writing\r\n", output_file_ptr);
         XBell((Display *)XtDisplay(mainWindow), 100);
       }
     }
 
     /* if all ok proceed to extract and output routes */
-    if (status == MB_SUCCESS) {
+    if (status == MB_SUCCESS && nroutewrite > 0) {
       /* loop over routes */
       for (iroute = 0; iroute < nroute; iroute++) {
-        /* get point count for current route */
-        status = mbview_getroutepointcount(verbose, instance, iroute, &npoint, &nintpoint, &error);
+        /* check if this route is selected for writing */
+        if (nroutewrite == nroute)
+          selected = true;
+        else
+          mbview_getrouteselected(verbose, instance, iroute, &selected, &error);
 
-        /* allocate route arrays */
-        npointtotal = npoint + nintpoint;
-        if (status == MB_SUCCESS && npointalloc < npointtotal) {
-          status = mbview_allocroutearrays(verbose, npointtotal, &routelon, &routelat, &routewaypoint, &routetopo,
-                                           &routebearing, &distlateral, &distovertopo, &slope, &error);
-          if (status == MB_SUCCESS) {
-            npointalloc = npointtotal;
+        /* output if selected */
+        if (selected) {
+          /* get point count for current route */
+          status = mbview_getroutepointcount(verbose, instance, iroute, &npoint, &nintpoint, &error);
+
+          /* allocate route arrays */
+          npointtotal = npoint + nintpoint;
+          if (status == MB_SUCCESS && npointalloc < npointtotal) {
+            status = mbview_allocroutearrays(verbose, npointtotal, &routelon, &routelat, &routewaypoint, &routetopo,
+                                             &routebearing, &distlateral, &distovertopo, &slope, &error);
+            if (status == MB_SUCCESS) {
+              npointalloc = npointtotal;
+            }
+
+            /* if error initializing memory then cancel dealing with this route */
+            else {
+              fprintf(stderr, "Unable to write route...\nArray allocation for %d points failed for instance %zu!\n",
+                      npointtotal, instance);
+              XBell((Display *)XtDisplay(mainWindow), 100);
+              npoint = 0;
+              nintpoint = 0;
+              npointtotal = 0;
+            }
           }
 
-          /* if error initializing memory then cancel dealing with this route */
-          else {
-            fprintf(stderr, "Unable to write route...\nArray allocation for %d points failed for instance %zu!\n",
-                    npointtotal, instance);
-            XBell((Display *)XtDisplay(mainWindow), 100);
-            npoint = 0;
-            nintpoint = 0;
-            npointtotal = 0;
+          /* extract data for route */
+          status = mbview_getroute(verbose, instance, iroute, &npointtotal, routelon, routelat, routewaypoint,
+                                   routetopo, routebearing, distlateral, distovertopo, slope, &routecolor, &routesize,
+                                   &routeeditmode, routename, &error);
+
+          /* if this the first route define the projection */
+          if (pjptr == NULL && npointtotal > 0) {
+            double reference_lon = routelon[0];
+            double reference_lat = routelat[0];
+            mb_path projection_id;
+
+            /* calculate eastings and northings using an LTM projection */
+            if (reference_lat > -80.0 && reference_lat < 84.0) {
+              if (reference_lon > 180.0)
+                reference_lon -= 360.0;
+              sprintf(projection_id, "LTM%.5f/%.5f", reference_lon, reference_lat);
+            }
+
+            /* else if more northerly than 84 deg N then use
+                    North Universal Polar Stereographic Projection */
+            else if (reference_lat > 84.0) {
+              int projectionid = 32661;
+              sprintf(projection_id, "EPSG:%d", projectionid);
+            }
+
+            /* else if more southerly than 80 deg S then use
+                    South Universal Polar Stereographic Projection */
+            else if (reference_lat < 80.0) {
+              int projectionid = 32761;
+              sprintf(projection_id, "EPSG:%d", projectionid);
+            }
+            fprintf(stderr, "Reference longitude: %.9f latitude:%.9f Projection ID: %s\n",
+                    reference_lon, reference_lat, projection_id);
+
+            /* initialize projection */
+            if (mb_proj_init(verbose, projection_id, &(pjptr), &error) != MB_SUCCESS) {
+              char *error_message = NULL;
+              mb_error(verbose, error, &error_message);
+              fprintf(stderr, "\nMBIO Error initializing projection:\n%s\n", error_message);
+              fprintf(stderr, "\nProgram terminated in <%s>\n", __func__);
+              mb_memory_clear(verbose, &error);
+              exit(error);
+            }
+            mb_proj_forward(verbose, pjptr, reference_lon, reference_lat, &origin_x, &origin_y, &error);
           }
-        }
 
-        /* extract data for route */
-        status =
-            mbview_getroute(verbose, instance, iroute, &npointtotal, routelon, routelat, routewaypoint, routetopo,
-                            routebearing, distlateral, distovertopo, slope, &routecolor, &routesize, routename, &error);
+          /* output route as Risi 2 script with start at the origin and relative movements */
+          if (pjptr != NULL && npointtotal > 0) {
+            /* write the route header */
+            fprintf(sfp, "## ROUTENAME %s\r\n", routename);
+            fprintf(sfp, "## ROUTEPOINTS %d\r\n", npointtotal);
+            fprintf(sfp, "## STARTROUTE\r\n");
 
-        /* write the route points */
-        n = 0;
-        for (j = 0; j < npointtotal; j++) {
-          if (routewaypoint[j] != MBV_ROUTE_WAYPOINT_NONE) {
-            n++;
-            fprintf(sfp, "%s %d,%.10f,%.10f,17,100.0,0.00,0.00,255,0.00\r\n", routename, n, routelat[j], routelon[j]);
+            /* write the route points */
+            fprintf(sfp, "## altitude, %.3f\r\n", altitude);
+            fprintf(sfp, "##\n");
+            fprintf(sfp, "## heading abs 0.0\r\n");
+            double xx0, yy0, xx1, yy1;
+            double heading0, heading1, dheading;
+            for (j = 0; j < npointtotal; j++) {
+              double xxxx, yyyy;
+              double range;
+              double bearing, heading0, heading1;
+              if (routewaypoint[j] > MBV_ROUTE_WAYPOINT_NONE) {
+                mb_proj_forward(verbose, pjptr, routelon[j], routelat[j], &xxxx, &yyyy, &error);
+                xxxx = xxxx - origin_x;
+                yyyy = yyyy - origin_y;
+                if (j == 0) {
+                  xx0 = xxxx;
+                  yy0 = yyyy;
+                  heading0 = routebearing[j];
+                }
+                else {
+                  xx1 = xxxx;
+                  yy1 = yyyy;
+                  range = sqrt((xx1 - xx0) * (xx1 - xx0) + (yy1 - yy0) * (yy1 - yy0));
+                  heading1 = routebearing[j];
+                  dheading = heading1 - heading0;
+                  if (dheading > 180.0) {
+                    dheading -= 360.0;
+                  } else if (dheading < -180.0) {
+                    dheading += 360.0;
+                  }
+                  fprintf(sfp, "move bearing 0.0, %.2f", range);
+                  fprintf(sfp, "heading rel %.2f", dheading);
+                  xx0 = xx1;
+                  yy0 = yy1;
+                  heading0 = heading1;
+                }
+              }
+            }
+
+            /* write the route end */
+            fprintf(sfp, "## End\r\n");
+          }
+
+          /* deallocate arrays */
+          if (npointalloc > 0) {
+            status = mbview_freeroutearrays(verbose, &routelon, &routelat, &routewaypoint, &routetopo, &routebearing,
+                                            &distlateral, &distovertopo, &slope, &error);
           }
         }
       }
 
       /* close the output file */
       fclose(sfp);
-
-      /* deallocate arrays */
-      if (npointalloc > 0) {
-        status = mbview_freeroutearrays(verbose, &routelon, &routelat, &routewaypoint, &routetopo, &routebearing,
-                                        &distlateral, &distovertopo, &slope, &error);
-      }
     }
   }
 
@@ -3673,6 +3975,7 @@ int do_mbgrdviz_savedegdecmin(size_t instance, char *output_file_ptr) {
   double *slope = NULL;
   int routecolor;
   int routesize;
+  int routeeditmode;
   mb_path routename;
   char latNS, lonEW;
   int latDeg, lonDeg;
@@ -3738,7 +4041,8 @@ int do_mbgrdviz_savedegdecmin(size_t instance, char *output_file_ptr) {
         /* extract data for route */
         status =
             mbview_getroute(verbose, instance, iroute, &npointtotal, routelon, routelat, routewaypoint, routetopo,
-                            routebearing, distlateral, distovertopo, slope, &routecolor, &routesize, routename, &error);
+                            routebearing, distlateral, distovertopo, slope, &routecolor, &routesize, 
+                            &routeeditmode, routename, &error);
 
         /* write the route points */
         n = 0;
@@ -3805,6 +4109,7 @@ int do_mbgrdviz_savelnw(size_t instance, char *output_file_ptr) {
   double *slope = NULL;
   int routecolor;
   int routesize;
+  int routeeditmode;
   mb_path routename;
   char *error_message;
   char projection_id[MB_PATH_MAXLINE];
@@ -3877,7 +4182,8 @@ int do_mbgrdviz_savelnw(size_t instance, char *output_file_ptr) {
         /* extract data for route */
         status =
             mbview_getroute(verbose, instance, iroute, &npointtotal, routelon, routelat, routewaypoint, routetopo,
-                            routebearing, distlateral, distovertopo, slope, &routecolor, &routesize, routename, &error);
+                            routebearing, distlateral, distovertopo, slope, &routecolor, &routesize, 
+                            &routeeditmode, routename, &error);
 
         /* if this the first route define the projection */
         if (pjptr == NULL && npointtotal > 0) {
@@ -3968,6 +4274,7 @@ int do_mbgrdviz_savegreenseayml(size_t instance, char *output_file_ptr) {
   double *slope = NULL;
   int routecolor;
   int routesize;
+  int routeeditmode;
   mb_path routename;
   bool selected;
   // char *error_message;
@@ -4059,7 +4366,7 @@ int do_mbgrdviz_savegreenseayml(size_t instance, char *output_file_ptr) {
       status = mbview_getroute(verbose, instance, iroutewrite, &npointtotal,
                                 routelon, routelat, routewaypoint, routetopo,
                                 routebearing, distlateral, distovertopo, slope,
-                                &routecolor, &routesize, routename, &error);
+                                &routecolor, &routesize, &routeeditmode, routename, &error);
 
       /* output header of mission */
       fprintf(sfp, "mission_data:\n");
@@ -4152,6 +4459,7 @@ int do_mbgrdviz_savetecdislst(size_t instance, char *output_file_ptr) {
   double *slope = NULL;
   int routecolor;
   int routesize;
+  int routeeditmode;
   mb_path routename;
   char latNS, lonEW;
   int latDeg, lonDeg;
@@ -4217,7 +4525,8 @@ int do_mbgrdviz_savetecdislst(size_t instance, char *output_file_ptr) {
         /* extract data for route */
         status =
             mbview_getroute(verbose, instance, iroute, &npointtotal, routelon, routelat, routewaypoint, routetopo,
-                            routebearing, distlateral, distovertopo, slope, &routecolor, &routesize, routename, &error);
+                            routebearing, distlateral, distovertopo, slope, &routecolor, &routesize, 
+                            &routeeditmode, routename, &error);
 
         /* write the route points */
         n = 0;
@@ -4252,6 +4561,410 @@ int do_mbgrdviz_savetecdislst(size_t instance, char *output_file_ptr) {
             fprintf(sfp, "$PTLKP,9,%2.2d%9.6f,%c,%3.3d%9.6f,%c\r\n", latDeg, latMin, latNS, lonDeg, lonMin, lonEW);
           }
         }
+      }
+
+      /* close the output file */
+      fclose(sfp);
+
+      /* deallocate arrays */
+      if (npointalloc > 0) {
+        status = mbview_freeroutearrays(verbose, &routelon, &routelat, &routewaypoint, &routetopo, &routebearing,
+                                        &distlateral, &distovertopo, &slope, &error);
+      }
+    }
+  }
+
+  /* all done */
+  return (status);
+}
+/*---------------------------------------------------------------------------------------*/
+
+int do_mbgrdviz_savekongsbergdp(size_t instance, char *output_file_ptr) {
+  int status = MB_SUCCESS;
+  FILE *sfp;
+  int nroute = 0;
+  int npoint = 0;
+  int nintpoint = 0;
+  int npointtotal = 0;
+  int npointalloc = 0;
+  double *routelon = NULL;
+  double *routelat = NULL;
+  int *routewaypoint = NULL;
+  double *routetopo = NULL;
+  double *routebearing = NULL;
+  double *distlateral = NULL;
+  double *distovertopo = NULL;
+  double *slope = NULL;
+  int routecolor;
+  int routesize;
+  int routeeditmode;
+  mb_path routename;
+  char latNS, lonEW;
+  int latDeg, lonDeg;
+  double latMin, lonMin;
+  int iroute, j, n;
+
+  if (verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2  Input arguments:\n");
+    fprintf(stderr, "dbg2       instance:        %zu\n", instance);
+    fprintf(stderr, "dbg2       output_file_ptr: %s\n", output_file_ptr);
+  }
+
+  /* read data for valid instance */
+  if (instance != MBV_NO_WINDOW) {
+
+    /* get the number of routes to be written to the output file */
+    status = mbview_getroutecount(verbose, instance, &nroute, &error);
+    if (nroute <= 0) {
+      fprintf(stderr, "Unable to write Kongsberg DP waypoint file...\nCurrently %d routes defined for instance %zu!\n", nroute, instance);
+      XBell((Display *)XtDisplay(mainWindow), 100);
+      status = MB_FAILURE;
+    }
+
+    /* initialize the output file */
+    if (status == MB_SUCCESS && nroute > 0) {
+      /* open the output file */
+      if ((sfp = fopen(output_file_ptr, "w")) == NULL) {
+        error = MB_ERROR_OPEN_FAIL;
+        status = MB_FAILURE;
+        fprintf(stderr, "\nUnable to open Kongsberg DP waypoint file <%s> for writing\n", output_file_ptr);
+        XBell((Display *)XtDisplay(mainWindow), 100);
+      }
+    }
+
+    /* if all ok proceed to extract and output routes */
+    if (status == MB_SUCCESS) {
+
+			/* get the creation time */
+			//char user[256], host[256], date[32];
+			//status = mb_user_host_date(verbose, user, host, date, &error);
+			//fprintf(sfp, "## Run by user <%s> on cpu <%s> at <%s>\n", user, host, date);
+			time_t right_now = time(NULL);
+			struct tm *tm_ptr = gmtime(&right_now);
+			double time_d = (double) right_now;
+			int time_i[7];
+			mb_get_date(verbose, time_d, time_i);
+			fprintf(sfp, "CreateDate (UTC),%s, %s %d, %d %2.2d:%2.2d:%2.2d\r\nVersion,4\r\n", 
+								mb_day_name(verbose, tm_ptr->tm_wday + 1), mb_month_name(verbose, 
+								time_i[1]), time_i[2], time_i[0], time_i[3], time_i[4], time_i[5]);
+
+      /* loop over routes */
+      for (iroute = 0; iroute < nroute; iroute++) {
+        /* get point count for current route */
+        status = mbview_getroutepointcount(verbose, instance, iroute, &npoint, &nintpoint, &error);
+
+        /* allocate route arrays */
+        npointtotal = npoint + nintpoint;
+        if (status == MB_SUCCESS && npointalloc < npointtotal) {
+          status = mbview_allocroutearrays(verbose, npointtotal, &routelon, &routelat, &routewaypoint, &routetopo,
+                                           &routebearing, &distlateral, &distovertopo, &slope, &error);
+          if (status == MB_SUCCESS) {
+            npointalloc = npointtotal;
+          }
+
+          /* if error initializing memory then cancel dealing with this route */
+          else {
+            fprintf(stderr, "Unable to write Kongsberg DP waypoint file...\nArray allocation for %d points failed for instance %zu!\n",
+                    npointtotal, instance);
+            XBell((Display *)XtDisplay(mainWindow), 100);
+            npoint = 0;
+            nintpoint = 0;
+            npointtotal = 0;
+          }
+        }
+
+        /* extract data for route */
+        status = mbview_getroutepointcount(verbose, instance, iroute, &npoint, &nintpoint, &error);
+        status = mbview_getroute(verbose, instance, iroute, &npointtotal, 
+        										routelon, routelat, routewaypoint, routetopo, routebearing, 
+        										distlateral, distovertopo, slope, &routecolor, &routesize, 
+                            &routeeditmode, routename, &error);
+                            
+			  fprintf(sfp, "TrackName,%s\r\n", routename);
+			  fprintf(sfp, "NoOfWp,%d\r\n", npoint);
+			  fprintf(sfp, "Datum,WGS84\r\n");
+			  fprintf(sfp, "WPFormat,WPId,WPHemisNS,WPLatDeg,WPLatMin,WPHemisEW,WPLonDeg,WPLonMin,WPLegType,WPHead,WPSpeed,WPTurnRad\r\n");
+
+        /* write the route points */
+        int noutputwaypoints = 0;
+        for (j = 0; j < npointtotal; j++) {
+          if (routewaypoint[j] != MBV_ROUTE_WAYPOINT_NONE) {
+            noutputwaypoints++;
+            if (routelat[j] >= 0.0)
+              latNS = 'N';
+            else
+              latNS = 'S';
+            latDeg = (int)(floor(fabs(routelat[j])));
+            latMin = (fabs(routelat[j]) - (double)latDeg) * 60.0;
+            if (routelon[j] >= 0.0)
+              lonEW = 'E';
+            else
+              lonEW = 'W';
+            lonDeg = (int)(floor(fabs(routelon[j])));
+            lonMin = (fabs(routelon[j]) - (double)lonDeg) * 60.0;
+
+            fprintf(sfp, "WP,%d,%c,%2.2d,%09.6f,%c,%3.3d,%09.6f,0,  0.000,5.0000,350.00\r\n", 
+            				noutputwaypoints,latNS, latDeg, latMin, lonEW, lonDeg, lonMin);
+          }
+        }
+			  fprintf(sfp, "END\r\n");
+      }
+
+      /* close the output file */
+      fclose(sfp);
+
+      /* deallocate arrays */
+      if (npointalloc > 0) {
+        status = mbview_freeroutearrays(verbose, &routelon, &routelat, &routewaypoint, &routetopo, &routebearing,
+                                        &distlateral, &distovertopo, &slope, &error);
+      }
+    }
+  }
+
+  /* all done */
+  return (status);
+}
+/*---------------------------------------------------------------------------------------*/
+
+int do_mbgrdviz_savesisasciiplan1(size_t instance, char *output_file_ptr) {
+  int status = MB_SUCCESS;
+  FILE *sfp;
+  int nroute = 0;
+  int npoint = 0;
+  int nintpoint = 0;
+  int npointtotal = 0;
+  int npointalloc = 0;
+  double *routelon = NULL;
+  double *routelat = NULL;
+  int *routewaypoint = NULL;
+  double *routetopo = NULL;
+  double *routebearing = NULL;
+  double *distlateral = NULL;
+  double *distovertopo = NULL;
+  double *slope = NULL;
+  int routecolor;
+  int routesize;
+  int routeeditmode;
+  mb_path routename;
+  char latNS, lonEW;
+  int latDeg, lonDeg;
+  double latMin, lonMin;
+  int iroute, j, n;
+
+  if (verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2  Input arguments:\n");
+    fprintf(stderr, "dbg2       instance:        %zu\n", instance);
+    fprintf(stderr, "dbg2       output_file_ptr: %s\n", output_file_ptr);
+  }
+
+  /* read data for valid instance */
+  if (instance != MBV_NO_WINDOW) {
+
+    /* get the number of routes to be written to the output file */
+    status = mbview_getroutecount(verbose, instance, &nroute, &error);
+    if (nroute <= 0) {
+      fprintf(stderr, "Unable to write SIS Asciiplan line file...\nCurrently %d routes defined for instance %zu!\n", nroute, instance);
+      XBell((Display *)XtDisplay(mainWindow), 100);
+      status = MB_FAILURE;
+    }
+
+    /* initialize the output file */
+    if (status == MB_SUCCESS && nroute > 0) {
+      /* open the output file */
+      if ((sfp = fopen(output_file_ptr, "w")) == NULL) {
+        error = MB_ERROR_OPEN_FAIL;
+        status = MB_FAILURE;
+        fprintf(stderr, "\nUnable to open SIS Asciiplan line file <%s> for writing\n", output_file_ptr);
+        XBell((Display *)XtDisplay(mainWindow), 100);
+      }
+    }
+
+    /* if all ok proceed to extract and output routes */
+    if (status == MB_SUCCESS) {
+
+			/* get the creation time */
+			time_t right_now = time(NULL);
+			struct tm *tm_ptr = gmtime(&right_now);
+			double time_d = (double) right_now;
+			int time_i[7];
+			mb_get_date(verbose, time_d, time_i);
+			fprintf(sfp, "DEG\r\n\r\n0 0 0 0\r\n");
+
+      /* loop over routes */
+      for (iroute = 0; iroute < nroute; iroute++) {
+        /* get point count for current route */
+        status = mbview_getroutepointcount(verbose, instance, iroute, &npoint, &nintpoint, &error);
+
+        /* allocate route arrays */
+        npointtotal = npoint + nintpoint;
+        if (status == MB_SUCCESS && npointalloc < npointtotal) {
+          status = mbview_allocroutearrays(verbose, npointtotal, &routelon, &routelat, &routewaypoint, &routetopo,
+                                           &routebearing, &distlateral, &distovertopo, &slope, &error);
+          if (status == MB_SUCCESS) {
+            npointalloc = npointtotal;
+          }
+
+          /* if error initializing memory then cancel dealing with this route */
+          else {
+            fprintf(stderr, "Unable to write SIS Asciiplan line file...\nArray allocation for %d points failed for instance %zu!\n",
+                    npointtotal, instance);
+            XBell((Display *)XtDisplay(mainWindow), 100);
+            npoint = 0;
+            nintpoint = 0;
+            npointtotal = 0;
+          }
+        }
+
+        /* extract data for route */
+        status = mbview_getroutepointcount(verbose, instance, iroute, &npoint, &nintpoint, &error);
+        status = mbview_getroute(verbose, instance, iroute, &npointtotal, 
+        										routelon, routelat, routewaypoint, routetopo, routebearing, 
+        										distlateral, distovertopo, slope, &routecolor, &routesize, 
+                            &routeeditmode, routename, &error);
+                            
+        /* write the route points */
+        int noutputlines = 0;
+        double lastlon, lastlat;
+        for (j = 0; j < npointtotal; j++) {
+          if (routewaypoint[j] != MBV_ROUTE_WAYPOINT_NONE) {
+          	if (j > 0) {
+							fprintf(sfp, "_LINE Line%d %d %4.4d%2.2d%2.2d%2.2d%2.2d%2.2d 0 %.9f %.9f %.9f %.9f \"\r\n",
+											noutputlines, noutputlines, 
+											time_i[0], time_i[1], time_i[2], time_i[3], time_i[4], time_i[5], 
+											lastlat, lastlon, routelat[j], routelon[j]);
+							noutputlines++;
+            }
+						lastlon = routelon[j];
+						lastlat = routelat[j];
+          }
+        }
+      }
+
+      /* close the output file */
+      fclose(sfp);
+
+      /* deallocate arrays */
+      if (npointalloc > 0) {
+        status = mbview_freeroutearrays(verbose, &routelon, &routelat, &routewaypoint, &routetopo, &routebearing,
+                                        &distlateral, &distovertopo, &slope, &error);
+      }
+    }
+  }
+
+  /* all done */
+  return (status);
+}
+/*---------------------------------------------------------------------------------------*/
+
+int do_mbgrdviz_savesisasciiplan2(size_t instance, char *output_file_ptr) {
+  int status = MB_SUCCESS;
+  FILE *sfp;
+  int nroute = 0;
+  int npoint = 0;
+  int nintpoint = 0;
+  int npointtotal = 0;
+  int npointalloc = 0;
+  double *routelon = NULL;
+  double *routelat = NULL;
+  int *routewaypoint = NULL;
+  double *routetopo = NULL;
+  double *routebearing = NULL;
+  double *distlateral = NULL;
+  double *distovertopo = NULL;
+  double *slope = NULL;
+  int routecolor;
+  int routesize;
+  int routeeditmode;
+  mb_path routename;
+  char latNS, lonEW;
+  int latDeg, lonDeg;
+  double latMin, lonMin;
+  int iroute, j, n;
+
+  if (verbose >= 2) {
+    fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
+    fprintf(stderr, "dbg2  Input arguments:\n");
+    fprintf(stderr, "dbg2       instance:        %zu\n", instance);
+    fprintf(stderr, "dbg2       output_file_ptr: %s\n", output_file_ptr);
+  }
+
+  /* read data for valid instance */
+  if (instance != MBV_NO_WINDOW) {
+
+    /* get the number of routes to be written to the output file */
+    status = mbview_getroutecount(verbose, instance, &nroute, &error);
+    if (nroute <= 0) {
+      fprintf(stderr, "Unable to write SIS Asciiplan route file...\nCurrently %d routes defined for instance %zu!\n", nroute, instance);
+      XBell((Display *)XtDisplay(mainWindow), 100);
+      status = MB_FAILURE;
+    }
+
+    /* initialize the output file */
+    if (status == MB_SUCCESS && nroute > 0) {
+      /* open the output file */
+      if ((sfp = fopen(output_file_ptr, "w")) == NULL) {
+        error = MB_ERROR_OPEN_FAIL;
+        status = MB_FAILURE;
+        fprintf(stderr, "\nUnable to open SIS Asciiplan route file <%s> for writing\n", output_file_ptr);
+        XBell((Display *)XtDisplay(mainWindow), 100);
+      }
+    }
+
+    /* if all ok proceed to extract and output routes */
+    if (status == MB_SUCCESS) {
+
+			/* get the creation time */
+			time_t right_now = time(NULL);
+			struct tm *tm_ptr = gmtime(&right_now);
+			double time_d = (double) right_now;
+			int time_i[7];
+			mb_get_date(verbose, time_d, time_i);
+			fprintf(sfp, "DEG\r\n\r\n0 0 0 0\r\n");
+
+      /* loop over routes */
+      for (iroute = 0; iroute < nroute; iroute++) {
+        /* get point count for current route */
+        status = mbview_getroutepointcount(verbose, instance, iroute, &npoint, &nintpoint, &error);
+
+        /* allocate route arrays */
+        npointtotal = npoint + nintpoint;
+        if (status == MB_SUCCESS && npointalloc < npointtotal) {
+          status = mbview_allocroutearrays(verbose, npointtotal, &routelon, &routelat, &routewaypoint, &routetopo,
+                                           &routebearing, &distlateral, &distovertopo, &slope, &error);
+          if (status == MB_SUCCESS) {
+            npointalloc = npointtotal;
+          }
+
+          /* if error initializing memory then cancel dealing with this route */
+          else {
+            fprintf(stderr, "Unable to write SIS Asciiplan route file...\nArray allocation for %d points failed for instance %zu!\n",
+                    npointtotal, instance);
+            XBell((Display *)XtDisplay(mainWindow), 100);
+            npoint = 0;
+            nintpoint = 0;
+            npointtotal = 0;
+          }
+        }
+
+        /* extract data for route */
+        status = mbview_getroutepointcount(verbose, instance, iroute, &npoint, &nintpoint, &error);
+        status = mbview_getroute(verbose, instance, iroute, &npointtotal, 
+        										routelon, routelat, routewaypoint, routetopo, routebearing, 
+        										distlateral, distovertopo, slope, &routecolor, &routesize, 
+                            &routeeditmode, routename, &error);
+                            
+        /* write the route points */
+				fprintf(sfp, "_LINE Route%d %d %4.4d%2.2d%2.2d%2.2d%2.2d%2.2d 0",
+								iroute, iroute, 
+								time_i[0], time_i[1], time_i[2], time_i[3], time_i[4], time_i[5]);
+        for (j = 0; j < npointtotal; j++) {
+          if (routewaypoint[j] != MBV_ROUTE_WAYPOINT_NONE) {
+						fprintf(sfp, " %.9f %.9f", routelat[j], routelon[j]);
+          }
+        }
+				fprintf(sfp, " \"\r\n");
       }
 
       /* close the output file */
@@ -4404,7 +5117,7 @@ int do_mbgrdviz_openvector(size_t instance, char *input_file_ptr) {
 
       /* add last vector if not already handled */
       if (npoint > 0) {
-        fprintf(stderr, "Adding vector npoints:%d\n", npoint);
+        fprintf(stderr, "Adding vector npoints:%d value min max: %f %f\n", npoint, vectordatamin, vectordatamax);
         status = mbview_addvector(verbose, instance, npoint, vectorlon, vectorlat, vectorz, vectordata, vectorcolor,
                                   vectorsize, vectorname, vectordatamin, vectordatamax, &error);
         npoint = 0;
@@ -4554,6 +5267,8 @@ int do_mbgrdviz_opennav(size_t instance, bool swathbounds, char *input_file_ptr)
   mb_path swathfileraw;
   mb_path swathfileprocessed;
   mb_path dfile;
+  int astatus = MB_ALTNAV_USE;
+  mb_path apath;
   int format;
   int formatorg;
   double weight;
@@ -4576,7 +5291,8 @@ int do_mbgrdviz_opennav(size_t instance, bool swathbounds, char *input_file_ptr)
     while (!done) {
       if ((status = mb_datalist_open(verbose, &datalist, input_file_ptr, MB_DATALIST_LOOK_UNSET, &error)) == MB_SUCCESS) {
         while (!done) {
-          if ((status = mb_datalist_read2(verbose, datalist, &swathfilestatus, swathfileraw, swathfileprocessed, dfile,
+          if ((status = mb_datalist_read3(verbose, datalist, &swathfilestatus, swathfileraw, swathfileprocessed, 
+                                          &astatus, apath, dfile,
                                           &format, &weight, &error)) == MB_SUCCESS) {
             nfiledatalist++;
             if (format != MBF_ASCIIXYZ && format != MBF_ASCIIYXZ && format != MBF_ASCIIXYT &&
@@ -4667,7 +5383,7 @@ int do_mbgrdviz_readnav(size_t instance, char *swathfile, int pathstatus, char *
   double heading;
   double distance;
   double altitude;
-  double sonardepth;
+  double sensordepth;
   char *beamflag = NULL;
   double *bath = NULL;
   double *bathacrosstrack = NULL;
@@ -4831,7 +5547,7 @@ int do_mbgrdviz_readnav(size_t instance, char *swathfile, int pathstatus, char *
     while (*error <= MB_ERROR_NO_ERROR) {
       /* read a ping of data */
       status = mb_get_all(verbose, mbio_ptr, &store_ptr, &kind, time_i, &time_d, &lon, &lat, &speed, &heading, &distance,
-                          &altitude, &sonardepth, &beams_bath, &beams_amp, &pixels_ss, beamflag, bath, amp, bathacrosstrack,
+                          &altitude, &sensordepth, &beams_bath, &beams_amp, &pixels_ss, beamflag, bath, amp, bathacrosstrack,
                           bathalongtrack, ss, ssacrosstrack, ssalongtrack, comment, error);
 
       /* ignore minor errors */
@@ -4958,7 +5674,7 @@ int do_mbgrdviz_readnav(size_t instance, char *swathfile, int pathstatus, char *
         navtime_d[npoint] = time_d;
         navlon[npoint] = lon;
         navlat[npoint] = lat;
-        navz[npoint] = -sonardepth;
+        navz[npoint] = -sensordepth;
         navheading[npoint] = heading;
         navspeed[npoint] = speed;
 
@@ -5227,7 +5943,7 @@ void do_mbgrdviz_open_region(Widget w, XtPointer client_data, XtPointer call_dat
           data_source->primary_histogram, data_source->primaryslope_histogram, data_source->secondary_histogram,
           data_source->primary_shade_mode, data_source->slope_shade_mode, data_source->secondary_shade_mode,
           data_source->grid_contour_mode, data_source->site_view_mode, data_source->route_view_mode,
-          data_source->nav_view_mode, data_source->navdrape_view_mode, data_source->vector_view_mode,
+          data_source->nav_view_mode, data_source->navswathbounds_view_mode, data_source->navdrape_view_mode, data_source->vector_view_mode,
           data_source->exageration, data_source->modelelevation3d, data_source->modelazimuth3d,
           data_source->viewelevation3d, data_source->viewazimuth3d, data_source->illuminate_magnitude,
           data_source->illuminate_elevation, data_source->illuminate_azimuth, data_source->slope_magnitude,
@@ -5281,17 +5997,11 @@ void do_mbgrdviz_open_region(Widget w, XtPointer client_data, XtPointer call_dat
                          &error);
         mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savesite, "Save Site File", MBV_EXISTMASK_SITE,
                          &error);
-        mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savesitewpt, "Save Sites as Winfrog WPT File", MBV_EXISTMASK_SITE,
-                         &error);
         mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_saveroute, "Save Route File",
                          MBV_EXISTMASK_ROUTE, &error);
         mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_saverisiscriptheading, "Save Risi Script File (variable heading)",
                          MBV_EXISTMASK_ROUTE, &error);
         mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_saverisiscriptnoheading, "Save Risi Script File (static heading)",
-                         MBV_EXISTMASK_ROUTE, &error);
-        mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savewinfrogpts, "Save Route as Winfrog PTS File",
-                         MBV_EXISTMASK_ROUTE, &error);
-        mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savewinfrogwpt, "Save Route as Winfrog WPT File",
                          MBV_EXISTMASK_ROUTE, &error);
         mbview_addaction(verbose, instance, do_mbgrdviz_fileSelectionBox_savedegdecmin,
                          "Save Route as Degrees + Decimal Minutes File", MBV_EXISTMASK_ROUTE, &error);

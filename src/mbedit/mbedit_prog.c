@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mbedit.c	4/8/93
  *
- *    Copyright (c) 1993-2020 by
+ *    Copyright (c) 1993-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * MBEDIT is an interactive beam editor for multibeam bathymetry data.
@@ -77,7 +87,7 @@
 #define MBEDIT_PLOT_SPEED 6
 #define MBEDIT_PLOT_DEPTH 7
 #define MBEDIT_PLOT_ALTITUDE 8
-#define MBEDIT_PLOT_SONARDEPTH 9
+#define MBEDIT_PLOT_SENSORDEPTH 9
 #define MBEDIT_PLOT_ROLL 10
 #define MBEDIT_PLOT_PITCH 11
 #define MBEDIT_PLOT_HEAVE 12
@@ -116,11 +126,13 @@ struct mbedit_ping_struct {
 	double speed;
 	double heading;
 	double altitude;
-	double sonardepth;
+	double sensordepth;
 	double roll;
 	double pitch;
 	double heave;
 	double distance;
+	bool dualprofile;
+	int dualprofilebeam;
 	int beams_bath;
 	char *beamflag;
 	char *beamflagorg;
@@ -341,7 +353,6 @@ int mbedit_init(int argc, char **argv, int *startup_file) {
 	int errflg = 0;
 	int c;
 	int help = 0;
-	int flag = 0;
 
 	/* process argument list */
 	while ((c = getopt(argc, argv, "VvHhB:b:DdE:e:F:f:GgI:i:SsXx")) != -1) {
@@ -358,40 +369,33 @@ int mbedit_init(int argc, char **argv, int *startup_file) {
 		case 'b':
 			sscanf(optarg, "%d/%d/%d/%d/%d/%d", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &btime_i[5]);
 			btime_i[6] = 0;
-			flag++;
 			break;
 		case 'D':
 		case 'd':
 			output_mode = MBEDIT_OUTPUT_BROWSE;
-			flag++;
 			break;
 		case 'E':
 		case 'e':
 			sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
 			etime_i[6] = 0;
-			flag++;
 			break;
 		case 'F':
 		case 'f':
 			sscanf(optarg, "%d", &format);
-			flag++;
 			break;
 		case 'G':
 		case 'g':
 			gui_mode = true;
-			flag++;
 			break;
 		case 'I':
 		case 'i':
 			sscanf(optarg, "%s", ifile);
 			do_parse_datalist(ifile, format);
-			flag++;
 			fileflag++;
 			break;
 		case 'X':
 		case 'x':
 			run_mbprocess = true;
-			flag++;
 			break;
 		case '?':
 			errflg++;
@@ -3224,8 +3228,6 @@ int mbedit_filter_ping(int iping) {
 					/* calculate median if beam not flagged */
 					if (mb_beam_ok(ping[iping].beamflag[jbeam])) {
 						int nbathlist = 0;
-						int nbathsum = 0;
-						// bathsum = 0.0;
 						double bathmedian = 0.0;
 						const int istart = MAX(iping - filter_medianspike_ltrack / 2, 0);
 						const int iend = MIN(iping + filter_medianspike_ltrack / 2, nbuff - 1);
@@ -3234,8 +3236,6 @@ int mbedit_filter_ping(int iping) {
 							const int jend = MIN(jbeam + filter_medianspike_xtrack / 2, ping[iping].beams_bath - 1);
 							for (int j = jstart; j <= jend; j++) {
 								if (mb_beam_ok(ping[i].beamflag[j])) {
-									// bathsum += ping[i].bath[j];
-									nbathsum++;
 									bathlist[nbathlist] = ping[i].bath[j];
 									nbathlist++;
 								}
@@ -3937,7 +3937,7 @@ int mbedit_load_data(int buffer_size, int *nloaded, int *nbuffer, int *ngood, in
 		error = MB_ERROR_NO_ERROR;
 		status = mb_get_all(verbose, imbio_ptr, &store_ptr, &kind, ping[nbuff].time_i, &ping[nbuff].time_d, &ping[nbuff].navlon,
 		                    &ping[nbuff].navlat, &ping[nbuff].speed, &ping[nbuff].heading, &distance, &ping[nbuff].altitude,
-		                    &ping[nbuff].sonardepth, &ping[nbuff].beams_bath, &namp, &nss, beamflag, bath, amp, bathacrosstrack,
+		                    &ping[nbuff].sensordepth, &ping[nbuff].beams_bath, &namp, &nss, beamflag, bath, amp, bathacrosstrack,
 		                    bathalongtrack, ss, ssacrosstrack, ssalongtrack, comment, &error);
 		if (error <= MB_ERROR_NO_ERROR && kind == MB_DATA_DATA) {
 			if (nbuff > 0)
@@ -4215,20 +4215,25 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 	*nplt = nplot;
 
 	/* get data into ping arrays and find median depth value */
-	// double bathsum = 0.0;
-	int nbathsum = 0;
 	int nbathlist = 0;
+	double xtrack_min = 0.0;
 	double xtrack_max = 0.0;
+	double xtrack_absmax = 0.0;
 	for (int i = current_id; i < current_id + nplot; i++) {
 		ping[i].record = i + ndump_total;
 		ping[i].outbounds = MBEDIT_OUTBOUNDS_NONE;
 		for (int j = 0; j < ping[i].beams_bath; j++) {
 			if (mb_beam_ok(ping[i].beamflag[j])) {
-				// bathsum += ping[i].bath[j];
-				nbathsum++;
 				bathlist[nbathlist] = ping[i].bath[j];
+				if (nbathlist == 0) {
+					xtrack_min = ping[i].bathacrosstrack[j];
+					xtrack_max = ping[i].bathacrosstrack[j];
+				}
+				else {
+					xtrack_min = MIN(xtrack_min, ping[i].bathacrosstrack[j]);
+					xtrack_max = MAX(xtrack_max, ping[i].bathacrosstrack[j]);
+				}
 				nbathlist++;
-				xtrack_max = MAX(xtrack_max, fabs(ping[i].bathacrosstrack[j]));
 			}
 		}
 	}
@@ -4239,32 +4244,62 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 		for (int i = current_id; i < current_id + nplot; i++) {
 			for (int j = 0; j < ping[i].beams_bath; j++) {
 				if (!mb_beam_ok(ping[i].beamflag[j]) && !mb_beam_check_flag_unusable2(ping[i].beamflag[j])) {
-					// bathsum += ping[i].bath[j];
-					nbathsum++;
 					bathlist[nbathlist] = ping[i].bath[j];
+					if (nbathlist == 0) {
+						xtrack_min = ping[i].bathacrosstrack[j];
+						xtrack_max = ping[i].bathacrosstrack[j];
+					}
+					else {
+						xtrack_min = MIN(xtrack_min, ping[i].bathacrosstrack[j]);
+						xtrack_max = MAX(xtrack_max, ping[i].bathacrosstrack[j]);
+					}
 					nbathlist++;
-					xtrack_max = MAX(xtrack_max, fabs(ping[i].bathacrosstrack[j]));
 				}
 			}
 		}
 	}
+	xtrack_absmax = MAX(fabs(xtrack_min), fabs(xtrack_max));
 	double bathmedian = 0.0;  // -Wmaybe-uninitialized
 	if (nbathlist > 0) {
 		qsort(bathlist, nbathlist, sizeof(double), mb_double_compare);
 		bathmedian = bathlist[nbathlist / 2];
 	}
-
-	/* reset xtrack_max if required */
-	if (autoscale && xtrack_max < 0.5) {
-		xtrack_max = 1000.0;
+	
+	/* check for dual profile condition */
+	for (int i = current_id; i < current_id + nplot; i++) {
+		ping[i].dualprofile = false;
+		ping[i].dualprofilebeam = 0;
+		bool first = true;
+		double xtrack_old = 0.0;
+		for (int j = 0; j < ping[i].beams_bath; j++) {
+			if (!mb_beam_check_flag_unusable2(ping[i].beamflag[j])) {
+				if (first) {
+					xtrack_old = ping[i].bathacrosstrack[j];
+					first = false;
+				}
+				else {
+					double xtrack_diff = ping[i].bathacrosstrack[j] - xtrack_old;
+					if (xtrack_diff < 0.0 && fabs(xtrack_diff) > 0.5 * xtrack_absmax) {
+						ping[i].dualprofile = true;
+						ping[i].dualprofilebeam = j;
+					}
+					xtrack_old = ping[i].bathacrosstrack[j];
+				}
+			}
+		}
 	}
-	else if (autoscale && xtrack_max > 100000.0) {
-		xtrack_max = 100000.0;
+
+	/* reset xtrack_absmax if required */
+	if (autoscale && xtrack_absmax < 0.5) {
+		xtrack_absmax = 1000.0;
+	}
+	else if (autoscale && xtrack_absmax > 100000.0) {
+		xtrack_absmax = 100000.0;
 	}
 
 	/* if autoscale on reset plot width */
-	if (autoscale && xtrack_max > 0.0) {
-		plot_width = (int)(2.4 * xtrack_max);
+	if (autoscale && xtrack_absmax > 0.0) {
+		plot_width = (int)(2.4 * xtrack_absmax);
 		const int ndec = MAX(1, (int)log10((double)plot_width));
 		int maxx = 1;
 		for (int i = 0; i < ndec; i++)
@@ -4309,10 +4344,9 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 	/* print out information */
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2       %d data records set for plotting (%d desired)\n", nplot, plot_size);
-		fprintf(stderr, "dbg2       xtrack_max:  %f\n", xtrack_max);
-		fprintf(stderr, "dbg2       bathmedian:  %f\n", bathmedian);
-		fprintf(stderr, "dbg2       nbathlist:   %d\n", nbathlist);
-		fprintf(stderr, "dbg2       nbathsum:    %d\n", nbathsum);
+		fprintf(stderr, "dbg2       xtrack_absmax:  %f\n", xtrack_absmax);
+		fprintf(stderr, "dbg2       bathmedian:     %f\n", bathmedian);
+		fprintf(stderr, "dbg2       nbathlist:      %d\n", nbathlist);
 		for (int i = current_id; i < current_id + nplot; i++) {
 			fprintf(stderr, "dbg2       %4d %4d %4d  %d/%d/%d %2.2d:%2.2d:%2.2d.%6.6d  %10.3f\n", i, ping[i].id, ping[i].record,
 			        ping[i].time_i[1], ping[i].time_i[2], ping[i].time_i[0], ping[i].time_i[3], ping[i].time_i[4],
@@ -4709,7 +4743,10 @@ int mbedit_plot_ping(int iping) {
 	/* plot the ping profile */
 	bool first = true;
 	bool last_flagged = false;
+	bool dualprofilebreak = false;
 	for (int j = 0; j < ping[iping].beams_bath; j++) {
+		if (ping[iping].dualprofile && ping[iping].dualprofilebeam == j)
+			dualprofilebreak = true;
 		if (show_flaggedprofiles && !mb_beam_ok(ping[iping].beamflag[j]) &&
 		    !mb_beam_check_flag_unusable2(ping[iping].beamflag[j]) && first) {
 			first = false;
@@ -4724,22 +4761,31 @@ int mbedit_plot_ping(int iping) {
 			yold = ping[iping].bath_y[j];
 		}
 		else if (!last_flagged && mb_beam_ok(ping[iping].beamflag[j])) {
-			xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[BLACK], XG_SOLIDLINE);
+			if (!dualprofilebreak)
+				xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[BLACK], XG_SOLIDLINE);
+			else
+				dualprofilebreak = false;
 			last_flagged = false;
 			xold = ping[iping].bath_x[j];
 			yold = ping[iping].bath_y[j];
 		}
 		else if (mb_beam_ok(ping[iping].beamflag[j])) {
-			xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[RED], XG_SOLIDLINE);
+			if (!dualprofilebreak)
+				xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[RED], XG_SOLIDLINE);
+			else
+				dualprofilebreak = false;
 			last_flagged = false;
 			xold = ping[iping].bath_x[j];
 			yold = ping[iping].bath_y[j];
 		}
 		else if (show_flaggedprofiles && !mb_beam_ok(ping[iping].beamflag[j]) &&
 		         !mb_beam_check_flag_unusable2(ping[iping].beamflag[j])) {
-			if (j > 0)
-				xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[RED],
-				            XG_SOLIDLINE);
+			if (j > 0) {
+				if (!dualprofilebreak)
+					xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[RED], XG_SOLIDLINE);
+				else
+					dualprofilebreak = false;
+			}
 			last_flagged = true;
 			xold = ping[iping].bath_x[j];
 			yold = ping[iping].bath_y[j];
@@ -4791,7 +4837,7 @@ int mbedit_plot_ping_label(int iping, bool save) {
 		else if (ping[iping].beams_bath > 0)
 			sprintf(string, "%5d %2.2d/%2.2d/%4.4d %2.2d:%2.2d:%2.2d.%3.3d %10.3f", ping[iping].record + 1, ping[iping].time_i[1],
 			        ping[iping].time_i[2], ping[iping].time_i[0], ping[iping].time_i[3], ping[iping].time_i[4],
-			        ping[iping].time_i[5], (int)(0.001 * ping[iping].time_i[6]), ping[iping].altitude + ping[iping].sonardepth);
+			        ping[iping].time_i[5], (int)(0.001 * ping[iping].time_i[6]), ping[iping].altitude + ping[iping].sensordepth);
 		else
 			sprintf(string, "%5d %2.2d/%2.2d/%4.4d %2.2d:%2.2d:%2.2d.%3.3d %10.3f", ping[iping].record + 1, ping[iping].time_i[1],
 			        ping[iping].time_i[2], ping[iping].time_i[0], ping[iping].time_i[3], ping[iping].time_i[4],
@@ -5227,7 +5273,7 @@ int mbedit_tslabel(int data_id, char *label) {
 	case MBEDIT_PLOT_ALTITUDE:
 		strcpy(label, "Sonar Altitude (m)");
 		break;
-	case MBEDIT_PLOT_SONARDEPTH:
+	case MBEDIT_PLOT_SENSORDEPTH:
 		strcpy(label, "Sonar Depth (m)");
 		break;
 	case MBEDIT_PLOT_ROLL:
@@ -5293,8 +5339,8 @@ int mbedit_tsvalue(int iping, int data_id, double *value) {
 		case MBEDIT_PLOT_ALTITUDE:
 			*value = ping[iping].altitude;
 			break;
-		case MBEDIT_PLOT_SONARDEPTH:
-			*value = ping[iping].sonardepth;
+		case MBEDIT_PLOT_SENSORDEPTH:
+			*value = ping[iping].sensordepth;
 			break;
 		case MBEDIT_PLOT_ROLL:
 			*value = ping[iping].roll;
@@ -5409,7 +5455,7 @@ int mbedit_tsminmax(int iping, int nping, int data_id, double *tsmin, double *ts
 		*tsmax = center + halfwidth;
 		break;
 	}
-	case MBEDIT_PLOT_SONARDEPTH:
+	case MBEDIT_PLOT_SENSORDEPTH:
 	{
 		const double halfwidth = MAX(1.0, 0.55 * (*tsmax - *tsmin));
 		const double center = 0.5 * (*tsmin + *tsmax);

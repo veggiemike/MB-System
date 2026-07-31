@@ -1,47 +1,39 @@
+#------------------------------------------------------------------------------
+#    The MB-system:  CMakeLists.txt   27 June 2023
 #
-# Gets variables from root CMakeLists
+#    Copyright (c) 2023-2024 by
+#    David W. Caress (caress@mbari.org)
+#      Monterey Bay Aquarium Research Institute
+#      Moss Landing, California, USA
+#    Dale N. Chayes 
+#      Center for Coastal and Ocean Mapping
+#      University of New Hampshire
+#      Durham, New Hampshire, USA
+#    Christian dos Santos Ferreira
+#      MARUM
+#      University of Bremen
+#      Bremen Germany
+#      
+#    MB-System was created by Caress and Chayes in 1992 at the
+#      Lamont-Doherty Earth Observatory
+#      Columbia University
+#      Palisades, NY 10964
 #
+#    See README.md file for copying and redistribution conditions.
+#------------------------------------------------------------------------------
 
-message("in mbgrdviz")
+message("In src/mbgrdviz")
 
-add_executable(mbgrdviz
-               mbgrdviz_callbacks.c  mbgrdviz_creation.c  mbgrdviz_main.c)
+find_package(X11 REQUIRED)
+find_package(Motif REQUIRED)
 
-target_include_directories(mbgrdviz
-                           PUBLIC
-                           .
-                           ${GMT_INCLUDE_DIRS}
-                           ${GDAL_INCLUDE_DIRS}
-                           ${CMAKE_SOURCE_DIR}/src/mbio
-                           ${CMAKE_SOURCE_DIR}/src/mbaux
-                           ${CMAKE_SOURCE_DIR}/src/mbview
-                           ${CMAKE_SOURCE_DIR}/src/bsio
-                           ${CMAKE_SOURCE_DIR}/src/surf
-                           ${CMAKE_SOURCE_DIR}/src/gsf)                        
+add_executable(mbgrdviz mbgrdviz_callbacks.c mbgrdviz_creation.c
+                        mbgrdviz_main.c)
 
-# link_directories($GMT_LIBRARIES)
-target_link_libraries(mbgrdviz
-                      PRIVATE
-                      mbio
-                      mbaux
-                      mbview
-                      mbbsio
-                      mbsapi
-                      ${GSF_LIB}
-		      ${R7KR_LIB}
-		      ${MFRAME_LIB}
-		      ${GMT_LIBRARIES}
-		      ${NETCDF_LIBRARIES}
-		      ${MOTIF_LIBRARIES}
-		      ${X11_LIBRARIES}
-		      ${X11_XT_LIBRARIES}		      
-		      ${OPENGL_LIBRARIES}
-		      ${GDAL_LIBRARIES}
-		      ${PROJ_LIBRARIES}
-                      m
-                      pthread)
-                           
-                           
-install(TARGETS mbgrdviz
-	DESTINATION ${CMAKE_INSTALL_BINDIR})
+		      target_link_libraries(mbgrdviz PRIVATE mbaux mbview
+			${MOTIF_LIBRARIES}
+			${X11_LIBRARIES}
+			${X11_Xt_LIB}
+		      )
 
+install(TARGETS mbgrdviz DESTINATION ${CMAKE_INSTALL_BINDIR})

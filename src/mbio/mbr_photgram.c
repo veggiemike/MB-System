@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mbr_photgram.c	1/27/2014
  *
- *    Copyright (c) 2014-2020 by
+ *    Copyright (c) 2014-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * mbr_photgram.c contains the functions for reading and writing
@@ -68,8 +78,8 @@
  *              Heading                             4F      Decimal degrees
  *              Roll                                4F      Decimal degrees
  *              Pitch                               4F      Decimal degrees
- *              Speed                               4F      Decimal degrees
- *              Altitude                            4F      Decimal degrees
+ *              Speed                               4F      Meters per second
+ *              Altitude                            4F      Meters
  *              N (Number of soundings)             4U
  *              ------------------------------------------------------------
  *              Repeat N times:
@@ -97,8 +107,8 @@
  *              Heading                             4F      Decimal degrees
  *              Roll                                4F      Decimal degrees
  *              Pitch                               4F      Decimal degrees
- *              Speed                               4F      Decimal degrees
- *              Altitude                            4F      Decimal degrees
+ *              Speed                               4F      Meters per second
+ *              Altitude                            4F      Meters
  *              End identifier                      4U      (0x454E4421 = "END!" = 1162757153)
  *              Check sum of data record between    2U
  *              and including the data record and
@@ -269,7 +279,6 @@ int mbr_photgram_rd_data(int verbose, void *mbio_ptr, void *store_ptr, int *erro
 	int *fileheader_initialized;
 	int *formatversion;
 	int index = 0;
-	int skip = 0;
 
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -314,13 +323,11 @@ int mbr_photgram_rd_data(int verbose, void *mbio_ptr, void *store_ptr, int *erro
 
 	/* check for valid record, loop over reading bytes until a valid
 	    record label is found or the read fails */
-	skip = 0;
 	while (status == MB_SUCCESS && strncmp(&buffer[4], "DD", 2) != 0) {
 		for (int i = 0; i < 7; i++)
 			buffer[i] = buffer[i + 1];
 		read_len = 1;
 		status = mb_fileio_get(verbose, mbio_ptr, (char *)&buffer[7], &read_len, error);
-		skip++;
 	}
 
 

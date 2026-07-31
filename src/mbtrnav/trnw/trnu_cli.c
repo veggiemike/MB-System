@@ -13,24 +13,24 @@
 /////////////////////////
 /*
  Copyright Information
-
+ 
  Copyright 2002-2019 MBARI
  Monterey Bay Aquarium Research Institute, all rights reserved.
-
+ 
  Terms of Use
-
+ 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
  the Free Software Foundation; either version 3 of the License, or
  (at your option) any later version. You can access the GPLv3 license at
  http://www.gnu.org/licenses/gpl-3.0.html
-
+ 
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details
  (http://www.gnu.org/licenses/gpl-3.0.html)
-
+ 
  MBARI provides the documentation and software code "as is", with no warranty,
  express or implied, as to the software, title, non-infringement of third party
  rights, merchantability, or fitness for any particular purpose, the accuracy of
@@ -38,7 +38,7 @@
  assume the entire risk associated with use of the code, and you agree to be
  responsible for the entire cost of repair or servicing of the program with
  which you are using the code.
-
+ 
  In no event shall MBARI be liable for any damages, whether general, special,
  incidental or consequential damages, arising out of your use of the software,
  including, but not limited to, the loss or corruption of your data or damages
@@ -48,11 +48,11 @@
  liability or expense, including attorneys' fees, resulting from loss of or
  damage to property or the injury to or death of any person arising out of the
  use of the software.
-
+ 
  The MBARI software is provided without obligation on the part of the
  Monterey Bay Aquarium Research Institute to assist in its use, correction,
  modification, or enhancement.
-
+ 
  MBARI assumes no responsibility or liability for any third party and/or
  commercial software required for the database or applications. Licensee agrees
  to obtain and maintain valid licenses for any additional third party software
@@ -60,17 +60,18 @@
  */
 
 /////////////////////////
-// Headers
+// Headers 
 /////////////////////////
 #include "trnu_cli.h"
 #include "trnif_proto.h"
 #include "mtime.h"
+#include "mxdebug.h"
 
 /////////////////////////
 // Macros
 /////////////////////////
 
-// These macros should only be defined for
+// These macros should only be defined for 
 // application main files rather than general C files
 /*
 /// @def PRODUCT
@@ -94,9 +95,11 @@
 #define TRNUCLI_ACK_WAIT_MSEC 150
 #define TRNUCLI_SHOW_WKEY 16
 #define TRNUCLI_SHOW_WVAL 16
+#define TRNUCLI_LOG_PATH_BYTES 512
+#define TRNUCLI_SESSION_DATE_BYTES 32
 
 /////////////////////////
-// Declarations
+// Declarations 
 /////////////////////////
 
 /////////////////////////
@@ -118,7 +121,7 @@ static int s_get_acknak(trnucli_t *self, uint32_t retries, uint32_t delay)
     int retval = -1;
 
     if(NULL!=self && retries){
-        PDPRINT((stderr,"%s - retries[%"PRIu32"] del[%"PRIu32"]\n",__func__,retries,delay));
+        MX_DEBUG("%s - retries[%"PRIu32"] del[%"PRIu32"]\n", __func__, retries, delay);
         byte ack[TRNX_MSG_SIZE]={0};
         uint32_t rx_retries=retries;
         msock_set_blocking(self->trnu->sock,false);
@@ -128,7 +131,7 @@ static int s_get_acknak(trnucli_t *self, uint32_t retries, uint32_t delay)
             bool is_acknak=false;
             bool is_update=false;
             memset(ack,0,TRNX_MSG_SIZE);
-            PDPRINT((stderr,"%s - rx_retries[%"PRIu32"]\n",__func__,rx_retries));
+            MX_DEBUG("%s - rx_retries[%"PRIu32"]\n", __func__, rx_retries);
 
             // check message type
             if( (test=msock_recvfrom(self->trnu->sock,self->trnu->sock->addr,ack,TRNUCLI_ACK_BYTES,MSG_PEEK))>0){
@@ -144,13 +147,14 @@ static int s_get_acknak(trnucli_t *self, uint32_t retries, uint32_t delay)
             if(is_acknak){
                 // this is the ACK/NAK we're looking for
                 if((test=msock_recvfrom(self->trnu->sock,self->trnu->sock->addr,ack,TRNX_MSG_SIZE,0))>0){
-                    PDPRINT((stderr,"%s - ret/ret/ack[%"PRIu32"/%"PRId64"/%s]\n",__func__,rx_retries,test,ack->mid));
-#ifdef WITH_PDEBUG
-                    int64_t i=0;
-                    for(i=0;i<test && i<TRNUCLI_ACK_BYTES;i++)
-                        fprintf(stderr,"%02X ",ack[i]);
-                    fprintf(stderr,"\n");
-#endif
+                    if(mxd_testModule(MXDEBUG, 1)){
+                        fprintf(stderr, "%s - ret/ret/ack[%"PRIu32"/%"PRId64"/%s]\n", __func__, rx_retries, test, ack);
+
+                        int64_t i=0;
+                        for(i=0;i<test && i<TRNUCLI_ACK_BYTES;i++)
+                            fprintf(stderr,"%02X ",ack[i]);
+                        fprintf(stderr,"\n");
+                    }
                     trnuif_msg_t *mp=(trnuif_msg_t *)ack;
                     if(strcmp(mp->mid,PROTO_TRNU_ACK)==0 || strcmp(mp->mid,PROTO_TRNU_NACK)==0){
                         retval=0;
@@ -161,15 +165,16 @@ static int s_get_acknak(trnucli_t *self, uint32_t retries, uint32_t delay)
                 // it's an update - go get it, then resume ACK/NAK search
                 trnucli_listen(self,false);
             }else{
-                PDPRINT((stderr,"ACK/NACK failed [%"PRIu32"/%"PRId64"/%s]\n",rx_retries,test,ack));
-#ifdef WITH_PDEBUG
+                if(mxd_testModule(MXDEBUG, 1)){
+                    fprintf(stderr, "ACK/NACK failed [%"PRIu32"/%"PRId64"/%s]\n", rx_retries, test, ack);
+
                     fprintf(stderr,"ack bytes:\n");
 
                     int64_t i=0;
                     for(i=0;i<TRNUCLI_ACK_BYTES;i++)
                         fprintf(stderr,"%02X ",ack[i]);
                     fprintf(stderr,"\n");
-#endif
+                }
             }
 	    if(delay>0){
               mtime_delay_ms(delay);
@@ -190,9 +195,9 @@ static int s_send_recv(trnucli_t *self, byte *msg, int32_t len)
     if(NULL!=self && NULL!=msg && len>0){
         int64_t test=msock_sendto(self->trnu->sock,NULL,msg,len,0);
         if(test>0){
-            PDPRINT((stderr,"send msg OK [%s/%"PRId64"]\n",msg,test));
+            MX_DEBUG("send msg OK [%s/%"PRId64"]\n", msg, test);
             retval=s_get_acknak(self,TRNUCLI_ACK_RETRIES,TRNUCLI_ACK_WAIT_MSEC);
-        }else{PTRACE();}
+        }else{MX_TRACE();}
     }
 
     return retval;
@@ -209,7 +214,7 @@ trnucli_t *trnucli_new(update_callback_fn update_fn, trnucli_flags_t flags, doub
         instance->hbeat_to_sec = hbeat_to_sec;
         instance->flags = flags;
     }
-
+    
     return instance;
 }
 
@@ -247,11 +252,11 @@ int trnucli_connect(trnucli_t *self, char *host, int port)
             retval = s_send_recv(self,(byte *)msg,slen);
             free(msg);
         }else{
-            PTRACE();
-            PDPRINT((stderr,"CON failed [%d]\n",test));
+            MX_TRACE();
+            MX_DEBUG("CON failed [%d]\n", test);
         }
     }else{
-        PTRACE();
+        MX_TRACE();
     }
 
     return retval;
@@ -271,8 +276,8 @@ int trnucli_disconnect(trnucli_t *self)
                 if (msock_lset_opt (self->trnu->sock, IPPROTO_IP, IP_DROP_MEMBERSHIP,&mreq,sizeof(mreq)) == 0){
                     retval=0;
                 }else{
-                    PTRACE();
-                    PDPRINT((stderr,"ERR - msock_set_opt IP_DROP_MEMBERSHIP\r\n"));
+                    MX_TRACE();
+                    MX_DEBUG_MSG("ERR - msock_set_opt IP_DROP_MEMBERSHIP\r\n");
                 }
             }
         }else{
@@ -306,7 +311,7 @@ int trnucli_mcast_connect(trnucli_t *self, char *host, int port, int ttl)
 
         // enable multiple clients on same host
         msock_set_opt(self->trnu->sock, SO_REUSEADDR, &so_reuse, sizeof(so_reuse));
-
+        
 #if !defined(__CYGWIN__)
         // Cygwin doesn't define SO_REUSEPORT
         // OSX requires this to reuse socket (linux optional)
@@ -318,17 +323,17 @@ int trnucli_mcast_connect(trnucli_t *self, char *host, int port, int ttl)
         // future expansion (for mcast outbound)
         unsigned char mcast_loop=1;
         if(msock_lset_opt(self->trnu->sock, IPPROTO_IP, IP_MULTICAST_LOOP, &mcast_loop, sizeof(mcast_loop))) {
-            PDPRINT((stderr,"ERR - msock_set_opt IP_MULTICAST_LOOP\r\n"));
+            MX_DEBUG_MSG("ERR - msock_set_opt IP_MULTICAST_LOOP\r\n");
         }
 
         if(msock_lset_opt(self->trnu->sock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl))) {
-            PDPRINT((stderr,"ERR - msock_set_opt IP_MULTICAST_TTL\r\n"));
+            MX_DEBUG_MSG("ERR - msock_set_opt IP_MULTICAST_TTL\r\n");
         }
 #endif // WITH_MCAST_BIDIR
 
 		// bind the socket to INADDR_ANY (accept mcast on all interfaces)
         if(msock_bind(self->trnu->sock)!=0){
-            PDPRINT((stderr,"ERR - bind failed [%d/%s]\n",errno,strerror(errno)));
+            MX_DEBUG("ERR - bind failed [%d/%s]\n", errno, strerror(errno));
         }
         struct ip_mreq mreq;
 
@@ -338,12 +343,12 @@ int trnucli_mcast_connect(trnucli_t *self, char *host, int port, int ttl)
         if (msock_lset_opt(self->trnu->sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,&mreq,sizeof(mreq)) == 0){
             retval=0;
         }else{
-            PTRACE();
-            PDPRINT((stderr,"ERR - msock_set_opt IP_ADD_MEMBERSHIP\r\n"));
+            MX_TRACE();
+            MX_DEBUG_MSG("ERR - msock_set_opt IP_ADD_MEMBERSHIP\r\n");
         }
 
     }else{
-        PTRACE();
+        MX_TRACE();
     }
 
     return retval;
@@ -374,23 +379,24 @@ int trnucli_listen(trnucli_t *self, bool callback_en)
             int64_t rret=msock_recvfrom(self->trnu->sock,self->trnu->sock->addr,(byte *)self->update,read_len,0);
             if(rret==read_len){
                 retval=0;
-                PDPRINT((stderr,"%s - recv OK rret/mb1cyc[%"PRId64",%d]\n",__func__,rret,self->update->mb1_cycle));
+                MX_DEBUG("%s - recv OK rret/mb1cyc[%"PRId64",%d]\n", __func__, rret, self->update->mb1_cycle);
                 if(callback_en && NULL!=self->update_fn){
                     retval= self->update_fn(self->update);
                 }else{
                     // no handler specified
                 }
             }else{
-                PDPRINT((stderr,"%s - recv ERR rret[%"PRId64"]\n",__func__,rret));
-#ifdef WITH_PDEBUG
-                if(rret>=0){
-                    int64_t i=0;
-                    byte *bp=(byte *)self->update;
-                    for(i=0;i<rret && i<TRNU_PUB_BYTES;i++)
-                        fprintf(stderr,"%02X ",bp[i]);
-                    fprintf(stderr,"\n");
+                
+                if(mxd_testModule(MXDEBUG, 1)){
+                    fprintf(stderr,"%s - recv ERR rret[%"PRId64"]\n", __func__, rret);
+                    if(rret>=0){
+                        int64_t i=0;
+                        byte *bp=(byte *)self->update;
+                        for(i=0;i<rret && i<TRNU_PUB_BYTES;i++)
+                            fprintf(stderr,"%02X ",bp[i]);
+                        fprintf(stderr,"\n");
+                    }
                 }
-#endif
             }// else reject non-updates (e.g. ACK/NACK
         }else{
             // could not alloc
@@ -685,12 +691,12 @@ static int s_update_hex(trnu_pub_t *update, char *dest, int len, bool pretty)
         int rem=len;
         byte *bp=(byte *)update;
         char *dp=dest;
-        unsigned int i=0;
+        int i=0;
         bool hdr=true;
         for(i=0;i<TRNU_PUB_BYTES;i++){
             if(pretty){
                 if(hdr){
-                    unsigned long ofs = ( bp>(byte *)update ? (bp-(byte *)update-1) : 0);
+                    unsigned long ofs = ( bp>(byte *)update ? (bp-(byte *)update) : 0);
                     int wbytes=snprintf(dp,rem,"%08lx: ",ofs);
                     rem-=(wbytes-1);
                     dp+=wbytes;
@@ -785,12 +791,12 @@ static void s_init_log(trnucli_ctx_t *ctx)
         // Get GMT time
         gmt = gmtime(&rawtime);
         // format YYYYMMDD-HHMMSS
-        sprintf(session_date, "%04d%02d%02d-%02d%02d%02d",
+        snprintf(session_date, TRNUCLI_SESSION_DATE_BYTES, "%04d%02d%02d-%02d%02d%02d",
                 (gmt->tm_year+1900),gmt->tm_mon+1,gmt->tm_mday,
                 gmt->tm_hour,gmt->tm_min,gmt->tm_sec);
 
 
-        sprintf(ctx->log_path,"%s//%s-%s-%0lx-%s",ctx->log_dir,ctx->log_name,session_date,((unsigned long )ctx),TRNUCLI_TEST_LOG_EXT);
+        snprintf(ctx->log_path, TRNUCLI_LOG_PATH_BYTES, "%s//%s-%s-%0lx-%s",ctx->log_dir,ctx->log_name,session_date,((unsigned long )ctx),TRNUCLI_TEST_LOG_EXT);
 
         ctx->log_id = mlog_get_instance(ctx->log_path, ctx->log_cfg, ctx->log_name);
 
@@ -1042,8 +1048,8 @@ trnucli_ctx_t *trnucli_ctx_new(char *host,
         instance->log_id=MLOG_ID_INVALID;
         instance->log_name=strdup(TRNUCLI_TEST_LOG_NAME);
         instance->log_dir=strdup(TRNUCLI_TEST_LOG_DIR);
-        instance->log_path=(char *)malloc(512);
-        memset(instance->log_path,0,512);
+        instance->log_path=(char *)malloc(TRNUCLI_LOG_PATH_BYTES);
+        memset(instance->log_path, 0, TRNUCLI_LOG_PATH_BYTES);
 
         instance->rc_timer=0.0;
         instance->hb_timer=0.0;

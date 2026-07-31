@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:  mbeditviz_callbacks.c    4/27/2007
  *
- *    Copyright (c) 2007-2020 by
+ *    Copyright (c) 2007-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  *
@@ -187,7 +197,7 @@ int do_mbeditviz_init(Widget parentwidget, XtAppContext appcon) {
 #endif
 
   // set about version label
-  sprintf(value_text, "::#TimesMedium14:t\"MB-System Release %s\"#TimesMedium14\"%s\"", MB_VERSION, MB_BUILD_DATE);
+  sprintf(value_text, "::#TimesMedium14:t\"MB-System Release %s\"#TimesMedium14\"%s\"", MB_VERSION, MB_VERSION_DATE);
   set_mbview_label_multiline_string(label_about_version, value_text);
 
   // set file selection widgets
@@ -769,10 +779,30 @@ void do_mbeditviz_changecellsize(Widget w, XtPointer client_data, XtPointer call
   /* get cell size value */
   ac = 0;
   int icellsize;
+  int iscalemax;
   XtSetArg(args[ac], XmNvalue, &icellsize);
+  ac++;
+  XtSetArg(args[ac], XmNmaximum, &iscalemax);
   ac++;
   XtGetValues(scale_cellsize, args, ac);
   mbev_grid_cellsize = 0.001 * icellsize;
+
+  /* reset the scale maximum */
+  if (icellsize <= 1) {
+    iscalemax /= 2;
+    ac = 0;
+    XtSetArg(args[ac], XmNmaximum, iscalemax);
+    ac++;
+    XtSetValues(scale_cellsize, args, ac);
+  }
+  else if (icellsize == iscalemax) {
+    iscalemax *= 2;
+    ac = 0;
+    XtSetArg(args[ac], XmNmaximum, iscalemax);
+    ac++;
+    XtSetValues(scale_cellsize, args, ac);
+  }
+
 
   /* get updated grid dimensions */
   mbev_grid_n_columns = (mbev_grid_boundsutm[1] - mbev_grid_boundsutm[0]) / mbev_grid_cellsize + 1;
@@ -940,6 +970,7 @@ void do_mbeditviz_viewgrid() {
   int mbv_site_view_mode;
   int mbv_route_view_mode;
   int mbv_nav_view_mode;
+  int mbv_navswathbounds_view_mode;
   int mbv_navdrape_view_mode;
   int mbv_vector_view_mode;
   int mbv_primary_colortable;
@@ -1007,6 +1038,7 @@ void do_mbeditviz_viewgrid() {
     mbv_site_view_mode = MBV_VIEW_OFF;
     mbv_route_view_mode = MBV_VIEW_OFF;
     mbv_nav_view_mode = MBV_VIEW_OFF;
+    mbv_navswathbounds_view_mode = MBV_VIEW_OFF;
     mbv_navdrape_view_mode = MBV_VIEW_OFF;
     mbv_vector_view_mode = MBV_VIEW_OFF;
     mbv_primary_colortable = MBV_COLORTABLE_HAXBY;
@@ -1048,8 +1080,9 @@ void do_mbeditviz_viewgrid() {
       mbev_status = mbview_setviewcontrols(
           mbev_verbose, mbev_instance, mbv_display_mode, mbv_mouse_mode, mbv_grid_mode, mbv_primary_histogram,
           mbv_primaryslope_histogram, mbv_secondary_histogram, mbv_primary_shade_mode, mbv_slope_shade_mode,
-          mbv_secondary_shade_mode, mbv_grid_contour_mode, mbv_site_view_mode, mbv_route_view_mode, mbv_nav_view_mode,
-          mbv_navdrape_view_mode, mbv_vector_view_mode, mbv_exageration, mbv_modelelevation3d, mbv_modelazimuth3d,
+          mbv_secondary_shade_mode, mbv_grid_contour_mode, mbv_site_view_mode, mbv_route_view_mode, 
+          mbv_nav_view_mode, mbv_navswathbounds_view_mode, mbv_navdrape_view_mode, mbv_vector_view_mode, 
+          mbv_exageration, mbv_modelelevation3d, mbv_modelazimuth3d,
           mbv_viewelevation3d, mbv_viewazimuth3d, mbv_illuminate_magnitude, mbv_illuminate_elevation,
           mbv_illuminate_azimuth, mbv_slope_magnitude, mbv_overlay_shade_magnitude, mbv_overlay_shade_center,
           mbv_overlay_shade_mode, mbv_contour_interval, MBV_PROJECTION_PROJECTED, mbev_grid.projection_id, &mbev_error);
@@ -1149,7 +1182,7 @@ void do_mbeditviz_viewgrid() {
             navtime_d[iping] = ping->time_d;
             navlon[iping] = ping->navlon;
             navlat[iping] = ping->navlat;
-            navz[iping] = -ping->sonardepth;
+            navz[iping] = -ping->sensordepth;
             navheading[iping] = ping->heading;
             navspeed[iping] = ping->speed;
             navportlon[iping] = ping->portlon;
@@ -1594,7 +1627,7 @@ void do_mbeditviz_update_filelist() {
           athchar = 'H';
         else
           athchar = ' ';
-        if (file->n_async_sonardepth > 0)
+        if (file->n_async_sensordepth > 0)
           atschar = 'S';
         else
           atschar = ' ';

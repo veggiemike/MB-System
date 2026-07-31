@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mbr_omghdcsj.c	3/10/99
  *
- *    Copyright (c) 1999-2020 by
+ *    Copyright (c) 1999-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * mbr_omghdcsj.c contains the functions for reading and writing
@@ -4729,7 +4739,7 @@ int mbr_wt_omghdcsj(int verbose, void *mbio_ptr, void *store_ptr, int *error) {
 		int_ptr = (int *)&buffer[offset];
 		*int_ptr = summary->totalProfileBytes;
 		offset += 4;
-		for (k = 0; k < 20; k++) {
+		for (int k = 0; k < 20; k++) {
 			int_ptr = (int *)&buffer[offset];
 			*int_ptr = summary->Profile_BitsDefining[k];
 			offset += 4;
@@ -4737,7 +4747,7 @@ int mbr_wt_omghdcsj(int verbose, void *mbio_ptr, void *store_ptr, int *error) {
 		int_ptr = (int *)&buffer[offset];
 		*int_ptr = summary->totalBeamBytes;
 		offset += 4;
-		for (k = 0; k < 20; k++) {
+		for (int k = 0; k < 20; k++) {
 			int_ptr = (int *)&buffer[offset];
 			*int_ptr = summary->Beam_BitsDefining[k];
 			if (k < 19)
@@ -5753,7 +5763,7 @@ int mbr_wt_omghdcsj(int verbose, void *mbio_ptr, void *store_ptr, int *error) {
 			if (summary->Profile_BitsDefining[0]) {
 				if (summary->Profile_BitsDefining[0] & PROF_ui_status) {
 					buffer[offset] = profile->status;
-					offset + 1;
+					offset += 1;
 				}
 				if (summary->Profile_BitsDefining[0] & PROF_ui_numDepths) {
 					short_ptr = (short *)&buffer[offset];

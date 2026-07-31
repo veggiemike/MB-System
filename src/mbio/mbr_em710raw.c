@@ -1,15 +1,25 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mbr_em710raw.c	2/26/2008
  *
- *    Copyright (c) 2008-2020 by
+ *    Copyright (c) 2008-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * mbr_em710raw.c contains the functions for reading and writing
@@ -87,7 +97,7 @@ int mbr_info_em710raw(int verbose, int *system, int *beams_bath_max, int *beams_
 	strncpy(format_name, "EM710RAW", MB_NAME_LENGTH);
 	strncpy(system_name, "SIMRAD3", MB_NAME_LENGTH);
 	strncpy(format_description,
-	        "Format name:          MBF_EM710RAW\nInformal Description: Kongsberg current multibeam vendor format\nAttributes:    "
+	        "Format name:          MBF_EM710RAW\nInformal Description: Kongsberg 3rd generation multibeam vendor format\nAttributes:    "
 	        "       Kongsberg EM122, EM302, EM710,\n                      bathymetry, amplitude, and sidescan,\n                 "
 	        "     up to 400 beams, variable pixels, binary, Kongsberg.\n",
 	        MB_DESCRIPTION_LENGTH);
@@ -719,6 +729,12 @@ int mbr_em710raw_rd_start(int verbose, void *mbio_ptr, int swap, struct mbsys_si
 		fprintf(stderr, "dbg2       sonar:      %d\n", sonar);
 	}
 
+	/* get pointer to mbio descriptor */
+	struct mb_io_struct *mb_io_ptr = (struct mb_io_struct *)mbio_ptr;
+
+	/* get sensordepth_only flag */
+	bool *sensordepth_only = (bool *)&mb_io_ptr->save5;
+
 	/* set goodend false until a good end is found */
 	*goodend = false;
 
@@ -1087,6 +1103,12 @@ int mbr_em710raw_rd_start(int verbose, void *mbio_ptr, int swap, struct mbsys_si
 		else if (status == MB_SUCCESS && line[len - 1] == ',' && len <= 5) {
 			len = 0;
 		}
+	}
+
+	/* if specified from mbpreprocess then reset sensor depth mode */
+	if (*sensordepth_only) {
+		store->par_dsh[0] = 'I';
+		store->par_dsh[1] = 'N';
 	}
 
 	/* now set the data kind */
@@ -3960,6 +3982,7 @@ int mbr_em710raw_rd_data(int verbose, void *mbio_ptr, void *store_ptr, int *erro
 	int *label_save_flag;
 	char *record_size_char;
   bool *ignore_snippets;
+  bool *sensordepth_only;
 	short type;
 	short sonar;
 	int *version;
@@ -3999,7 +4022,7 @@ int mbr_em710raw_rd_data(int verbose, void *mbio_ptr, void *store_ptr, int *erro
 	num_sonars = (int *)&mb_io_ptr->save10;
 	record_size_char = (char *)&record_size;
   ignore_snippets = (bool *)&mb_io_ptr->save4;
-//  *ignore_snippets = true;
+	sensordepth_only = (bool *)&mb_io_ptr->save5;
 
 	/* set file position */
 	mb_io_ptr->file_pos = mb_io_ptr->file_bytes;
@@ -4519,7 +4542,17 @@ store->pings[store->ping_index].png_ss_count);
 			done = true;
 
 		/* if necessary read over unread but expected bytes */
-		bytes_read = ftell(mbfp) - mb_io_ptr->file_bytes - 4;
+        if(mbfp != NULL){
+            // reading from file
+            bytes_read = ftell(mbfp) - mb_io_ptr->file_bytes - 4;
+        }
+//        else if(mbsp != NULL) {
+//            // reading from socket
+//            bytes_read = 0;
+//        } else {
+//            // error: neither file nor socket set
+//        }
+
 		if (!*label_save_flag && !good_end_bytes && bytes_read < record_size) {
 #ifdef MBR_EM710RAW_DEBUG
 			fprintf(stderr, "skip over %d unread bytes of supported datagram type %x\n", record_size - bytes_read, type);
@@ -4531,8 +4564,8 @@ store->pings[store->ping_index].png_ss_count);
 		}
 
 #ifdef MBR_EM710RAW_DEBUG
-		fprintf(stderr, "record_size:%d bytes read:%ld file_pos old:%ld new:%ld\n", record_size,
-		        ftell(mbfp) - mb_io_ptr->file_bytes, mb_io_ptr->file_bytes, ftell(mbfp));
+        if(mbfp != NULL)
+            fprintf(stderr, "record_size:%d bytes read:%ld file_pos old:%ld new:%ld\n", record_size, ftell(mbfp) - mb_io_ptr->file_bytes, mb_io_ptr->file_bytes, ftell(mbfp));
 		fprintf(stderr, "done:%d status:%d error:%d\n", done, status, *error);
 		fprintf(stderr, "end of mbr_em710raw_rd_data loop:\n\n");
 #endif
@@ -4542,10 +4575,15 @@ store->pings[store->ping_index].png_ss_count);
 #endif
 
 		/* get file position */
-		if (*label_save_flag)
-			mb_io_ptr->file_bytes = ftell(mbfp) - 2;
-		else
-			mb_io_ptr->file_bytes = ftell(mbfp);
+        if (*label_save_flag) {
+            if(mbfp != NULL) {
+                mb_io_ptr->file_bytes = ftell(mbfp) - 2;
+            }
+        } else {
+            if(mbfp != NULL){
+                mb_io_ptr->file_bytes = ftell(mbfp);
+            }
+        }
 	}
 
 	if (verbose >= 2) {
@@ -4562,7 +4600,6 @@ store->pings[store->ping_index].png_ss_count);
 int mbr_rt_em710raw(int verbose, void *mbio_ptr, void *store_ptr, int *error) {
 	int time_i[7];
 	double ntime_d, ptime_d, atime_d, btime_d;
-	double bath_time_d, ss_time_d;
 	double rawspeed, pheading;
 	double plon, plat, pspeed, roll, pitch, heave;
 	double att_time_d[MBSYS_SIMRAD3_MAXATTITUDE];
@@ -4764,36 +4801,36 @@ int mbr_rt_em710raw(int verbose, void *mbio_ptr, void *store_ptr, int *error) {
 	   match for survey data - we can have bath without
 	   sidescan but not sidescan without bath */
 	else if (status == MB_SUCCESS && store->kind == MB_DATA_DATA) {
-		/* get times of bath and sidescan records */
-		time_i[0] = ping->png_date / 10000;
-		time_i[1] = (ping->png_date % 10000) / 100;
-		time_i[2] = ping->png_date % 100;
-		time_i[3] = ping->png_msec / 3600000;
-		time_i[4] = (ping->png_msec % 3600000) / 60000;
-		time_i[5] = (ping->png_msec % 60000) / 1000;
-		time_i[6] = (ping->png_msec % 1000) * 1000;
-		mb_get_time(verbose, time_i, &bath_time_d);
-		time_i[0] = ping->png_ss_date / 10000;
-		time_i[1] = (ping->png_ss_date % 10000) / 100;
-		time_i[2] = ping->png_ss_date % 100;
-		time_i[3] = ping->png_ss_msec / 3600000;
-		time_i[4] = (ping->png_ss_msec % 3600000) / 60000;
-		time_i[5] = (ping->png_ss_msec % 60000) / 1000;
-		time_i[6] = (ping->png_ss_msec % 1000) * 1000;
-		mb_get_time(verbose, time_i, &ss_time_d);
+		
+		/* make sure bathymetry, raw beam and snippet records have the same timestamp */
+		if (ping->png_count == ping->png_raw_count && (ping->png_date != ping->png_raw_date || ping->png_msec != ping->png_raw_msec)) {
+			ping->png_raw_date = ping->png_date;
+			ping->png_raw_msec = ping->png_msec;
+		}
+		if (ping->png_count == ping->png_ss_count && (ping->png_date != ping->png_ss_date || ping->png_msec != ping->png_ss_msec)) {
+			ping->png_ss_date = ping->png_date;
+			ping->png_ss_msec = ping->png_msec;
+		}
 
-		/* check for time match - if bath newer than
-		   sidescan then zero sidescan,  if sidescan
-		   newer than bath then set error,  if ok then
-		   check that beam ids are the same */
+		/* check for ping count match - if not
+		   then zero sidescan,  if ok then
+		   check that beam numbers are the same */
 		if (ping->png_ss_date == 0 || ping->png_nbeams_ss == 0) {
 			status = mbsys_simrad3_zero_ss(verbose, store_ptr, error);
 		}
-		else if (fabs(bath_time_d - ss_time_d) > 0.002) {
-			if (verbose > 0)
-				fprintf(stderr, "%s: %4.4d/%2.2d/%2.2d %2.2d:%2.2d:%2.2d.%6.6d Sidescan zeroed, bathtime:%f != sstime:%f\n",
-				        __func__, time_i[0], time_i[1], time_i[2], time_i[3], time_i[4], time_i[5], time_i[6], bath_time_d,
-				        ss_time_d);
+		else if (ping->png_count != ping->png_ss_count) {
+			if (verbose > 0) {
+				time_i[0] = ping->png_date / 10000;
+				time_i[1] = (ping->png_date % 10000) / 100;
+				time_i[2] = ping->png_date % 100;
+				time_i[3] = ping->png_msec / 3600000;
+				time_i[4] = (ping->png_msec % 3600000) / 60000;
+				time_i[5] = (ping->png_msec % 60000) / 1000;
+				time_i[6] = (ping->png_msec % 1000) * 1000;
+				fprintf(stderr, "%s: %4.4d/%2.2d/%2.2d %2.2d:%2.2d:%2.2d.%6.6d Sidescan zeroed, png_count:%d != png_ss_count:%d\n",
+				        __func__, time_i[0], time_i[1], time_i[2], time_i[3], time_i[4], time_i[5], time_i[6], 
+						ping->png_count, ping->png_ss_count);
+			}
 			status = mbsys_simrad3_zero_ss(verbose, store_ptr, error);
 		}
 		else {

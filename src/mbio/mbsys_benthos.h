@@ -1,22 +1,32 @@
 /*--------------------------------------------------------------------
  *    The MB-system:	mbsys_benthos.h	3/29/2011
  *
- *    Copyright (c) 2012-2020 by
+ *    Copyright (c) 2012-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /**
-   @file
- * mbsys_benthos.h defines the data structures used by MBIO functions
+ * @file
+ * @brief Define the data structures used by MBIO functions
  * to store data from Benthos SIS1624 Sidescan sonar systems.
- * The formats associated with this i/o module are:
- *      MBF_XTFB1624 : MBIO ID 211
+ * @details The formats associated with this i/o module are:
+ *  - MBF_XTFB1624 (MBIO ID 211)
  *
  * Author:	Jens Renken (MARUM/University of Bremen)
  * Date:	March 29, 2011

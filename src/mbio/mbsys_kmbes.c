@@ -1,15 +1,25 @@
-/*--------------------------------------------------------------------
+ /*--------------------------------------------------------------------
  *    The MB-system:  mbsys_kmbes.c  3.00  5/25/2018
  *
- *    Copyright (c) 2018-2020 by
+ *    Copyright (c) 2018-2025 by
  *    David W. Caress (caress@mbari.org)
  *      Monterey Bay Aquarium Research Institute
- *      Moss Landing, CA 95039
- *    and Dale N. Chayes (dale@ldeo.columbia.edu)
+ *      Moss Landing, California, USA
+ *    Dale N. Chayes 
+ *      Center for Coastal and Ocean Mapping
+ *      University of New Hampshire
+ *      Durham, New Hampshire, USA
+ *    Christian dos Santos Ferreira
+ *      MARUM
+ *      University of Bremen
+ *      Bremen Germany
+ *     
+ *    MB-System was created by Caress and Chayes in 1992 at the
  *      Lamont-Doherty Earth Observatory
+ *      Columbia University
  *      Palisades, NY 10964
  *
- *    See README file for copying and redistribution conditions.
+ *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
 /*
  * mbsys_kmbes.c contains the MBIO functions for handling data from
@@ -149,6 +159,11 @@ int mbsys_kmbes_deall(int verbose, void *mbio_ptr, void **store_ptr, int *error)
 
       status = mb_freed(verbose, __FILE__, __LINE__, (void **)(&store->mwc[i].beamData_p), error);
       store->mwc[i].beamData_p_alloc_size = 0;
+    }
+    if (store->msc.rawbytes != NULL && store->msc.num_rawbytes_alloc > 0) {
+      store->msc.num_rawbytes_alloc = 0;
+      store->msc.num_rawbytes = 0;
+      status = mb_freed(verbose, __FILE__, __LINE__, (void **)(&store->msc.rawbytes), error);
     }
   }
 
@@ -423,6 +438,44 @@ int mbsys_kmbes_preprocess(int verbose, void *mbio_ptr, void *store_ptr,
       }
     }
   }
+  if (verbose >= 5) {
+    int time_i[7];
+    fprintf(stderr, "dbg5       n_nav:                         %d\n", pars->n_nav);
+    for (int i = 0; i < pars->n_nav; i++) {
+      mb_get_date(0, pars->nav_time_d[i], time_i);
+      fprintf(stderr, "dbg5         %d %4.4d/%2.2d/%2.2d-%2.2d:%2.2d:%2.2d.%6.6d %15.6f %14.10f %14.10f %6.3f\n", 
+    				i, time_i[0], time_i[1], time_i[2], time_i[3], time_i[4], time_i[5], time_i[6],
+    				pars->nav_time_d[i], pars->nav_lon[i], pars->nav_lat[i], pars->nav_speed[i]);
+    }
+    fprintf(stderr, "dbg2       n_sensordepth:                 %d\n", pars->n_sensordepth);
+    for (int i = 0; i < pars->n_sensordepth; i++) {
+      mb_get_date(0, pars->sensordepth_time_d[i], time_i);
+      fprintf(stderr, "dbg5         %d %4.4d/%2.2d/%2.2d-%2.2d:%2.2d:%2.2d.%6.6d %15.6f %8.3f\n", 
+    				i, time_i[0], time_i[1], time_i[2], time_i[3], time_i[4], time_i[5], time_i[6],
+    				pars->sensordepth_time_d[i], pars->sensordepth_sensordepth[i]);
+    }
+    fprintf(stderr, "dbg2       n_heading:                     %d\n", pars->n_heading);
+    for (int i = 0; i < pars->n_heading; i++) {
+      mb_get_date(0, pars->heading_time_d[i], time_i);
+      fprintf(stderr, "dbg5         %d %4.4d/%2.2d/%2.2d-%2.2d:%2.2d:%2.2d.%6.6d %15.6f %6.3f\n", 
+    				i, time_i[0], time_i[1], time_i[2], time_i[3], time_i[4], time_i[5], time_i[6],
+    				pars->heading_time_d[i], pars->heading_heading[i]);
+    }
+    fprintf(stderr, "dbg2       n_altitude:                    %d\n", pars->n_altitude);
+    for (int i = 0; i < pars->n_altitude; i++) {
+      mb_get_date(0, pars->altitude_time_d[i], time_i);
+      fprintf(stderr, "dbg5         %d %4.4d/%2.2d/%2.2d-%2.2d:%2.2d:%2.2d.%6.6d %15.6f %6.3f\n", 
+    				i, time_i[0], time_i[1], time_i[2], time_i[3], time_i[4], time_i[5], time_i[6],
+    				pars->altitude_time_d[i], pars->altitude_altitude[i]);
+    }
+    fprintf(stderr, "dbg2       n_attitude:                    %d\n", pars->n_attitude);
+    for (int i = 0; i < pars->n_attitude; i++) {
+      mb_get_date(0, pars->attitude_time_d[i], time_i);
+      fprintf(stderr, "dbg5         %d %4.4d/%2.2d/%2.2d-%2.2d:%2.2d:%2.2d.%6.6d %15.6f %6.3f %6.3f %6.3f\n", 
+    				i, time_i[0], time_i[1], time_i[2], time_i[3], time_i[4], time_i[5], time_i[6],
+    				pars->attitude_time_d[i], pars->attitude_roll[i], pars->attitude_pitch[i], pars->attitude_heave[i]);
+    }
+  }
 
   int status = MB_SUCCESS;
 
@@ -455,9 +508,9 @@ int mbsys_kmbes_preprocess(int verbose, void *mbio_ptr, void *store_ptr,
     /*--------------------------------------------------------------*/
     if (pars->timestamp_changed) {
       /* set time */
-double time_d_old = store->time_d;
-int time_i_old[7];
-mb_get_date(verbose, time_d_old, time_i_old);
+      double time_d_old = store->time_d;
+      int time_i_old[7];
+      mb_get_date(verbose, time_d_old, time_i_old);
       mb_get_date(verbose, pars->time_d, time_i);
       for (int i = 0; i < 7; i++)
         store->time_i[i] = time_i[i];
@@ -670,11 +723,13 @@ mb_get_date(verbose, time_d_old, time_i_old);
         double reference_heading;
         double beamAzimuth;
         double beamDepression;
-        double ttime = 0.0;  // TODO(schwehr): Bug?
         double beamroll, beampitch, beamheading;
         // double theta, phi;
         // double mtodeglon, mtodeglat;
         // double headingx, headingy;
+
+        double ttime = mrz->sounding[i].twoWayTravelTime_sec
+                                  + mrz->sounding[i].twoWayTravelTimeCorrection_sec;
 
         /* get roll at bottom return time for this beam */
         /* interp_status = */ mb_linear_interp(verbose, pars->attitude_time_d - 1,
@@ -698,7 +753,6 @@ mb_get_date(verbose, time_d_old, time_i_old);
                 RTD * asin(MAX(-1.0, MIN(1.0, soundspeedsnellfactor
                          * sin(DTR * mrz->sounding[i].beamAngleReRx_deg))));
         }
-
 
         /* calculate beam angles for raytracing using Jon Beaudoin's code based on:
             Beaudoin, J., Hughes Clarke, J., and Bartlett, J. Application of
@@ -733,9 +787,6 @@ mb_get_date(verbose, time_d_old, time_i_old);
         double phi = 90.0 - beamAzimuth;
         if (phi < 0.0)
           phi += 360.0;
-
-        ttime = mrz->sounding[i].twoWayTravelTime_sec
-                                  + mrz->sounding[i].twoWayTravelTimeCorrection_sec;
 
         /* calculate Bathymetry */
         // const double rr = 0.5 * soundspeed * ttime;
@@ -1039,6 +1090,53 @@ if (verbose >= 2) {
     *time_d = store->time_d;
 
     /* get navigation */
+    *navlon = skm->sample[0].KMdefault.longitude_deg;
+    *navlat = skm->sample[0].KMdefault.latitude_deg;
+
+    /* get speed */
+    *speed = 3.6 * sqrt(skm->sample[0].KMdefault.velNorth
+                          * skm->sample[0].KMdefault.velNorth
+                        + skm->sample[0].KMdefault.velEast
+                          * skm->sample[0].KMdefault.velEast);
+
+    /* get heading */
+    *heading = skm->sample[0].KMdefault.heading_deg;
+
+    /* set beam and pixel numbers */
+    *nbath = 0;
+    *namp = 0;
+    *nss = 0;
+
+    if (verbose >= 5) {
+      fprintf(stderr, "\ndbg4  Data extracted by MBIO function <%s>\n", __func__);
+      fprintf(stderr, "dbg4  Extracted values:\n");
+      fprintf(stderr, "dbg4       kind:       %d\n", *kind);
+      fprintf(stderr, "dbg4       error:      %d\n", *error);
+      fprintf(stderr, "dbg4       time_i[0]:  %d\n", time_i[0]);
+      fprintf(stderr, "dbg4       time_i[1]:  %d\n", time_i[1]);
+      fprintf(stderr, "dbg4       time_i[2]:  %d\n", time_i[2]);
+      fprintf(stderr, "dbg4       time_i[3]:  %d\n", time_i[3]);
+      fprintf(stderr, "dbg4       time_i[4]:  %d\n", time_i[4]);
+      fprintf(stderr, "dbg4       time_i[5]:  %d\n", time_i[5]);
+      fprintf(stderr, "dbg4       time_i[6]:  %d\n", time_i[6]);
+      fprintf(stderr, "dbg4       time_d:     %f\n", *time_d);
+      fprintf(stderr, "dbg4       longitude:  %f\n", *navlon);
+      fprintf(stderr, "dbg4       latitude:   %f\n", *navlat);
+      fprintf(stderr, "dbg4       speed:      %f\n", *speed);
+      fprintf(stderr, "dbg4       heading:    %f\n", *heading);
+    }
+
+    /* done translating values */
+  }
+
+  /* extract data from structure */
+  else if (*kind == MB_DATA_NAV3) {
+    /* get time */
+    for (int i = 0; i < 7; i++)
+      time_i[i] = store->time_i[i];
+    *time_d = store->time_d;
+
+    /* get navigation */
     *navlon = cpo->sensorData.correctedLong_deg;
     *navlat = cpo->sensorData.correctedLat_deg;
 
@@ -1076,7 +1174,7 @@ if (verbose >= 2) {
   }
 
   /* extract data from structure */
-  else if (*kind == MB_DATA_SONARDEPTH) {
+  else if (*kind == MB_DATA_SENSORDEPTH) {
     /* get time */
     for (int i = 0; i < 7; i++)
       time_i[i] = store->time_i[i];
@@ -1237,7 +1335,8 @@ if (verbose >= 2) {
     fprintf(stderr, "dbg2       time_i[6]:     %d\n", time_i[6]);
     fprintf(stderr, "dbg2       time_d:        %f\n", *time_d);
   }
-  if (verbose >= 2 && (*kind == MB_DATA_DATA || *kind == MB_DATA_NAV)) {
+  if (verbose >= 2 && (*kind == MB_DATA_DATA || *kind == MB_DATA_NAV 
+  		|| *kind == MB_DATA_NAV1 || *kind == MB_DATA_NAV2 || *kind == MB_DATA_NAV3)) {
     fprintf(stderr, "dbg2       longitude:     %f\n", *navlon);
     fprintf(stderr, "dbg2       latitude:      %f\n", *navlat);
     fprintf(stderr, "dbg2       speed:         %f\n", *speed);
@@ -1295,7 +1394,8 @@ int mbsys_kmbes_insert(int verbose, void *mbio_ptr, void *store_ptr, int kind, i
     fprintf(stderr, "dbg2       time_i[6]:  %d\n", time_i[6]);
     fprintf(stderr, "dbg2       time_d:     %f\n", time_d);
   }
-  if (verbose >= 2 && (kind == MB_DATA_DATA || kind == MB_DATA_NAV)) {
+  if (verbose >= 2 && (kind == MB_DATA_DATA || kind == MB_DATA_NAV || kind == MB_DATA_NAV1 
+  		|| kind == MB_DATA_NAV2 || kind == MB_DATA_NAV3)) {
     fprintf(stderr, "dbg2       navlon:     %f\n", navlon);
     fprintf(stderr, "dbg2       navlat:     %f\n", navlat);
     fprintf(stderr, "dbg2       speed:      %f\n", speed);
@@ -1446,6 +1546,26 @@ int mbsys_kmbes_insert(int verbose, void *mbio_ptr, void *store_ptr, int kind, i
   /* insert data in nav structure */
   else if (store->kind == MB_DATA_NAV2) {
     if (store->time_d != time_d) {
+      skm->header.time_sec = (unsigned int)floor(time_d);
+      skm->header.time_nanosec = (unsigned int)((time_d - (double)skm->header.time_sec) * 1.0e9);
+    }
+    for (int i = 0; i < 7; i++)
+      store->time_i[i] = time_i[i];
+    store->time_d = time_d;
+
+    /* get navigation */
+    skm->sample[0].KMdefault.longitude_deg = navlon;
+    skm->sample[0].KMdefault.latitude_deg = navlat;
+
+    /* get heading */
+    skm->sample[0].KMdefault.heading_deg = heading;
+
+    /* get speed  */
+  }
+
+  /* insert data in nav structure */
+  else if (store->kind == MB_DATA_NAV3) {
+    if (store->time_d != time_d) {
       cpo->header.time_sec = (unsigned int)floor(time_d);
       cpo->header.time_nanosec = (unsigned int)((time_d - (double)cpo->header.time_sec) * 1.0e9);
     }
@@ -1465,7 +1585,7 @@ int mbsys_kmbes_insert(int verbose, void *mbio_ptr, void *store_ptr, int kind, i
   }
 
   /* insert data in nav structure */
-  else if (store->kind == MB_DATA_SONARDEPTH) {
+  else if (store->kind == MB_DATA_SENSORDEPTH) {
 
   }
 
@@ -1983,7 +2103,7 @@ int mbsys_kmbes_extract_nav(int verbose, void *mbio_ptr, void *store_ptr, int *k
   }
 
   /* get mbio descriptor */
-  // struct mb_io_struct *mb_io_ptr = (struct mb_io_struct *)mbio_ptr;
+  struct mb_io_struct *mb_io_ptr = (struct mb_io_struct *)mbio_ptr;
 
   /* get data structure pointer */
   struct mbsys_kmbes_struct *store = (struct mbsys_kmbes_struct *)store_ptr;
@@ -2029,7 +2149,7 @@ int mbsys_kmbes_extract_nav(int verbose, void *mbio_ptr, void *store_ptr, int *k
     /* done translating values */
   }
 
-  /* extract data from structure */
+  /* extract data from SPO record */
   else if (*kind == MB_DATA_NAV) {
     /* get time */
     for (int i = 0; i < 7; i++)
@@ -2044,20 +2164,32 @@ int mbsys_kmbes_extract_nav(int verbose, void *mbio_ptr, void *store_ptr, int *k
     *speed = 3.6 * spo->sensorData.speedOverGround_mPerSec;
 
     /* get heading */
-    *heading = spo->sensorData.courseOverGround_deg;
-
+    if (mb_io_ptr->nheading > 0)
+      mb_hedint_interp(verbose, mbio_ptr, *time_d, heading, error);
+    else
+      *heading = spo->sensorData.courseOverGround_deg;
+  
     /* get draft  */
-    *draft = mrz->pingInfo.txTransducerDepth_m;
+    if (mb_io_ptr->nsensordepth > 0) {
+      mb_depint_interp(verbose, mbio_ptr, *time_d, draft, error);
+      *heave = 0.0;
+    } else {
+      *draft = mrz->pingInfo.txTransducerDepth_m;
+    }
 
-    /* get attitude  */
-    *roll = xmt->xmtPingInfo.roll;
-    *pitch = xmt->xmtPingInfo.pitch;
-    *heave = xmt->xmtPingInfo.heave;
+    /* get roll pitch and heave */
+    if (mb_io_ptr->nattitude > 0) {
+      mb_attint_interp(verbose, mbio_ptr, *time_d, heave, roll, pitch, error);
+    } else {
+      *roll = xmt->xmtPingInfo.roll;
+      *pitch = xmt->xmtPingInfo.pitch;
+      *heave = xmt->xmtPingInfo.heave;
+    }
 
     /* done translating values */
 }
 
-  /* extract data from nav record */
+  /* extract data from SKM record */
   else if (*kind == MB_DATA_NAV1) {
     /* get time */
     for (int i = 0; i < 7; i++)
@@ -2065,31 +2197,126 @@ int mbsys_kmbes_extract_nav(int verbose, void *mbio_ptr, void *store_ptr, int *k
     *time_d = store->time_d;
 
     /* get navigation */
-    *navlon = skm->sample[0].KMdefault.longitude_deg;
-    *navlat = skm->sample[0].KMdefault.latitude_deg;
-
-    /* get speed */
-    *speed = 3.6 * sqrt(skm->sample[0].KMdefault.velNorth
-                          * skm->sample[0].KMdefault.velNorth
-                        + skm->sample[0].KMdefault.velEast
-                          * skm->sample[0].KMdefault.velEast);
+    if ((skm->infoPart.sensorDataContents & 0x00000001) && skm->infoPart.numSamplesArray > 0) {
+	  *navlon = skm->sample[0].KMdefault.longitude_deg;
+	  *navlat = skm->sample[0].KMdefault.latitude_deg;
+	  *speed = 3.6 * sqrt(skm->sample[0].KMdefault.velNorth
+							* skm->sample[0].KMdefault.velNorth
+						  + skm->sample[0].KMdefault.velEast
+							* skm->sample[0].KMdefault.velEast);
+    }
+    else  if (mb_io_ptr->nfix > 0) {
+      mb_navint_interp(verbose, mbio_ptr, store->time_d, *heading, *speed, navlon, navlat, speed, error);
+    }
+    else {
+      *navlon = xmt->xmtPingInfo.longitude;
+      *navlat = xmt->xmtPingInfo.latitude;
+      *speed = 3.6 * xmt->xmtPingInfo.speed;
+    }
 
     /* get heading */
-    *heading = skm->sample[0].KMdefault.heading_deg;
+    if ((skm->infoPart.sensorDataContents & 0x00000004) && skm->infoPart.numSamplesArray > 0) {
+      *heading = skm->sample[0].KMdefault.heading_deg;
+    }
+    else  if (mb_io_ptr->nheading > 0) {
+      mb_hedint_interp(verbose, mbio_ptr, store->time_d, heading, error);
+    }
+    else {
+      *heading = xmt->xmtPingInfo.heading;
+    }
 
     /* get draft  */
-    *draft = mrz->pingInfo.txTransducerDepth_m;
+    if (mb_io_ptr->nsensordepth > 0) {
+      mb_depint_interp(verbose, mbio_ptr, *time_d, draft, error);
+      *heave = 0.0;
+    } 
+    else {
+      *draft = xmt->xmtPingInfo.sensordepth;
+    }
 
     /* get attitude  */
-    *roll = skm->sample[0].KMdefault.roll_deg;
-    *pitch = skm->sample[0].KMdefault.pitch_deg;
-    *heave = skm->sample[0].KMdefault.heave_m;
+    if ((skm->infoPart.sensorDataContents & 0x00000002) && skm->infoPart.numSamplesArray > 0) {
+      *roll = skm->sample[0].KMdefault.roll_deg;
+      *pitch = skm->sample[0].KMdefault.pitch_deg;
+      *heave = skm->sample[0].KMdefault.heave_m;
+    }
+    else if (mb_io_ptr->nattitude > 0) {
+	  mb_attint_interp(verbose, mbio_ptr, store->time_d, heave, roll, pitch, error);
+    }
+    else {
+      *roll = xmt->xmtPingInfo.roll;
+      *pitch = xmt->xmtPingInfo.pitch;
+      *heave = xmt->xmtPingInfo.heave;
+    }
 
     /* done translating values */
   }
 
-  /* extract data from nav record */
+  /* extract data from SKM record */
   else if (*kind == MB_DATA_NAV2) {
+    /* get time */
+    for (int i = 0; i < 7; i++)
+      time_i[i] = store->time_i[i];
+    *time_d = store->time_d;
+
+    /* get navigation */
+    if ((skm->infoPart.sensorDataContents & 0x00000001) && skm->infoPart.numSamplesArray > 0) {
+	  *navlon = skm->sample[0].KMdefault.longitude_deg;
+	  *navlat = skm->sample[0].KMdefault.latitude_deg;
+	  *speed = 3.6 * sqrt(skm->sample[0].KMdefault.velNorth
+							* skm->sample[0].KMdefault.velNorth
+						  + skm->sample[0].KMdefault.velEast
+							* skm->sample[0].KMdefault.velEast);
+    }
+    else  if (mb_io_ptr->nfix > 0) {
+      mb_navint_interp(verbose, mbio_ptr, store->time_d, *heading, *speed, navlon, navlat, speed, error);
+    }
+    else {
+      *navlon = xmt->xmtPingInfo.longitude;
+      *navlat = xmt->xmtPingInfo.latitude;
+      *speed = 3.6 * xmt->xmtPingInfo.speed;
+    }
+
+    /* get heading */
+    if ((skm->infoPart.sensorDataContents & 0x00000004) && skm->infoPart.numSamplesArray > 0) {
+      *heading = skm->sample[0].KMdefault.heading_deg;
+    }
+    else  if (mb_io_ptr->nheading > 0) {
+      mb_hedint_interp(verbose, mbio_ptr, store->time_d, heading, error);
+    }
+    else {
+      *heading = xmt->xmtPingInfo.heading;
+    }
+
+    /* get draft  */
+    if (mb_io_ptr->nsensordepth > 0) {
+      mb_depint_interp(verbose, mbio_ptr, *time_d, draft, error);
+      *heave = 0.0;
+    } 
+    else {
+      *draft = xmt->xmtPingInfo.sensordepth;
+    }
+
+    /* get attitude  */
+    if ((skm->infoPart.sensorDataContents & 0x00000002) && skm->infoPart.numSamplesArray > 0) {
+      *roll = skm->sample[0].KMdefault.roll_deg;
+      *pitch = skm->sample[0].KMdefault.pitch_deg;
+      *heave = skm->sample[0].KMdefault.heave_m;
+    }
+    else if (mb_io_ptr->nattitude > 0) {
+	  mb_attint_interp(verbose, mbio_ptr, store->time_d, heave, roll, pitch, error);
+    }
+    else {
+      *roll = xmt->xmtPingInfo.roll;
+      *pitch = xmt->xmtPingInfo.pitch;
+      *heave = xmt->xmtPingInfo.heave;
+    }
+
+    /* done translating values */
+  }
+
+  /* extract data from CPO record */
+  else if (*kind == MB_DATA_NAV3) {
     /* get time */
     for (int i = 0; i < 7; i++)
       time_i[i] = store->time_i[i];
@@ -2101,50 +2328,73 @@ int mbsys_kmbes_extract_nav(int verbose, void *mbio_ptr, void *store_ptr, int *k
 
     /* get speed */
     *speed = 3.6 * cpo->sensorData.speedOverGround_mPerSec;
-
+ 
     /* get heading */
-    *heading = cpo->sensorData.courseOverGround_deg;
+    if (mb_io_ptr->nheading > 0)
+      mb_hedint_interp(verbose, mbio_ptr, *time_d, heading, error);
+    else
+      *heading = cpo->sensorData.courseOverGround_deg;
 
     /* get draft  */
-    *draft = mrz->pingInfo.txTransducerDepth_m;
+    if (mb_io_ptr->nsensordepth > 0) {
+      mb_depint_interp(verbose, mbio_ptr, *time_d, draft, error);
+      *heave = 0.0;
+    } else {
+      *draft = mrz->pingInfo.txTransducerDepth_m;
+    }
 
     /* get attitude  */
-    *roll = xmt->xmtPingInfo.roll;
-    *pitch = xmt->xmtPingInfo.pitch;
-    *heave = xmt->xmtPingInfo.heave;
+    if (mb_io_ptr->nattitude > 0) {
+      mb_attint_interp(verbose, mbio_ptr, *time_d, heave, roll, pitch, error);
+    }
+    else {
+      *roll = xmt->xmtPingInfo.roll;
+      *pitch = xmt->xmtPingInfo.pitch;
+      *heave = xmt->xmtPingInfo.heave;
+    }
 
     /* done translating values */
   }
 
-  /* extract data from nav record */
-  else if (*kind == MB_DATA_SONARDEPTH) {
+  /* extract data from SDE record */
+  else if (*kind == MB_DATA_SENSORDEPTH) {
     /* get time */
     for (int i = 0; i < 7; i++)
       time_i[i] = store->time_i[i];
     *time_d = store->time_d;
 
     /* get navigation */
-    *navlon = xmt->xmtPingInfo.longitude;
-    *navlat = xmt->xmtPingInfo.latitude;
-
-    /* get speed */
     *speed = 3.6 * xmt->xmtPingInfo.speed;
+    if (mb_io_ptr->nfix > 0)
+      mb_navint_interp(verbose, mbio_ptr, store->time_d, *heading, *speed, navlon, navlat, speed, error);
+    else {
+      *navlon = xmt->xmtPingInfo.longitude;
+      *navlat = xmt->xmtPingInfo.latitude;
+    }
 
     /* get heading */
-    *heading = mrz->pingInfo.headingVessel_deg;
+    if (mb_io_ptr->nheading > 0)
+      mb_hedint_interp(verbose, mbio_ptr, *time_d, heading, error);
+    else
+      *heading = mrz->pingInfo.headingVessel_deg;
 
     /* get draft  */
     *draft = sde->sensorData.depthUsed_m;
 
     /* get attitude  */
-    *roll = xmt->xmtPingInfo.roll;
-    *pitch = xmt->xmtPingInfo.pitch;
-    *heave = xmt->xmtPingInfo.heave;
+    if (mb_io_ptr->nattitude > 0) {
+      mb_attint_interp(verbose, mbio_ptr, *time_d, heave, roll, pitch, error);
+    }
+    else {
+      *roll = xmt->xmtPingInfo.roll;
+      *pitch = xmt->xmtPingInfo.pitch;
+      *heave = xmt->xmtPingInfo.heave;
+    }
 
     /* done translating values */
   }
 
-  /* extract data from nav record */
+  /* extract data from heading record */
   else if (*kind == MB_DATA_HEADING) {
     /* get time */
     for (int i = 0; i < 7; i++)
@@ -2152,22 +2402,34 @@ int mbsys_kmbes_extract_nav(int verbose, void *mbio_ptr, void *store_ptr, int *k
     *time_d = store->time_d;
 
     /* get navigation */
-    *navlon = xmt->xmtPingInfo.longitude;
-    *navlat = xmt->xmtPingInfo.latitude;
-
-    /* get speed */
     *speed = 3.6 * xmt->xmtPingInfo.speed;
+    if (mb_io_ptr->nfix > 0)
+      mb_navint_interp(verbose, mbio_ptr, store->time_d, *heading, *speed, navlon, navlat, speed, error);
+    else {
+      *navlon = xmt->xmtPingInfo.longitude;
+      *navlat = xmt->xmtPingInfo.latitude;
+    }
 
     /* get heading */
     *heading = sha->sensorData[0].headingCorrected_deg;
 
     /* get draft  */
-    *draft = mrz->pingInfo.txTransducerDepth_m;
+    if (mb_io_ptr->nsensordepth > 0) {
+      mb_depint_interp(verbose, mbio_ptr, *time_d, draft, error);
+      *heave = 0.0;
+    } else {
+      *draft = mrz->pingInfo.txTransducerDepth_m;
+    }
 
     /* get attitude  */
-    *roll = xmt->xmtPingInfo.roll;
-    *pitch = xmt->xmtPingInfo.pitch;
-    *heave = xmt->xmtPingInfo.heave;
+    if (mb_io_ptr->nattitude > 0) {
+      mb_attint_interp(verbose, mbio_ptr, *time_d, heave, roll, pitch, error);
+    }
+    else {
+      *roll = xmt->xmtPingInfo.roll;
+      *pitch = xmt->xmtPingInfo.pitch;
+      *heave = xmt->xmtPingInfo.heave;
+    }
 
     /* done translating values */
   }
@@ -2238,7 +2500,7 @@ int mbsys_kmbes_extract_nnav(int verbose, void *mbio_ptr, void *store_ptr, int n
   }
 
   /* get mbio descriptor */
-  // struct mb_io_struct *mb_io_ptr = (struct mb_io_struct *)mbio_ptr;
+  struct mb_io_struct *mb_io_ptr = (struct mb_io_struct *)mbio_ptr;
 
   /* get data structure pointer */
   struct mbsys_kmbes_struct *store = (struct mbsys_kmbes_struct *)store_ptr;
@@ -2255,158 +2517,138 @@ int mbsys_kmbes_extract_nnav(int verbose, void *mbio_ptr, void *store_ptr, int n
 
   int status = MB_SUCCESS;
 
-  /* extract data from survey record */
-  if (*kind == MB_DATA_DATA) {
-    /* just one navigation value */
-    *n = 1;
-
-    /* get time */
-    for (int i = 0; i < 7; i++)
-      time_i[i] = store->time_i[i];
-    time_d[0] = store->time_d;
-
-    /* get navigation */
-    navlon[0] = mrz->pingInfo.longitude_deg;
-    navlat[0] = mrz->pingInfo.latitude_deg;
-
-    /* get speed */
-    speed[0] = 3.6 * xmt->xmtPingInfo.speed;
-
-    /* get heading */
-    heading[0] = mrz->pingInfo.headingVessel_deg;
-
-    /* get draft  */
-    draft[0] = mrz->pingInfo.txTransducerDepth_m;
-
-    /* get attitude  */
-    roll[0] = xmt->xmtPingInfo.roll;
-    pitch[0] = xmt->xmtPingInfo.pitch;
-    heave[0] = xmt->xmtPingInfo.heave;
-
-    /* done translating values */
-  }
-
-  /* extract data from structure */
-  else if (*kind == MB_DATA_NAV) {
-    /* just one navigation value */
-    *n = 1;
-
-    /* get time */
-    for (int i = 0; i < 7; i++)
-      time_i[i] = store->time_i[i];
-    time_d[0] = store->time_d;
-
-    /* get navigation */
-    navlon[0] = spo->sensorData.correctedLong_deg;
-    navlat[0] = spo->sensorData.correctedLat_deg;
-
-    /* get speed */
-    speed[0] = 3.6 * spo->sensorData.speedOverGround_mPerSec;
-
-    /* get heading */
-    heading[0] = spo->sensorData.courseOverGround_deg;
-
-    /* get attitude  */
-    roll[0] = xmt->xmtPingInfo.roll;
-    pitch[0] = xmt->xmtPingInfo.pitch;
-    heave[0] = xmt->xmtPingInfo.heave;
-  }
-
-  /* extract data from nav record */
-  else if (*kind == MB_DATA_NAV1) {
+  /* extract all nav and attitude data from record SKM (KM Binary) */
+  if (*kind == MB_DATA_NAV1) {
     *n = MIN(skm->infoPart.numSamplesArray, MB_NAV_MAX);
 
     for (int i = 0; i < *n; i++) {
       /* get time */
       time_d[i] = skm->sample[i].KMdefault.time_sec + 0.000000001 * skm->sample[i].KMdefault.time_nanosec;
       mb_get_date(verbose, time_d[i], &time_i[7*i]);
-
-      /* get navigation */
-      navlon[i] = skm->sample[i].KMdefault.longitude_deg;
-      navlat[i] = skm->sample[i].KMdefault.latitude_deg;
-
-      /* get speed */
-      speed[i] = 3.6 * sqrt(skm->sample[i].KMdefault.velNorth
-                            * skm->sample[i].KMdefault.velNorth
-                          + skm->sample[i].KMdefault.velEast
-                            * skm->sample[i].KMdefault.velEast);
-
-      /* get heading */
-      heading[i] = skm->sample[i].KMdefault.heading_deg;
-
-      /* get draft  */
-      draft[i] = mrz->pingInfo.txTransducerDepth_m;
-
-      /* get attitude  */
-      roll[i] = skm->sample[i].KMdefault.roll_deg;
-      pitch[i] = skm->sample[i].KMdefault.pitch_deg;
-      heave[i] = skm->sample[i].KMdefault.heave_m;
+  
+	  /* get heading */
+	  if ((skm->infoPart.sensorDataContents & 0x00000004) && skm->infoPart.numSamplesArray > 0) {
+		heading[i] = skm->sample[i].KMdefault.heading_deg;
+	  }
+	  else  if (mb_io_ptr->nheading > 0) {
+		mb_hedint_interp(verbose, mbio_ptr, time_d[i], &heading[i], error);
+	  }
+	  else {
+		heading[i] = xmt->xmtPingInfo.heading;
+	  }
+  
+	  /* get navigation */
+	  if ((skm->infoPart.sensorDataContents & 0x00000001) && skm->infoPart.numSamplesArray > 0) {
+		navlon[i] = skm->sample[i].KMdefault.longitude_deg;
+		navlat[i] = skm->sample[i].KMdefault.latitude_deg;
+		speed[i] = 3.6 * sqrt(skm->sample[i].KMdefault.velNorth
+							  * skm->sample[i].KMdefault.velNorth
+							+ skm->sample[i].KMdefault.velEast
+							  * skm->sample[i].KMdefault.velEast);
+	  }
+	  else  if (mb_io_ptr->nfix > 0) {
+		mb_navint_interp(verbose, mbio_ptr, time_d[i], heading[i], speed[i], navlon, navlat, speed, error);
+	  }
+	  else {
+		navlon[i] = xmt->xmtPingInfo.longitude;
+		navlat[i] = xmt->xmtPingInfo.latitude;
+		speed[i] = 3.6 * xmt->xmtPingInfo.speed;
+	  }
+  
+	  /* get draft  */
+	  if (mb_io_ptr->nsensordepth > 0) {
+		mb_depint_interp(verbose, mbio_ptr, time_d[i], &draft[i], error);
+		heave[i] = 0.0;
+	  } 
+	  else {
+		draft[i] = xmt->xmtPingInfo.sensordepth;
+	  }
+  
+	  /* get attitude  */
+	  if ((skm->infoPart.sensorDataContents & 0x00000002) && skm->infoPart.numSamplesArray > 0) {
+		roll[i] = skm->sample[i].KMdefault.roll_deg;
+		pitch[i] = skm->sample[i].KMdefault.pitch_deg;
+		heave[i] = skm->sample[i].KMdefault.heave_m;
+	  }
+	  else if (mb_io_ptr->nattitude > 0) {
+		mb_attint_interp(verbose, mbio_ptr, time_d[i], &heave[i], &roll[i], &pitch[i], error);
+	  }
+	  else {
+		roll[i] = xmt->xmtPingInfo.roll;
+		pitch[i] = xmt->xmtPingInfo.pitch;
+		heave[i] = xmt->xmtPingInfo.heave;
+	  }
     }
 
     /* done translating values */
   }
 
-  /* extract data from nav record */
   else if (*kind == MB_DATA_NAV2) {
-    *n = 1;
+    *n = MIN(skm->infoPart.numSamplesArray, MB_NAV_MAX);
 
-    /* get time */
-    for (int i = 0; i < 7; i++)
-      time_i[i] = store->time_i[i];
-    time_d[0] = store->time_d;
-
-    /* get navigation */
-    navlon[0] = cpo->sensorData.correctedLong_deg;
-    navlat[0] = cpo->sensorData.correctedLat_deg;
-
-    /* get speed */
-    speed[0] = 3.6 * cpo->sensorData.speedOverGround_mPerSec;
-
-    /* get heading */
-    heading[0] = cpo->sensorData.courseOverGround_deg;
-
-    /* get draft  */
-    draft[0] = mrz->pingInfo.txTransducerDepth_m;
-
-    /* get attitude  */
-    roll[0] = xmt->xmtPingInfo.roll;
-    pitch[0] = xmt->xmtPingInfo.pitch;
-    heave[0] = xmt->xmtPingInfo.heave;
+    for (int i = 0; i < *n; i++) {
+      /* get time */
+      time_d[i] = skm->sample[i].KMdefault.time_sec + 0.000000001 * skm->sample[i].KMdefault.time_nanosec;
+      mb_get_date(verbose, time_d[i], &time_i[7*i]);
+  
+	  /* get heading */
+	  if ((skm->infoPart.sensorDataContents & 0x00000004) && skm->infoPart.numSamplesArray > 0) {
+		heading[i] = skm->sample[i].KMdefault.heading_deg;
+	  }
+	  else  if (mb_io_ptr->nheading > 0) {
+		mb_hedint_interp(verbose, mbio_ptr, time_d[i], &heading[i], error);
+	  }
+	  else {
+		heading[i] = xmt->xmtPingInfo.heading;
+	  }
+  
+	  /* get navigation */
+	  if ((skm->infoPart.sensorDataContents & 0x00000001) && skm->infoPart.numSamplesArray > 0) {
+		navlon[i] = skm->sample[i].KMdefault.longitude_deg;
+		navlat[i] = skm->sample[i].KMdefault.latitude_deg;
+		speed[i] = 3.6 * sqrt(skm->sample[i].KMdefault.velNorth
+							  * skm->sample[i].KMdefault.velNorth
+							+ skm->sample[i].KMdefault.velEast
+							  * skm->sample[i].KMdefault.velEast);
+	  }
+	  else  if (mb_io_ptr->nfix > 0) {
+		mb_navint_interp(verbose, mbio_ptr, time_d[i], heading[i], speed[i], navlon, navlat, speed, error);
+	  }
+	  else {
+		navlon[i] = xmt->xmtPingInfo.longitude;
+		navlat[i] = xmt->xmtPingInfo.latitude;
+		speed[i] = 3.6 * xmt->xmtPingInfo.speed;
+	  }
+  
+	  /* get draft  */
+	  if (mb_io_ptr->nsensordepth > 0) {
+		mb_depint_interp(verbose, mbio_ptr, time_d[i], &draft[i], error);
+		heave[i] = 0.0;
+	  } 
+	  else {
+		draft[i] = xmt->xmtPingInfo.sensordepth;
+	  }
+  
+	  /* get attitude  */
+	  if ((skm->infoPart.sensorDataContents & 0x00000002) && skm->infoPart.numSamplesArray > 0) {
+		roll[i] = skm->sample[i].KMdefault.roll_deg;
+		pitch[i] = skm->sample[i].KMdefault.pitch_deg;
+		heave[i] = skm->sample[i].KMdefault.heave_m;
+	  }
+	  else if (mb_io_ptr->nattitude > 0) {
+		mb_attint_interp(verbose, mbio_ptr, time_d[i], &heave[i], &roll[i], &pitch[i], error);
+	  }
+	  else {
+		roll[i] = xmt->xmtPingInfo.roll;
+		pitch[i] = xmt->xmtPingInfo.pitch;
+		heave[i] = xmt->xmtPingInfo.heave;
+	  }
+    }
 
     /* done translating values */
   }
 
-  /* extract data from nav record */
-  else if (*kind == MB_DATA_SONARDEPTH) {
-    *n = 1;
-
-    /* get time */
-    for (int i = 0; i < 7; i++)
-      time_i[i] = store->time_i[i];
-    time_d[0] = store->time_d;
-
-    /* get navigation */
-    *navlon = xmt->xmtPingInfo.longitude;
-    *navlat = xmt->xmtPingInfo.latitude;
-
-    /* get speed */
-    *speed = 3.6 * xmt->xmtPingInfo.speed;
-
-    /* get heading */
-    *heading = mrz->pingInfo.headingVessel_deg;
-
-    /* get draft  */
-    *draft = sde->sensorData.depthUsed_m;
-
-    /* get attitude  */
-    *roll = xmt->xmtPingInfo.roll;
-    *pitch = xmt->xmtPingInfo.pitch;
-    *heave = xmt->xmtPingInfo.heave;
-
-    /* done translating values */
-  }
-
-  /* extract data from nav record */
+  /* extract data from heading record */
   else if (*kind == MB_DATA_HEADING) {
     *n = sha->dataInfo.numSamplesArray;
 
@@ -2417,50 +2659,37 @@ int mbsys_kmbes_extract_nnav(int verbose, void *mbio_ptr, void *store_ptr, int n
       time_d[i] = sha_time_d + 0.000000001 * sha->sensorData[i].timeSinceRecStart_nanosec;
       mb_get_date(verbose, time_d[i], &time_i[7*i]);
 
-      /* get navigation */
-      *navlon = xmt->xmtPingInfo.longitude;
-      *navlat = xmt->xmtPingInfo.latitude;
-
       /* get speed */
-      *speed = 3.6 * xmt->xmtPingInfo.speed;
+      speed[i] = 3.6 * xmt->xmtPingInfo.speed;
 
       /* get heading */
-      *heading = sha->sensorData[i].headingCorrected_deg;
+      heading[i] = sha->sensorData[i].headingCorrected_deg;
 
-      /* get draft  */
-      *draft = mrz->pingInfo.txTransducerDepth_m;
+     /* get navigation from buffered time series */
+      mb_navint_interp(verbose, mbio_ptr, time_d[i], heading[i], speed[i],
+                          &(navlon[i]), &(navlat[i]), &(speed[i]), error);
 
-      /* get attitude  */
-      *roll = xmt->xmtPingInfo.roll;
-      *pitch = xmt->xmtPingInfo.pitch;
-      *heave = xmt->xmtPingInfo.heave;
+      // get draft from buffered time series
+      if (mb_io_ptr->nsensordepth > 0)
+        mb_depint_interp(verbose, mbio_ptr, time_d[i], &(draft[i]), error);
+      else
+        draft[i] = 0.0;
+
+      /* get roll pitch and heave */
+      if (mb_io_ptr->nattitude > 0) {
+        mb_attint_interp(verbose, mbio_ptr, time_d[i], &(heave[i]), &(roll[i]), &(pitch[i]), error);
+      }
     }
 
     /* done translating values */
   }
 
-  /* deal with comment */
-  else if (*kind == MB_DATA_COMMENT) {
-    /* set status */
-    *error = MB_ERROR_COMMENT;
-    status = MB_FAILURE;
-
-    /* get time */
-    for (int i = 0; i < 7; i++)
-      time_i[i] = store->time_i[i];
-    time_d[0] = store->time_d;
-  }
-
-  /* deal with other record type */
+  // All other records have single values so set *n=1 and call the mbsys_kmbes_extract_nav() function
   else {
-    /* set status */
-    *error = MB_ERROR_OTHER;
-    status = MB_FAILURE;
-
-    /* get time */
-    for (int i = 0; i < 7; i++)
-      time_i[i] = store->time_i[i];
-    time_d[0] = store->time_d;
+    *n = 1;
+    status = mbsys_kmbes_extract_nav(verbose, mbio_ptr, store_ptr, kind, time_i, time_d,
+                                  navlon, navlat, speed, heading, draft, roll,
+                                  pitch, heave, error);
   }
 
   if (verbose >= 2) {
@@ -2611,6 +2840,26 @@ int mbsys_kmbes_insert_nav(int verbose, void *mbio_ptr, void *store_ptr, int tim
 
   /* insert data in nav structure */
   else if (store->kind == MB_DATA_NAV2) {
+    if (store->time_d != time_d) {
+      skm->header.time_sec = (unsigned int)floor(time_d);
+      skm->header.time_nanosec = (unsigned int)((time_d - (double)skm->header.time_sec) * 1.0e9);
+    }
+    for (int i = 0; i < 7; i++)
+      store->time_i[i] = time_i[i];
+    store->time_d = time_d;
+
+    /* get navigation */
+    skm->sample[0].KMdefault.longitude_deg = navlon;
+    skm->sample[0].KMdefault.latitude_deg = navlat;
+
+    /* get heading */
+    skm->sample[0].KMdefault.heading_deg = heading;
+
+    /* get speed  */
+  }
+
+  /* insert data in nav structure */
+  else if (store->kind == MB_DATA_NAV3) {
     if (store->time_d != time_d) {
       cpo->header.time_sec = (unsigned int)floor(time_d);
       cpo->header.time_nanosec = (unsigned int)((time_d - (double)cpo->header.time_sec) * 1.0e9);

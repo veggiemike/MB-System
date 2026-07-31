@@ -1,51 +1,96 @@
+#------------------------------------------------------------------------------
+#    The MB-system:  CMakeLists.txt   27 June 2023
 #
-# Gets variables from root CMakeLists
+#    Copyright (c) 2023-2024 by
+#    David W. Caress (caress@mbari.org)
+#      Monterey Bay Aquarium Research Institute
+#      Moss Landing, California, USA
+#    Dale N. Chayes 
+#      Center for Coastal and Ocean Mapping
+#      University of New Hampshire
+#      Durham, New Hampshire, USA
+#    Christian dos Santos Ferreira
+#      MARUM
+#      University of Bremen
+#      Bremen Germany
+#      
+#    MB-System was created by Caress and Chayes in 1992 at the
+#      Lamont-Doherty Earth Observatory
+#      Columbia University
+#      Palisades, NY 10964
 #
+#    See README.md file for copying and redistribution conditions.
+#------------------------------------------------------------------------------
 
-message("in utilities")
+message("In src/utilities")
 
-set(executables mbabsorption mbdatalist mbgrid mbnavlist mbsegypsd 
-    mbareaclean mbdefaults mbhistogram mbpreprocess mbset 
-    mbauvloglist mbdumpesf mbinfo mbprocess mbsslayout mbbackangle 
-    mbextractsegy mblevitus mbrolltimelag mbsvplist mbclean mbfilter mblist 
-    mbroutetime mbsvpselect mbconfig mbformat mbmakeplatform mbsegygrid 
-    mbtime mbcopy mbgetesf mbminirovnav mbsegyinfo mbvoxelclean mbctdlist 
-    mbgpstide mbmosaic mbsegylist)
+find_package(FFTW REQUIRED)
+find_package(LibPROJ REQUIRED)
+
+set(executables
+    mb7k2jstar
+    mbabsorption
+    mbareaclean
+    mbauvloglist
+    mbbackangle
+    mbclean
+    mbcopy
+    mbctdlist
+    mbdatalist
+    mbdefaults
+    mbdumpesf
+    mbextractsegy
+    mbfilter
+    mbformat
+    mbgetesf
+    mbgpstide
+    mbgrid
+    mbhistogram
+    mbinfo
+    mblist
+    mbmakeplatform
+    mbmapscale
+    mbminirovnav
+    mbmosaic
+    mbnavlist
+    mbprocess
+    mbrolltimelag
+    mbroutetime
+    mbsegygrid
+    mbsegyinfo
+    mbsegylist
+    mbsegypsd
+    mbpreprocess
+    mbset
+    mbsslayout
+    mbsvplist
+    mbsvpselect
+    mbtime
+    mbvoxelclean)
 
 foreach(executable ${executables})
-  add_executable(${executable}
-                 ${executable}.cc)
-
-  target_include_directories(${executable}
-                             PUBLIC
-                             .
-                             ${GMT_INCLUDE_DIRS}
-                             ${NETCDF_INCLUDE_DIRS}                           
-                             ${CMAKE_SOURCE_DIR}/src/mbio
-                             ${CMAKE_SOURCE_DIR}/src/mbaux
-                             ${CMAKE_SOURCE_DIR}/src/gsf)
-
-
-  target_link_libraries(${executable}
-                        PRIVATE
-                        mbio
-                        mbbsio
-                        mbaux
-                        mbsapi
-                        ${GSF_LIB}
-			${R7KR_LIB}
-			${MFRAME_LIB}
-	                ${GMT_LIBRARIES}
-                        ${NETCDF_LIBRARIES}
-                        ${GDAL_LIBRARIES}
-                        ${PROJ_LIBRARIES}
-                        ${FFTW_LIBRARIES}
-                        m
-                        pthread)
-
+  add_executable(${executable} ${executable}.cc)
+  target_link_libraries(${executable} PRIVATE mbio mbbsio mbaux mbsapi mbgsf m pthread)
 endforeach()
-                           
-                           
-install(TARGETS ${executables}
-        DESTINATION ${CMAKE_INSTALL_BINDIR})
-	
+
+add_executable(mblevitus mblevitus.cc levitus.h)
+target_link_libraries(mblevitus PRIVATE mbio mbbsio mbaux mbsapi mbgsf m pthread)
+
+add_executable(mbconfig mbconfig.cc levitus.h)
+target_link_libraries(mbconfig PRIVATE mbio mbbsio mbaux mbsapi mbgsf m pthread)
+
+file(WRITE levitus.h
+  "const char *levitusfile = \"${CMAKE_INSTALL_PREFIX}/${levitusDir}/LevitusAnnual82.dat\";\nconst char *otps_location = \"${otpsDir}\";\n")
+
+target_link_libraries(mbsvpselect PRIVATE LibPROJ::LibPROJ)
+target_link_libraries(mbgrid PRIVATE mbaux)
+target_link_libraries(mbsegypsd PRIVATE FFTW::Double)
+target_compile_definitions(
+  mbconfig
+  PRIVATE MBSYSTEM_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}"
+          ENV_OTPSDIR="${otpsDir}"
+          ENV_LEVITUSANNUAL82="${levitusDir}/LevitusAnnual82.dat")
+target_compile_definitions(
+  mblevitus PRIVATE ENV_LEVITUSANNUAL82="${CMAKE_INSTALL_PREFIX}/${levitusDir}/LevitusAnnual82.dat")
+
+install(TARGETS ${executables} mbconfig mblevitus DESTINATION ${CMAKE_INSTALL_BINDIR})

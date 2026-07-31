@@ -79,7 +79,6 @@
 #include <signal.h>
 #include "mframe.h"
 #include "msocket.h"
-#include "medebug.h"
 
 /////////////////////////
 // Macros
@@ -379,7 +378,7 @@ int main(int argc, char *argv[])
             if( (pid=strstr(rxbuf,"mid["))!=NULL){
                 sscanf(pid,"mid[%d",&mid);
             }
-            sprintf(txbuf,"PNG mid[%d] cid[%d] ",mid,getpid());
+            snprintf(txbuf, MSGBUFSIZE, "PNG mid[%d] cid[%d] ",mid,getpid());
             size_t tx_len = strlen(txbuf)+1;
 
 

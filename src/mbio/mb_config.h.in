@@ -3,6 +3,9 @@
 /* Machine is littleendian, (Byteswapping on) */
 #undef BYTESWAPPED
 
+/* Build deprecated programs */
+#undef DEPRECATED_ENABLED
+
 /* Build with GSF */
 #undef ENABLE_GSF
 
@@ -15,16 +18,16 @@
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H
 
-/* Define to 1 if you have the `gsincos' function. */
+/* Define to 1 if you have the 'gsincos' function. */
 #undef HAVE_GSINCOS
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
-/* Define to 1 if you have the `m' library (-lm). */
+/* Define to 1 if you have the 'm' library (-lm). */
 #undef HAVE_LIBM
 
-/* Define to 1 if you have the `pthread' library (-lpthread). */
+/* Define to 1 if you have the 'pthread' library (-lpthread). */
 #undef HAVE_LIBPTHREAD
 
 /* Have malloc.h */
@@ -33,7 +36,7 @@
 /* Have rpc/rpc.h */
 #undef HAVE_RPC_RPC_H
 
-/* Define to 1 if you have the `sincos' function. */
+/* Define to 1 if you have the 'sincos' function. */
 #undef HAVE_SINCOS
 
 /* Define to 1 if you have the <stdint.h> header file. */
@@ -111,7 +114,10 @@
 /* Build tools using Qt5 */
 #undef QTTOOLS_ENABLED
 
-/* Define to 1 if all of the C90 standard headers exist (not just the ones
+/* Build rovtrn tools in mbtrnav */
+#undef ROVTRN_ENABLED
+
+/* Define to 1 if all of the C89 standard headers exist (not just the ones
    required in a freestanding environment). This macro is provided for
    backward compatibility; new code need not use it. */
 #undef STDC_HEADERS
@@ -121,9 +127,6 @@
 
 /* Version number of package */
 #undef VERSION
-
-/* Set VERSION_DATE define in mb_config.h */
-#undef VERSION_DATE
 
 /* 0 */
 #undef WITH_DEBUG

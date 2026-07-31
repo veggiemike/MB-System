@@ -73,8 +73,6 @@
 #include "trnif_proto.h"
 
 #include "mframe.h"
-#include "medebug.h"
-#include "mmdebug.h"
 
 /////////////////////////
 // Macros
@@ -109,6 +107,7 @@
 #define TRNUST_VERBOSE_DFL 0
 #define SESSION_BUF_LEN 80
 #define TRNUSVR_CMD_LINE_BYTES 2048
+#define HOSTNAME_BUF_LEN 256
 
 /////////////////////////
 // Declarations
@@ -261,6 +260,25 @@ void parse_args(int argc, char **argv, app_cfg_t *cfg)
         }
     }// while
 
+    // use this host if unset
+    if(NULL==cfg->host){
+        // if unset, use local IP
+        char host[HOSTNAME_BUF_LEN]={0};
+        if(gethostname(host, HOSTNAME_BUF_LEN)==0 && strlen(host)>0){
+            struct hostent *host_entry;
+
+            if( (host_entry = gethostbyname(host))!=NULL){
+                //Convert into IP string
+                char *s =inet_ntoa(*((struct in_addr*) host_entry->h_addr_list[0]));
+                cfg->host = strdup(s);
+            } //find host information
+        }
+
+        if(NULL==cfg->host){
+            cfg->host=strdup("localhost");
+        }
+    }
+
     fprintf(stderr,"verbose   [%d]\n",cfg->verbose);
     fprintf(stderr,"host      [%s]\n",cfg->host);
     fprintf(stderr,"port      [%d]\n",cfg->port);
@@ -300,7 +318,7 @@ static app_cfg_t *app_cfg_new()
         memset(instance,0,sizeof(app_cfg_t));
         instance->netif=NULL;
         instance->logdir=strdup(TRNUST_LOGDIR_DFL);
-        instance->host=strdup(TRNUST_HOST_DFL);
+        instance->host=NULL;
         instance->port=TRNUST_PORT_DFL;
         instance->verbose=TRNUST_VERBOSE_DFL;
         instance->update_period_sec=TRNUST_UPDATE_DFL;
@@ -365,7 +383,7 @@ static char *s_session_str(char **pdest, size_t len)
     gmt = gmtime(&rawtime);
 
     // format YYYYMMDD-HHMMSS
-    sprintf(session_date, "%04d%02d%02d-%02d%02d%02d", (gmt->tm_year + 1900), gmt->tm_mon + 1, gmt->tm_mday, gmt->tm_hour,
+    snprintf(session_date, SESSION_BUF_LEN, "%04d%02d%02d-%02d%02d%02d", (gmt->tm_year + 1900), gmt->tm_mon + 1, gmt->tm_mday, gmt->tm_hour,
             gmt->tm_min, gmt->tm_sec);
 
     if(NULL!=pdest){
@@ -375,7 +393,7 @@ static char *s_session_str(char **pdest, size_t len)
             retval=*pdest;
         }else {
             if(len>=SESSION_BUF_LEN){
-                sprintf(*pdest,"%s",session_date);
+                snprintf(*pdest, SESSION_BUF_LEN, "%s",session_date);
                 retval=*pdest;
             }else{
                 fprintf(stderr,"ERR - dest buffer too small\n");
@@ -411,13 +429,18 @@ static int s_init_trnusvr(int argc, char **argv, app_cfg_t *cfg, bool verbose)
             char *ip=g_cmd_line;
             int x=0;
             for (x=0;x<argc;x++){
-                if ((ip+strlen(argv[x])-g_cmd_line) > TRNUSVR_CMD_LINE_BYTES) {
+
+                size_t check_len = (ip + strlen(argv[x]) - g_cmd_line);
+
+                if ( check_len > TRNUSVR_CMD_LINE_BYTES) {
                     fprintf(stderr,"warning - logged cmdline truncated\n");
                     mlog_tprintf(cfg->netif->mlog_id,"warning - logged cmdline truncated\n");
                     break;
                 }
-                int ilen=sprintf(ip," %s",argv[x]);
-                ip+=ilen;
+
+                size_t wlen = TRNUSVR_CMD_LINE_BYTES - (ip - g_cmd_line);
+                int ilen=snprintf(ip, wlen, " %s",argv[x]);
+                ip += (ilen > 0 ? ilen : 0);
             }
             g_cmd_line[TRNUSVR_CMD_LINE_BYTES-1]='\0';
             mlog_tprintf(cfg->netif->mlog_id,"*** trnusvr session start ***\n");
@@ -444,7 +467,7 @@ static void s_advance_update(trnu_pub_t *update)
 
     if(NULL!=update){
         static int count=0;
-
+        
         update->est[TRNU_EST_PT].time=mtime_etime();
         update->est[TRNU_EST_MLE].time=mtime_etime();
         update->est[TRNU_EST_MMSE].time=mtime_etime();
@@ -554,13 +577,13 @@ static int s_app_main(app_cfg_t *cfg)
         if(NULL!=cfg->netif ){
 
             // enable module debug
-            netif_init_mmd();
+            netif_configure_debug(NULL, cfg->verbose);
 
             // test trn_server/commsT protocol
             s_run(cfg);
 
             // release module debug resources
-            mmd_release();
+            mxd_release();
 
             // log session end
             double now=mtime_etime();

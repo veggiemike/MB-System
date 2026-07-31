@@ -1,24 +1,37 @@
 dnl--------------------------------------------------------------------
 dnl    The MB-system:    configure.ac    12/7/2011
 dnl
-dnl    Copyright (c) 2011-2022 by
-dnl    D. W. Caress (caress@lamont.ldgo.columbia.edu)
-dnl    and D. N. Chayes (dale@lamont.ldgo.columbia.edu)
-dnl    Lamont-Doherty Earth Observatory
-dnl    Palisades, NY  10964
+dnl    Copyright (c) 2011-2025 by
+dnl    David W. Caress (caress@mbari.org)
+dnl      Monterey Bay Aquarium Research Institute
+dnl      Moss Landing, California, USA
+dnl    Dale N. Chayes 
+dnl      Center for Coastal and Ocean Mapping
+dnl      University of New Hampshire
+dnl      Durham, New Hampshire, USA
+dnl    Christian dos Santos Ferreira
+dnl      MARUM
+dnl      University of Bremen
+dnl      Bremen Germany
+dnl      
+dnl    MB-System was created by Caress and Chayes in 1992 at the
+dnl      Lamont-Doherty Earth Observatory
+dnl      Columbia University
+dnl      Palisades, NY 10964
 dnl
-dnl    See README file for copying and redistribution conditions.
+dnl    See README.md file for copying and redistribution conditions.
+dnl------------------------------------------------------------------------------
+
 dnl--------------------------------------------------------------------
 
 dnl Initialize and set version and version date
-AC_INIT([mbsystem],[5.7.9beta52],[http://listserver.mbari.org/sympa/arc/mbsystem],[mbsystem],[http://www.mbari.org/data/mbsystem/])
-AC_DEFINE(VERSION_DATE, ["9 March 2023"], [Set VERSION_DATE define in mb_config.h])
+AC_INIT([mbsystem],[5.8.2],[http://listserver.mbari.org/sympa/arc/mbsystem],[mbsystem],[http://www.mbari.org/data/mbsystem/])
 
 AS_ECHO([" "])
 AS_ECHO(["------------------------------------------------------------------------------"])
 AS_ECHO(["    The MB-system:    configure    12/7/2011"])
 AS_ECHO([" "])
-AS_ECHO(["    Copyright (c) 2011-2022 by"])
+AS_ECHO(["    Copyright (c) 2011-2025 by"])
 AS_ECHO(["    D. W. Caress (caress@lamont.ldgo.columbia.edu)"])
 AS_ECHO(["    and D. N. Chayes (dale@lamont.ldgo.columbia.edu)"])
 AS_ECHO(["    Lamont-Doherty Earth Observatory"])
@@ -69,7 +82,7 @@ AS_ECHO(["----------------------------------------------------------------------
 AS_ECHO(["    To generate the makefiles needed to build MB-System, run ./configure"])
 AS_ECHO(["    with the options appropriate for your situation. These options are"])
 AS_ECHO(["    listed here:"])
-AS_ECHO(["        --prefix=install      - location for mbsystem (/usr/local/mbsystem) (optional)"])
+AS_ECHO(["        --prefix=install      - location for mbsystem (/usr/local) (optional)"])
 AS_ECHO(["        --with-netcdf-config  - location of NetCDF config script nc-config (optional)"])
 AS_ECHO(["        --with-gdal-config    - location of GDAL config script gdal-config (optional)"])
 AS_ECHO(["        --with-gmt-config     - location of GMT config script gmt-config (optional)"])
@@ -89,6 +102,8 @@ AS_ECHO(["        --with-vtk-lib        - location of VTK8.2+ libraries (require
 AS_ECHO(["        --enable-opencv       - enable building tools using OpenCV (optional)"])
 AS_ECHO(["        --enable-mbtrn        - enable building terrain relative navigation (TRN) tools (optional)"])
 AS_ECHO(["        --enable-mbtnav       - enable building terrain relative navigation (TRN) tools (optional)"])
+AS_ECHO(["        --enable-rovtrn       - enable building terrain relative navigation (TRN) ROV tools (optional)"])
+AS_ECHO(["        --enable-deprecated   - enable building deprecated programs (optional)"])
 AS_ECHO(["        --disable-mbtools     - disable building graphical tools (use with --enable-mbtrn and --enable-mbtnav)"])
 AS_ECHO(["        --enable-hardening    - Enable compiler and linker options to frustrate memory corruption exploits  (e.g. -fPIE and -pie) (optional)"])
 AS_ECHO(["        --enable-test         - Enable building unit tests in test/ and third-party/"])
@@ -124,7 +139,7 @@ AS_ECHO(["----------------------------------------------------------------------
 AS_ECHO([" "])
 
 dnl Require automake 2.71 or later
-AC_PREREQ([2.71])
+AC_PREREQ([2.72])
 
 dnl Disable warnings about unrecognized options
 AC_DISABLE_OPTION_CHECKING
@@ -147,7 +162,7 @@ dnl Handle option to enable debugging
 AC_ARG_WITH(debug, [  --with-debug  Set compiler flags to allow full debugging], [AC_DEFINE(WITH_DEBUG,1,0) AC_SUBST(WITH_DEBUG,1) CFLAGS="-O0 -g" CXXFLAGS="-O0 -g"])
 
 dnl Check for programs
-AC_PROG_CC
+AC_PROG_CC([cc gcc])
 AM_PROG_CC_C_O
 AC_PROG_CXX
 AC_PROG_INSTALL
@@ -332,8 +347,6 @@ mbsystemdatadir="$datadir/$PACKAGE"
 AC_SUBST(mbsystemdatadir)
 mbsystemhtmldir="$docdir/html"
 AC_SUBST(mbsystemhtmldir)
-mbsystempsdir="$docdir/ps"
-AC_SUBST(mbsystempsdir)
 
 dnl--------------------------------------------------------------------
 dnl OTPS Section
@@ -341,7 +354,7 @@ dnl--------------------------------------------------------------------
 
 dnl Use OTPS (OSU Tidal Prediction Software) location if specified with --with-otps-dir, use default otherwise
 AS_ECHO(["Use OTPS (OSU Tidal Prediction Software) location if specified with --with-otps-dir, use default otherwise"])
-OTPS_DIR="/usr/local/OTPS2"
+OTPS_DIR="/usr/local/src/OTPS"
 AC_ARG_WITH(otps_dir, [ --with-otps-dir=DIR    Location of OSU Tidal Prediction Software], [OTPS_DIR=${withval}])
 AC_SUBST(OTPS_DIR)
 
@@ -409,7 +422,9 @@ else
             FOUND_PROJ_LIB=yes
         fi
     else
-        AC_MSG_ERROR([Did not find PROJ library pkg-config package...])
+        if test "$FOUND_PROJ4" != "yes"; then
+            AC_MSG_ERROR([Did not find PROJ library pkg-config package...])
+        fi
     fi
     libproj_LIBS="-lproj"
     libproj_LDFLAGS=""
@@ -1344,6 +1359,31 @@ else
 fi
 
 dnl--------------------------------------------------------------------
+dnl ROVTRN Section - optionally build terrain relative navigation (TRN) tools for ROV
+dnl--------------------------------------------------------------------
+
+dnl Check if the rovtrn tools should be built
+AS_ECHO(["Check if the rovtrn tools should be built"])
+AC_ARG_ENABLE(rovtrn, [AS_HELP_STRING([--enable-rovtrn], [build rovtrn tools])], [build_rovtrn=yes], [build_rovtrn=no])
+AM_CONDITIONAL([BUILD_ROVTRN], [test $build_rovtrn = yes])
+if test "$build_rovtrn" = "yes" ; then
+    dnl Building rovtrn tools
+    AS_ECHO(["Build rovtrn tools in mbtrnav"])
+    AC_DEFINE(ROVTRN_ENABLED, 1, [Build rovtrn tools in mbtrnav])
+    AC_DEFINE(MBTRN_ENABLED, 1, [Build libmbtrn and mbtrnpp])
+    AC_DEFINE(MBTNAV_ENABLED, 1, [Build libmbtnav and embed TRN instance in mbtrnpp])
+    AM_CONDITIONAL([BUILD_MBTRN], [test $build_rovtrn = yes])
+    AM_CONDITIONAL([BUILD_MBTNAV], [test $build_rovtrn = yes])
+    AM_CONDITIONAL([BUILD_MBTRNUTILS], [test $build_rovtrn = yes])
+    build_mbtrn="yes"
+    build_mbrnutils="yes"
+    build_mbtrnframe="yes"
+else
+    dnl Not building rovtrn tools
+    AS_ECHO(["Not building rovtrn tools"])
+fi
+
+dnl--------------------------------------------------------------------
 dnl Point Cloud Library Section - optionally build ICP based feature matching
 dnl in mbnavadjust - uses ICP algorithm in Point Cloud Library (PCL)
 dnl--------------------------------------------------------------------
@@ -1381,6 +1421,21 @@ if test "$build_pcltools" = "yes" ; then
     else
         AS_ECHO(["Did not find boost"])
     fi
+fi
+
+dnl--------------------------------------------------------------------
+dnl Deprecated Section - optionally build and install deprecated programs
+dnl using --enable-deprecated
+dnl--------------------------------------------------------------------
+AS_ECHO(["Check if deprecated programs should be built"])
+AC_ARG_ENABLE(deprecated, [AS_HELP_STRING([--enable-deprecated],
+        [build deprecated programs])], [build_deprecated=yes], [build_deprecated=no])
+AM_CONDITIONAL([BUILD_DEPRECATED], [test $build_deprecated = yes])
+if test "$build_deprecated" = "yes" ; then
+    AS_ECHO(["Build deprecated programs"])
+    AC_DEFINE(DEPRECATED_ENABLED, 1, [Build deprecated programs])
+else
+    AS_ECHO(["Not building deprecated programs"])
 fi
 
 dnl--------------------------------------------------------------------
@@ -1447,19 +1502,24 @@ AC_CONFIG_FILES([\
     src/mbio/Makefile \
     src/surf/Makefile \
     src/bsio/Makefile \
+    src/mbbitpack/Makefile \
     src/mbaux/Makefile \
     src/utilities/Makefile \
-    src/deprecated/Makefile \
     src/gmt/Makefile \
     src/macros/Makefile \
     src/otps/Makefile \
+    src/mbgrd2gltf/Makefile \
     src/man/Makefile \
     src/man/man1/Makefile \
     src/man/man3/Makefile \
     src/html/Makefile \
-    src/ps/Makefile \
     src/share/Makefile \
     ])
+if test "$enable_deprecated" = "yes" ; then
+    AC_CONFIG_FILES([\
+        src/deprecated/Makefile \
+        ])
+fi
 if test "$enable_gsf" = "yes" ; then
     AC_CONFIG_FILES([\
         src/gsf/Makefile \
@@ -1525,8 +1585,12 @@ if test "$build_test" = "yes" ; then
           test/Makefile \
           test/mbio/Makefile \
           test/utilities/Makefile \
-          test/deprecated/Makefile \
           ])
+    if test "$enable_deprecated" = "yes" ; then
+        AC_CONFIG_FILES([\
+            test/deprecated/Makefile \
+            ])
+    fi
 fi
 
 AC_OUTPUT
@@ -1626,6 +1690,11 @@ if test "$build_mbtrnframe" = "yes" ; then
 else
 	AS_ECHO(["Build mbtrnframe: Disabled"])
 fi
+if test "$build_rovtrn" = "yes" ; then
+	AS_ECHO(["Build rovtrn tools: Enabled"])
+else
+	AS_ECHO(["Build rovtrn tools: Disabled"])
+fi
 if test "$GOT_OPENCV4" = "yes" ; then
 	AS_ECHO(["Build OpenCV4 tools: Enabled"])
 else
@@ -1651,6 +1720,11 @@ if test "$enable_gsf" = "yes" ; then
 else
     AS_ECHO(["Build driver gsf: Disabled"])
 fi
+if test "$enable_deprecated" = "yes" ; then
+    AS_ECHO(["Build deprecated: Enabled"])
+else
+    AS_ECHO(["Build deprecated: Disabled"])
+fi
 
 AS_ECHO(["------------------------------------------------------------------------------"])
 AS_ECHO(["Key Variables:"])
@@ -1666,7 +1740,6 @@ AS_ECHO(["    header files:             ${includedir}"])
 AS_ECHO(["    data files:               ${mbsystemdatadir}"])
 AS_ECHO(["    man pages:                ${mandir}"])
 AS_ECHO(["    Html documentation:       ${mbsystemhtmldir}"])
-AS_ECHO(["    Postscript documentation: ${mbsystempsdir}"])
 AS_ECHO(["------------------------------------------------------------------------------"])
 AS_ECHO(["See config.log for details of configure results"])
 AS_ECHO(["See INSTALL for further build instructions and hints"])
