@@ -8,4 +8,4 @@ AM_CPPFLAGS += ${libnetcdf_CPPFLAGS}
 
 mbgrd2gltf_SOURCES = main.cpp bathymetry.cpp compression.cpp geometry.cpp model.cpp options.cpp
 mbgrd2gltf_LDADD =
-mbgrd2gltf_LDADD += ${libnetcdf_LIBS}
+mbgrd2gltf_LDADD += ${libnetcdf_LIBS} -L/usr/lib/x86_64-linux-gnu -ldraco
