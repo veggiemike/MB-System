@@ -963,7 +963,6 @@ WidgetList BxWidgetIdsFromNames(Widget ref, char *cbName, char *stringList) {
 	 */
 	start = strtok(start, ",");
 
-	// TODO(schwehr): Localize
 	WidgetList wgtIds = NULL;
 	int wgtCount = 0;
 
@@ -2570,8 +2569,8 @@ void SetAppDefaults(
 			break;
 
 		char buf[1000];
-		strcpy(buf, lineage);
-		sprintf(lineage, "*%s%s", XtName(parent), buf);
+		snprintf(buf, sizeof(buf), "%s", lineage);
+		snprintf(lineage, sizeof(lineage), "*%s%s", XtName(parent), buf);
 
 		parent = XtParent(parent);
 	}

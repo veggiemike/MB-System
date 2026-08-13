@@ -377,6 +377,8 @@ top_srcdir = @top_srcdir@
 @BUILD_DEPRECATED_TRUE@	mbrollbias.1 \
 @BUILD_DEPRECATED_TRUE@	mbstripnan.1 \
 @BUILD_DEPRECATED_TRUE@	mbswplspreprocess.1
+@BUILD_MBTRNUTILS_TRUE@MAN_MBTRN = \
+@BUILD_MBTRNUTILS_TRUE@	mbtrnpp.1
 
 man_MANS = \
 	mbabsorption.1 \
@@ -398,6 +400,7 @@ man_MANS = \
 	mbformat.1 \
 	mbgetesf.1 \
 	mbgpstide.1 \
+	mbmesh.1 \
 	mbgrd2obj.1 \
 	mbgrdtiff.1 \
 	mbgrdviz.1 \
@@ -457,7 +460,8 @@ man_MANS = \
 	mbtime.1 \
 	mbvelocitytool.1 \
 	mbvoxelclean.1 \
-	$(MAN_DEPRECATED)
+	$(MAN_DEPRECATED) \
+	$(MAN_MBTRN)
 
 EXTRA_DIST = $(man_MANS)
 all: all-am

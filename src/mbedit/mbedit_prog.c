@@ -106,10 +106,10 @@
 #define MBEDIT_GRAB_END 2
 
 /* Bottom detect type names */
-char *detect_name[] = {"Unknown", "Amplitude", "Phase"};
+char *detect_name[] = {"Unknown", "Amplitude", "Phase", "Lidar", "Photogrammetry"};
 
 /* Source pulse type names */
-char *pulse_name[] = {"Unknown", "CW", "Up-Chirp", "Down-Chirp"};
+char *pulse_name[] = {"Unknown", "CW", "Up-Chirp", "Down-Chirp", "Lidar"};
 
 /* ping structure definition */
 struct mbedit_ping_struct {
@@ -120,6 +120,8 @@ struct mbedit_ping_struct {
 	int time_i[7];
 	double time_d;
 	int multiplicity;
+	bool dualprofile;
+	int dualprofilebeam;
 	double time_interval;
 	double navlon;
 	double navlat;
@@ -131,8 +133,6 @@ struct mbedit_ping_struct {
 	double pitch;
 	double heave;
 	double distance;
-	bool dualprofile;
-	int dualprofilebeam;
 	int beams_bath;
 	char *beamflag;
 	char *beamflagorg;
@@ -162,8 +162,17 @@ static const char help_message[] =
     "anomalous beams. Flagging is handled internally by setting\n"
     "depth values negative, so that no information is lost.";
 static const char usage_message[] =
-    "mbedit [-Byr/mo/da/hr/mn/sc -D  -Eyr/mo/da/hr/mn/sc \n\t-Fformat "
-    "-Ifile -Ooutfile -S -X -V -H]";
+    "mbedit\n"
+    "\t--begin-time=yr/mo/da/hr/mn/sc {-Byr/mo/da/hr/mn/sc}\n"
+    "\t--browse {-D}\n"
+    "\t--end-time=yr/mo/da/hr/mn/sc {-Eyr/mo/da/hr/mn/sc}\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--gui-mode {-G}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--run-mbprocess {-X}\n"
+    "\t--use-edit-save {-S}\n"
+    "\t--verbose {-V}\n\n";
 
 /* status variables */
 static int error = MB_ERROR_NO_ERROR;
@@ -290,7 +299,7 @@ static int borders[4];
 static int margin;
 static int xmin, xmax;
 static int ymin, ymax;
-static int exager = 100;
+static int exagger = 100;
 static int plot_width = 5000;
 static double xscale;
 static double yscale;
@@ -305,22 +314,11 @@ static int iping_save = 0;
 static int jbeam_save = 0;
 static double *bathlist;
 
-/* color control values */
-typedef enum {
-    WHITE = 0,
-    BLACK = 1,
-    RED = 2,
-    GREEN = 3,
-    BLUE = 4,
-    CORAL = 5,
-    LIGHTGREY = 6,
-} mbedit_color_t;
-
 static int ncolors;
 static unsigned int pixel_values[256];
 
 /*--------------------------------------------------------------------*/
-int mbedit_init(int argc, char **argv, int *startup_file) {
+int mbedit_init(int argc, char **argv, int *startup_file, int *startup_use_esf) {
 	int status = mb_defaults(verbose, &format, &pings, &lonflip, bounds, btime_i, etime_i, &speedmin, &timegap);
 	status = mb_uselockfiles(verbose, &uselockfiles);
 	format = 0;
@@ -349,14 +347,65 @@ int mbedit_init(int argc, char **argv, int *startup_file) {
 	strcpy(ifile, "");
 
 	int fileflag = 0;
+	bool use_esf = false;
 
 	int errflg = 0;
 	int c;
 	int help = 0;
 
+	static struct option options[] = {{"verbose", no_argument, NULL, 0},
+	                                   {"help", no_argument, NULL, 0},
+	                                   {"begin-time", required_argument, NULL, 0},
+	                                   {"browse", no_argument, NULL, 0},
+	                                   {"end-time", required_argument, NULL, 0},
+	                                   {"format", required_argument, NULL, 0},
+	                                   {"gui-mode", no_argument, NULL, 0},
+	                                   {"input", required_argument, NULL, 0},
+	                                   {"run-mbprocess", no_argument, NULL, 0},
+	                                   {"use-edit-save", no_argument, NULL, 0},
+	                                   {NULL, 0, NULL, 0}};
+	int option_index;
+
 	/* process argument list */
-	while ((c = getopt(argc, argv, "VvHhB:b:DdE:e:F:f:GgI:i:SsXx")) != -1) {
+	while ((c = getopt_long(argc, argv, "VvHhB:b:DdE:e:F:f:GgI:i:SsXx", options, &option_index)) != -1) {
 		switch (c) {
+		/* long options all return c=0 */
+		case 0:
+			if (strcmp("verbose", options[option_index].name) == 0) {
+				verbose++;
+			}
+			else if (strcmp("help", options[option_index].name) == 0) {
+				help++;
+			}
+			else if (strcmp("begin-time", options[option_index].name) == 0) {
+				sscanf(optarg, "%d/%d/%d/%d/%d/%d", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &btime_i[5]);
+				btime_i[6] = 0;
+			}
+			else if (strcmp("browse", options[option_index].name) == 0) {
+				output_mode = MBEDIT_OUTPUT_BROWSE;
+			}
+			else if (strcmp("end-time", options[option_index].name) == 0) {
+				sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
+				etime_i[6] = 0;
+			}
+			else if (strcmp("format", options[option_index].name) == 0) {
+				sscanf(optarg, "%d", &format);
+			}
+			else if (strcmp("gui-mode", options[option_index].name) == 0) {
+				gui_mode = true;
+			}
+			else if (strcmp("input", options[option_index].name) == 0) {
+				sscanf(optarg, "%1023s", ifile);
+				do_parse_datalist(ifile, format);
+				fileflag++;
+			}
+			else if (strcmp("run-mbprocess", options[option_index].name) == 0) {
+				run_mbprocess = true;
+			}
+			else if (strcmp("use-edit-save", options[option_index].name) == 0) {
+				use_esf = true;
+			}
+			break;
 		case 'H':
 		case 'h':
 			help++;
@@ -389,13 +438,17 @@ int mbedit_init(int argc, char **argv, int *startup_file) {
 			break;
 		case 'I':
 		case 'i':
-			sscanf(optarg, "%s", ifile);
+			sscanf(optarg, "%1023s", ifile);
 			do_parse_datalist(ifile, format);
 			fileflag++;
 			break;
 		case 'X':
 		case 'x':
 			run_mbprocess = true;
+			break;
+		case 'S':
+		case 's':
+			use_esf = true;
 			break;
 		case '?':
 			errflg++;
@@ -444,11 +497,13 @@ int mbedit_init(int argc, char **argv, int *startup_file) {
 
 	/* if file specified then use it */
 	*startup_file = fileflag > 0;
+	*startup_use_esf = use_esf;
 
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBIO function <%s> completed\n", __func__);
 		fprintf(stderr, "dbg2  Return values:\n");
 		fprintf(stderr, "dbg2       startup_file: %d\n", *startup_file);
+		fprintf(stderr, "dbg2       startup_use_esf: %d\n", *startup_use_esf);
 		fprintf(stderr, "dbg2       error:        %d\n", error);
 		fprintf(stderr, "dbg2  Return status:\n");
 		fprintf(stderr, "dbg2       status:  %d\n", status);
@@ -512,7 +567,7 @@ int mbedit_set_scaling(int *brdr, int sh_time) {
 		ymin = margin;
 		ymax = borders[3] - margin / 2;
 		xscale = 100.0 * plot_width / (xmax - xmin);
-		yscale = (xscale * exager) / 100.0;
+		yscale = (xscale * exagger) / 100.0;
 	}
 	else {
 		margin = (borders[1] - borders[0]) / 16;
@@ -521,7 +576,7 @@ int mbedit_set_scaling(int *brdr, int sh_time) {
 		ymin = margin;
 		ymax = borders[3] - margin / 2;
 		xscale = 100.0 * plot_width / (xmax - xmin);
-		yscale = (xscale * exager) / 100.0;
+		yscale = (xscale * exagger) / 100.0;
 	}
 
 	const int status = MB_SUCCESS;
@@ -715,7 +770,7 @@ int mbedit_get_defaults(int *plt_size_max, int *plt_size, int *sh_mode, int *sh_
 
 	/* get scaling */
 	*plwd = plot_width;
-	*exgr = exager;
+	*exgr = exagger;
 
 	/* get tick intervals */
 	*xntrvl = x_interval;
@@ -749,7 +804,7 @@ int mbedit_get_defaults(int *plt_size_max, int *plt_size, int *sh_mode, int *sh_
 		fprintf(stderr, "dbg2       hold_size:              %d\n", *hold_size);
 		fprintf(stderr, "dbg2       format:                 %d\n", *form);
 		fprintf(stderr, "dbg2       plot_width:             %d\n", *plwd);
-		fprintf(stderr, "dbg2       exager:                 %d\n", *exgr);
+		fprintf(stderr, "dbg2       exagger:                %d\n", *exgr);
 		fprintf(stderr, "dbg2       x_interval:             %d\n", *xntrvl);
 		fprintf(stderr, "dbg2       y_interval:             %d\n", *yntrvl);
 		for (int i = 0; i < 7; i++)
@@ -821,7 +876,7 @@ int mbedit_action_open(char *file, int form, int fileid, int numfiles, int savem
 		fprintf(stderr, "dbg2       savemode:        %d\n", savemode);
 		fprintf(stderr, "dbg2       outmode:         %d\n", outmode);
 		fprintf(stderr, "dbg2       plot_width:      %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:          %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:         %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:      %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:      %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:       %d\n", plt_size);
@@ -910,7 +965,7 @@ int mbedit_action_next_buffer(int hold_size, int buffer_size, int plwd, int exgr
 		fprintf(stderr, "dbg2       hold_size:   %d\n", hold_size);
 		fprintf(stderr, "dbg2       buffer_size: %d\n", buffer_size);
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -1173,7 +1228,7 @@ int mbedit_action_step(int step, int plwd, int exgr, int xntrvl, int yntrvl, int
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       step:        %d\n", step);
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -1247,7 +1302,7 @@ int mbedit_action_plot(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -1305,7 +1360,7 @@ int mbedit_action_mouse_toggle(int x_loc, int y_loc, int plwd, int exgr, int xnt
 		fprintf(stderr, "dbg2       x_loc:       %d\n", x_loc);
 		fprintf(stderr, "dbg2       y_loc:       %d\n", y_loc);
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -1469,7 +1524,7 @@ int mbedit_action_mouse_pick(int x_loc, int y_loc, int plwd, int exgr, int xntrv
 		fprintf(stderr, "dbg2       x_loc:       %d\n", x_loc);
 		fprintf(stderr, "dbg2       y_loc:       %d\n", y_loc);
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -1615,7 +1670,7 @@ int mbedit_action_mouse_erase(int x_loc, int y_loc, int plwd, int exgr, int xntr
 		fprintf(stderr, "dbg2       x_loc:       %d\n", x_loc);
 		fprintf(stderr, "dbg2       y_loc:       %d\n", y_loc);
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -1751,7 +1806,7 @@ int mbedit_action_mouse_restore(int x_loc, int y_loc, int plwd, int exgr, int xn
 		fprintf(stderr, "dbg2       x_loc:       %d\n", x_loc);
 		fprintf(stderr, "dbg2       y_loc:       %d\n", y_loc);
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -1888,7 +1943,7 @@ int mbedit_action_mouse_grab(int grabmode, int x_loc, int y_loc, int plwd, int e
 		fprintf(stderr, "dbg2       x_loc:       %d\n", x_loc);
 		fprintf(stderr, "dbg2       y_loc:       %d\n", y_loc);
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -1943,7 +1998,7 @@ int mbedit_action_mouse_grab(int grabmode, int x_loc, int y_loc, int plwd, int e
 			}
 
 			/* draw grab ractangle */
-			xg_drawrectangle(mbedit_xgid, xgmin, ygmin, xgmax - xgmin, ygmax - ygmin, pixel_values[RED], XG_SOLIDLINE);
+			xg_drawrectangle(mbedit_xgid, xgmin, ygmin, xgmax - xgmin, ygmax - ygmin, pixel_values[MB_COLOR_RED], XG_SOLIDLINE);
 		}
 
 		/* change grab rectangle */
@@ -1967,7 +2022,7 @@ int mbedit_action_mouse_grab(int grabmode, int x_loc, int y_loc, int plwd, int e
 			}
 
 			/* undraw old grab rectangle */
-			xg_drawrectangle(mbedit_xgid, xgmin, ygmin, xgmax - xgmin, ygmax - ygmin, pixel_values[WHITE], XG_SOLIDLINE);
+			xg_drawrectangle(mbedit_xgid, xgmin, ygmin, xgmax - xgmin, ygmax - ygmin, pixel_values[MB_COLOR_WHITE], XG_SOLIDLINE);
 
 			/* update grab rectangle */
 			grab_set = true;
@@ -1993,7 +2048,7 @@ int mbedit_action_mouse_grab(int grabmode, int x_loc, int y_loc, int plwd, int e
 			}
 
 			/* draw grab rectangle */
-			xg_drawrectangle(mbedit_xgid, xgmin, ygmin, xgmax - xgmin, ygmax - ygmin, pixel_values[RED], XG_SOLIDLINE);
+			xg_drawrectangle(mbedit_xgid, xgmin, ygmin, xgmax - xgmin, ygmax - ygmin, pixel_values[MB_COLOR_RED], XG_SOLIDLINE);
 
 			/* replot beams on bounds of the grab box */
 			for (int i = current_id; i < current_id + nplot; i++) {
@@ -2145,7 +2200,7 @@ int mbedit_action_mouse_info(int x_loc, int y_loc, int plwd, int exgr, int xntrv
 		fprintf(stderr, "dbg2       x_loc:       %d\n", x_loc);
 		fprintf(stderr, "dbg2       y_loc:       %d\n", y_loc);
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -2262,7 +2317,7 @@ int mbedit_action_zap_outbounds(int iping, int plwd, int exgr, int xntrvl, int y
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       iping:       %d\n", iping);
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -2365,7 +2420,7 @@ int mbedit_action_bad_ping(int plwd, int exgr, int xntrvl, int yntrvl, int plt_s
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -2463,7 +2518,7 @@ int mbedit_action_good_ping(int plwd, int exgr, int xntrvl, int yntrvl, int plt_
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -2550,7 +2605,7 @@ int mbedit_action_left_ping(int plwd, int exgr, int xntrvl, int yntrvl, int plt_
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -2648,7 +2703,7 @@ int mbedit_action_right_ping(int plwd, int exgr, int xntrvl, int yntrvl, int plt
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -2746,7 +2801,7 @@ int mbedit_action_zero_ping(int plwd, int exgr, int xntrvl, int yntrvl, int plt_
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -2834,7 +2889,7 @@ int mbedit_action_flag_view(int plwd, int exgr, int xntrvl, int yntrvl, int plt_
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -2927,7 +2982,7 @@ int mbedit_action_unflag_view(int plwd, int exgr, int xntrvl, int yntrvl, int pl
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -3016,7 +3071,7 @@ int mbedit_action_unflag_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -3104,7 +3159,7 @@ int mbedit_action_filter_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -3233,7 +3288,7 @@ int mbedit_filter_ping(int iping) {
 						const int iend = MIN(iping + filter_medianspike_ltrack / 2, nbuff - 1);
 						for (int i = istart; i <= iend; i++) {
 							const int jstart = MAX(jbeam - filter_medianspike_xtrack / 2, 0);
-							const int jend = MIN(jbeam + filter_medianspike_xtrack / 2, ping[iping].beams_bath - 1);
+							const int jend = MIN(jbeam + filter_medianspike_xtrack / 2, ping[i].beams_bath - 1);
 							for (int j = jstart; j <= jend; j++) {
 								if (mb_beam_ok(ping[i].beamflag[j])) {
 									bathlist[nbathlist] = ping[i].bath[j];
@@ -3940,11 +3995,15 @@ int mbedit_load_data(int buffer_size, int *nloaded, int *nbuffer, int *ngood, in
 		                    &ping[nbuff].sensordepth, &ping[nbuff].beams_bath, &namp, &nss, beamflag, bath, amp, bathacrosstrack,
 		                    bathalongtrack, ss, ssacrosstrack, ssalongtrack, comment, &error);
 		if (error <= MB_ERROR_NO_ERROR && kind == MB_DATA_DATA) {
+		
+			/* get navigation */
 			if (nbuff > 0)
 				ping[nbuff].time_interval = ping[nbuff].time_d - ping[nbuff - 1].time_d;
 			status = mb_extract_nav(verbose, imbio_ptr, store_ptr, &kind, ping[nbuff].time_i, &ping[nbuff].time_d,
 			                        &ping[nbuff].navlon, &ping[nbuff].navlat, &speed_nav, &ping[nbuff].heading, &draft,
 			                        &ping[nbuff].roll, &ping[nbuff].pitch, &ping[nbuff].heave, &error);
+
+			/* check for ping multiplicity */
 			const int sensorhead_status = mb_sensorhead(verbose, imbio_ptr, store_ptr, &sensorhead, &sensorhead_error);
 			if (sensorhead_status == MB_SUCCESS) {
 				ping[nbuff].multiplicity = sensorhead;
@@ -3960,6 +4019,8 @@ int mbedit_load_data(int buffer_size, int *nloaded, int *nbuffer, int *ngood, in
 			else
 				ping[nbuff].distance = ping[nbuff - 1].distance + ping[nbuff].speed * ping[nbuff].time_interval / 3.6;
 			nbeams = ping[nbuff].beams_bath;
+			
+			/* get detect status */
 			detect_status = mb_detects(verbose, imbio_ptr, store_ptr, &kind, &nbeams, detect, &detect_error);
 			if (detect_status != MB_SUCCESS) {
 				status = MB_SUCCESS;
@@ -3970,7 +4031,7 @@ int mbedit_load_data(int buffer_size, int *nloaded, int *nbuffer, int *ngood, in
 			}
 			else {
 				for (int i = 0; i < ping[nbuff].beams_bath; i++) {
-          priority[i] = (detect[i] & 0x0000FF00) << 8;
+          priority[i] = (detect[i] & 0x0000FF00) >> 8;
 					detect[i] = detect[i] & 0x000000FF;
 				}
 			}
@@ -4027,7 +4088,39 @@ int mbedit_load_data(int buffer_size, int *nloaded, int *nbuffer, int *ngood, in
 			ping[nbuff].pulses = (int *)malloc(ping[nbuff].beams_bath * sizeof(int));
 			ping[nbuff].bath_x = (int *)malloc(ping[nbuff].beams_bath * sizeof(int));
 			ping[nbuff].bath_y = (int *)malloc(ping[nbuff].beams_bath * sizeof(int));
-			ping[nbuff].allocated = ping[nbuff].beams_bath;
+			if (ping[nbuff].beamflag == NULL || ping[nbuff].beamflagorg == NULL || ping[nbuff].bath == NULL ||
+			    ping[nbuff].amp == NULL || ping[nbuff].bathacrosstrack == NULL || ping[nbuff].bathalongtrack == NULL ||
+			    ping[nbuff].detect == NULL || ping[nbuff].priority == NULL || ping[nbuff].pulses == NULL ||
+			    ping[nbuff].bath_x == NULL || ping[nbuff].bath_y == NULL) {
+				free(ping[nbuff].beamflag);
+				free(ping[nbuff].beamflagorg);
+				free(ping[nbuff].bath);
+				free(ping[nbuff].amp);
+				free(ping[nbuff].bathacrosstrack);
+				free(ping[nbuff].bathalongtrack);
+				free(ping[nbuff].detect);
+				free(ping[nbuff].priority);
+				free(ping[nbuff].pulses);
+				free(ping[nbuff].bath_x);
+				free(ping[nbuff].bath_y);
+				ping[nbuff].beamflag = NULL;
+				ping[nbuff].beamflagorg = NULL;
+				ping[nbuff].bath = NULL;
+				ping[nbuff].amp = NULL;
+				ping[nbuff].bathacrosstrack = NULL;
+				ping[nbuff].bathalongtrack = NULL;
+				ping[nbuff].detect = NULL;
+				ping[nbuff].priority = NULL;
+				ping[nbuff].pulses = NULL;
+				ping[nbuff].bath_x = NULL;
+				ping[nbuff].bath_y = NULL;
+				ping[nbuff].allocated = 0;
+				status = MB_FAILURE;
+				error = MB_ERROR_MEMORY_FAIL;
+			}
+			else {
+				ping[nbuff].allocated = ping[nbuff].beams_bath;
+			}
 		}
 		if (status == MB_SUCCESS && ping[nbuff].allocated > 0) {
 			for (int i = 0; i < ping[nbuff].beams_bath; i++) {
@@ -4042,6 +4135,62 @@ int mbedit_load_data(int buffer_size, int *nloaded, int *nbuffer, int *ngood, in
 				ping[nbuff].pulses[i] = pulses[i];
 				ping[nbuff].bath_x[i] = 0;
 				ping[nbuff].bath_y[i] = 0;
+			}
+			
+			/* check if this is a dual profile (e.g. Kongsberg dual swath) */
+			double xtrack_min = 0.0;
+			double xtrack_max = 0.0;
+			double xtrack_absmax = 0.0;
+			bool first = true;
+			for (int i = 0; i < ping[nbuff].beams_bath; i++) {
+				if (mb_beam_ok(ping[nbuff].beamflag[i])) {
+					if (first) {
+						xtrack_min = ping[nbuff].bathacrosstrack[i];
+						xtrack_max = ping[nbuff].bathacrosstrack[i];
+						first = false;
+					}
+					else {
+						xtrack_min = MIN(xtrack_min, ping[nbuff].bathacrosstrack[i]);
+						xtrack_max = MAX(xtrack_max, ping[nbuff].bathacrosstrack[i]);
+					}
+				}
+			}
+			if (first) {
+				for (int i = 0; i < ping[nbuff].beams_bath; i++) {
+					if (!mb_beam_ok(ping[nbuff].beamflag[i]) 
+							&& !mb_beam_check_flag_unusable2(ping[nbuff].beamflag[i])) {
+						if (first) {
+							xtrack_min = ping[nbuff].bathacrosstrack[i];
+							xtrack_max = ping[nbuff].bathacrosstrack[i];
+							first = false;
+						}
+						else {
+							xtrack_min = MIN(xtrack_min, ping[nbuff].bathacrosstrack[i]);
+							xtrack_max = MAX(xtrack_max, ping[nbuff].bathacrosstrack[i]);
+						}
+					}
+				}
+			}
+			xtrack_absmax = MAX(fabs(xtrack_min), fabs(xtrack_max));
+			ping[nbuff].dualprofile = false;
+			ping[nbuff].dualprofilebeam = 0;
+			first = true;
+			double xtrack_old = 0.0;
+			for (int i = 0; i < ping[nbuff].beams_bath; i++) {
+				if (!mb_beam_check_flag_unusable2(ping[nbuff].beamflag[i])) {
+					if (first) {
+						xtrack_old = ping[nbuff].bathacrosstrack[i];
+						first = false;
+					}
+					else {
+						double xtrack_diff = ping[nbuff].bathacrosstrack[i] - xtrack_old;
+						if (xtrack_diff < 0.0 && fabs(xtrack_diff) > 0.5 * xtrack_absmax) {
+							ping[nbuff].dualprofile = true;
+							ping[nbuff].dualprofilebeam = i;
+						}
+						xtrack_old = ping[nbuff].bathacrosstrack[i];
+					}
+				}
 			}
 		}
 		if (status == MB_SUCCESS) {
@@ -4163,7 +4312,7 @@ int mbedit_clear_screen() {
 	}
 
 	/* clear screen */
-	xg_fillrectangle(mbedit_xgid, borders[0], borders[2], borders[1] - borders[0], borders[3] - borders[2], pixel_values[WHITE],
+	xg_fillrectangle(mbedit_xgid, borders[0], borders[2], borders[1] - borders[0], borders[3] - borders[2], pixel_values[MB_COLOR_WHITE],
 	                 XG_SOLIDLINE);
 
 	const int status = MB_SUCCESS;
@@ -4186,7 +4335,7 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
 		fprintf(stderr, "dbg2  Input arguments:\n");
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);
@@ -4200,14 +4349,14 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 
 	/* set scales and tick intervals */
 	plot_width = plwd;
-	exager = exgr;
+	exagger = exgr;
 	show_mode = sh_mode;
 	show_flaggedsoundings = sh_flggdsdg;
 	show_flaggedprofiles = sh_flggdprf;
 	show_time = sh_time,
 
 	/* figure out which pings to plot */
-	    plot_size = plt_size;
+	plot_size = plt_size;
 	if (current_id + plot_size > nbuff)
 		nplot = nbuff - current_id;
 	else
@@ -4265,30 +4414,6 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 		bathmedian = bathlist[nbathlist / 2];
 	}
 	
-	/* check for dual profile condition */
-	for (int i = current_id; i < current_id + nplot; i++) {
-		ping[i].dualprofile = false;
-		ping[i].dualprofilebeam = 0;
-		bool first = true;
-		double xtrack_old = 0.0;
-		for (int j = 0; j < ping[i].beams_bath; j++) {
-			if (!mb_beam_check_flag_unusable2(ping[i].beamflag[j])) {
-				if (first) {
-					xtrack_old = ping[i].bathacrosstrack[j];
-					first = false;
-				}
-				else {
-					double xtrack_diff = ping[i].bathacrosstrack[j] - xtrack_old;
-					if (xtrack_diff < 0.0 && fabs(xtrack_diff) > 0.5 * xtrack_absmax) {
-						ping[i].dualprofile = true;
-						ping[i].dualprofilebeam = j;
-					}
-					xtrack_old = ping[i].bathacrosstrack[j];
-				}
-			}
-		}
-	}
-
 	/* reset xtrack_absmax if required */
 	if (autoscale && xtrack_absmax < 0.5) {
 		xtrack_absmax = 1000.0;
@@ -4355,7 +4480,7 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 	}
 
 	/* clear screen */
-	xg_fillrectangle(mbedit_xgid, borders[0], borders[2], borders[1] - borders[0], borders[3] - borders[2], pixel_values[WHITE],
+	xg_fillrectangle(mbedit_xgid, borders[0], borders[2], borders[1] - borders[0], borders[3] - borders[2], pixel_values[MB_COLOR_WHITE],
 	                 XG_SOLIDLINE);
 
 	/* set scaling */
@@ -4366,7 +4491,7 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 	// const double dx = ((double)(xmax - xmin)) / plot_size;
 	const double dy = ((double)(ymax - ymin)) / plot_size;
 	xscale = 100.0 * plot_width / (xmax - xmin);
-	yscale = (xscale * 100.0) / exager;
+	yscale = (xscale * 100.0) / exagger;
 	const double dxscale = 100.0 / xscale;
 	const double dyscale = 100.0 / yscale;
 
@@ -4380,6 +4505,19 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 	int sdescent;
 	int sxstart;
 
+	if (ping[current_id].dualprofile) {
+		sprintf(string, "Dual Swath per Ping");
+		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
+		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 - sdescent + 5, string, pixel_values[MB_COLOR_BLACK],
+									XG_SOLIDLINE);
+	}
+	else {
+		sprintf(string, "Single Swath per Ping");
+		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
+		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 - sdescent + 5, string, pixel_values[MB_COLOR_BLACK],
+									XG_SOLIDLINE);
+	}
+
 	if (sh_mode == MBEDIT_SHOW_FLAG) {
 		sprintf(string, "Sounding Colors by Flagging:  Unflagged  Manual  Filter  Sonar");
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
@@ -4387,22 +4525,22 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 
 		sprintf(string, "Sounding Colors by Flagging:  Unflagged  ");
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 
 		sxstart += swidth;
 		sprintf(string, "Manual  ");
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[RED], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[MB_COLOR_RED], XG_SOLIDLINE);
 
 		sxstart += swidth;
 		sprintf(string, "Filter  ");
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[BLUE], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[MB_COLOR_BLUE], XG_SOLIDLINE);
 
 		sxstart += swidth;
 		sprintf(string, "Sonar");
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[GREEN], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[MB_COLOR_GREEN], XG_SOLIDLINE);
 	}
 	else if (sh_mode == MBEDIT_SHOW_DETECT) {
 		sprintf(string, "Sounding Colors by Bottom Detection:  Amplitude  Phase  Unknown");
@@ -4411,17 +4549,17 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 
 		sprintf(string, "Sounding Colors by Bottom Detection:  Amplitude  ");
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 
 		sxstart += swidth;
 		sprintf(string, "Phase  ");
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[RED], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[MB_COLOR_RED], XG_SOLIDLINE);
 
 		sxstart += swidth;
 		sprintf(string, "Unknown");
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[GREEN], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[MB_COLOR_GREEN], XG_SOLIDLINE);
 	}
 	else if (sh_mode == MBEDIT_SHOW_PULSE) {
 		sprintf(string, "Sounding Colors by Source Type:  CW  Up-Chirp  Down-Chirp  Unknown");
@@ -4430,40 +4568,40 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 
 		sprintf(string, "Sounding Colors by Source Type:  CW  ");
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 
 		sxstart += swidth;
 		sprintf(string, "Up-Chirp  ");
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[RED], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[MB_COLOR_RED], XG_SOLIDLINE);
 
 		sxstart += swidth;
 		sprintf(string, "Down-Chirp  ");
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[BLUE], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[MB_COLOR_BLUE], XG_SOLIDLINE);
 
 		sxstart += swidth;
 		sprintf(string, "Unknown");
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[GREEN], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, sxstart, ymin - margin / 2 + sascent + 5, string, pixel_values[MB_COLOR_GREEN], XG_SOLIDLINE);
 	}
 
-	sprintf(string, "Vertical Exageration: %4.2f   All Distances and Depths in Meters", (exager / 100.));
+	sprintf(string, "Vertical exaggeration: %4.2f   All Distances and Depths in Meters", (exagger / 100.));
 	xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-	xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 + 2 * (sascent + sdescent) + 5, string, pixel_values[BLACK],
+	xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 + 2 * (sascent + sdescent) + 5, string, pixel_values[MB_COLOR_BLACK],
 	              XG_SOLIDLINE);
 
 	/* plot filename */
 	sprintf(string, "File %d of %d:", file_id + 1, num_files);
 	xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-	xg_drawstring(mbedit_xgid, margin / 2, ymin - 3 * margin / 4, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbedit_xgid, margin / 2, ymin - 3 * margin / 4, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	char *string_ptr = strrchr(ifile, '/');
 	if (string_ptr == NULL)
 		string_ptr = ifile;
 	else if (strlen(string_ptr) > 0)
 		string_ptr++;
 	xg_drawstring(mbedit_xgid, margin / 2 + 2 + swidth, ymin - margin / 2 - 1 * (sascent + sdescent) - 5, string_ptr,
-	              pixel_values[BLACK], XG_SOLIDLINE);
+	              pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 
 	/* plot file position bar */
 	int fpx = margin / 2 + ((4 * margin) * current_id) / nbuff;
@@ -4472,45 +4610,45 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 	const int fpdy = margin / 4;
 	if (fpx + fpdx > 9 * margin / 2)
 		fpx = 9 * margin / 2 - fpdx;
-	xg_drawrectangle(mbedit_xgid, margin / 2, ymin - 5 * margin / 8, 4 * margin, margin / 4, pixel_values[BLACK], XG_SOLIDLINE);
-	xg_drawrectangle(mbedit_xgid, margin / 2 - 1, ymin - 5 * margin / 8 - 1, 4 * margin + 2, margin / 4 + 2, pixel_values[BLACK],
+	xg_drawrectangle(mbedit_xgid, margin / 2, ymin - 5 * margin / 8, 4 * margin, margin / 4, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+	xg_drawrectangle(mbedit_xgid, margin / 2 - 1, ymin - 5 * margin / 8 - 1, 4 * margin + 2, margin / 4 + 2, pixel_values[MB_COLOR_BLACK],
 	                 XG_SOLIDLINE);
-	xg_fillrectangle(mbedit_xgid, fpx, fpy, fpdx, fpdy, pixel_values[LIGHTGREY], XG_SOLIDLINE);
-	xg_drawrectangle(mbedit_xgid, fpx, fpy, fpdx, fpdy, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_fillrectangle(mbedit_xgid, fpx, fpy, fpdx, fpdy, pixel_values[MB_COLOR_LIGHTGREY], XG_SOLIDLINE);
+	xg_drawrectangle(mbedit_xgid, fpx, fpy, fpdx, fpdy, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	sprintf(string, "0 ");
 	xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-	xg_drawstring(mbedit_xgid, margin / 2 - swidth, ymin - margin / 2 + sascent / 2, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbedit_xgid, margin / 2 - swidth, ymin - margin / 2 + sascent / 2, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	sprintf(string, " %d", nbuff);
-	xg_drawstring(mbedit_xgid, 9 * margin / 2, ymin - margin / 2 + sascent / 2, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbedit_xgid, 9 * margin / 2, ymin - margin / 2 + sascent / 2, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 
 	/* plot scale bars */
 	const double dx_width = (xmax - xmin) / dxscale;
 	const int nx_int = (int)(0.5 * dx_width / x_interval + 1);
 	const int x_int = (int)(x_interval * dxscale);
-	xg_drawline(mbedit_xgid, xmin, ymax, xmax, ymax, pixel_values[BLACK], XG_SOLIDLINE);
-	xg_drawline(mbedit_xgid, xmin, ymin, xmax, ymin, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawline(mbedit_xgid, xmin, ymax, xmax, ymax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+	xg_drawline(mbedit_xgid, xmin, ymin, xmax, ymin, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	for (int i = 0; i < nx_int; i++) {
 		const int xx = i * x_int;
 		const int vx = i * x_interval;
-		xg_drawline(mbedit_xgid, xcen - xx, ymin, xcen - xx, ymax, pixel_values[BLACK], XG_DASHLINE);
-		xg_drawline(mbedit_xgid, xcen + xx, ymin, xcen + xx, ymax, pixel_values[BLACK], XG_DASHLINE);
+		xg_drawline(mbedit_xgid, xcen - xx, ymin, xcen - xx, ymax, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
+		xg_drawline(mbedit_xgid, xcen + xx, ymin, xcen + xx, ymax, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
 		sprintf(string, "%1d", vx);
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, xcen + xx - swidth / 2, ymax + sascent + 5, string, pixel_values[BLACK], XG_SOLIDLINE);
-		xg_drawstring(mbedit_xgid, xcen - xx - swidth / 2, ymax + sascent + 5, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, xcen + xx - swidth / 2, ymax + sascent + 5, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, xcen - xx - swidth / 2, ymax + sascent + 5, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	}
 	const double dy_height = (ymax - ymin) / dyscale;
 	const int ny_int = (int)(dy_height / y_interval + 1);
 	const int y_int = (int)(y_interval * dyscale);
-	xg_drawline(mbedit_xgid, xmin, ymin, xmin, ymax, pixel_values[BLACK], XG_SOLIDLINE);
-	xg_drawline(mbedit_xgid, xmax, ymin, xmax, ymax, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawline(mbedit_xgid, xmin, ymin, xmin, ymax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+	xg_drawline(mbedit_xgid, xmax, ymin, xmax, ymax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	for (int i = 0; i < ny_int; i++) {
 		const int yy = i * y_int;
 		const int vy = i * y_interval;
-		xg_drawline(mbedit_xgid, xmin, ymax - yy, xmax, ymax - yy, pixel_values[BLACK], XG_DASHLINE);
+		xg_drawline(mbedit_xgid, xmin, ymax - yy, xmax, ymax - yy, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
 		sprintf(string, "%1d", vy);
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, xmax + 5, ymax - yy + sascent / 2, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, xmax + 5, ymax - yy + sascent / 2, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	}
 
 	// int x0;
@@ -4527,25 +4665,25 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 		const double tsscale = 2.0 * margin / (tsmax - tsmin);
 
 		/* draw time series plot box */
-		xg_drawline(mbedit_xgid, margin / 2, ymin, margin / 2, ymax, pixel_values[BLACK], XG_SOLIDLINE);
-		xg_drawline(mbedit_xgid, margin, ymin, margin, ymax, pixel_values[BLACK], XG_DASHLINE);
-		xg_drawline(mbedit_xgid, 3 * margin / 2, ymin, 3 * margin / 2, ymax, pixel_values[BLACK], XG_DASHLINE);
-		xg_drawline(mbedit_xgid, 2 * margin, ymin, 2 * margin, ymax, pixel_values[BLACK], XG_DASHLINE);
-		xg_drawline(mbedit_xgid, 5 * margin / 2, ymin, 5 * margin / 2, ymax, pixel_values[BLACK], XG_SOLIDLINE);
-		xg_drawline(mbedit_xgid, margin / 2, ymax, 5 * margin / 2, ymax, pixel_values[BLACK], XG_SOLIDLINE);
-		xg_drawline(mbedit_xgid, margin / 2, ymin, 5 * margin / 2, ymin, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawline(mbedit_xgid, margin / 2, ymin, margin / 2, ymax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+		xg_drawline(mbedit_xgid, margin, ymin, margin, ymax, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
+		xg_drawline(mbedit_xgid, 3 * margin / 2, ymin, 3 * margin / 2, ymax, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
+		xg_drawline(mbedit_xgid, 2 * margin, ymin, 2 * margin, ymax, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
+		xg_drawline(mbedit_xgid, 5 * margin / 2, ymin, 5 * margin / 2, ymax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+		xg_drawline(mbedit_xgid, margin / 2, ymax, 5 * margin / 2, ymax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+		xg_drawline(mbedit_xgid, margin / 2, ymin, 5 * margin / 2, ymin, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 
 		/* draw time series labels */
 		/*sprintf(string,"Heading (deg)");*/
 		mbedit_tslabel(show_time, string);
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, 3 * margin / 2 - swidth / 2, ymin - sdescent, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, 3 * margin / 2 - swidth / 2, ymin - sdescent, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 		sprintf(string, "%g", tsmin);
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, margin / 2 - swidth / 2, ymax + sascent + 5, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, margin / 2 - swidth / 2, ymax + sascent + 5, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 		sprintf(string, "%g", tsmax);
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, 5 * margin / 2 - swidth / 2, ymax + sascent + 5, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, 5 * margin / 2 - swidth / 2, ymax + sascent + 5, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 
 		/*x0 = margin/2 + ping[current_id].heading / 360.0 * 2 * margin;*/
 		mbedit_tsvalue(current_id, show_time, &tsvalue);
@@ -4556,8 +4694,8 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 			mbedit_tsvalue(i, show_time, &tsvalue);
 			const int x = margin / 2 + (int)((tsvalue - tsmin) * tsscale);
 			const int y = ymax - (int)(dy / 2) - (int)((i - current_id) * dy);
-			xg_drawline(mbedit_xgid, x0, y0, x, y, pixel_values[BLACK], XG_SOLIDLINE);
-			xg_fillrectangle(mbedit_xgid, x - 2, y - 2, 4, 4, pixel_values[BLACK], XG_SOLIDLINE);
+			xg_drawline(mbedit_xgid, x0, y0, x, y, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+			xg_fillrectangle(mbedit_xgid, x - 2, y - 2, 4, 4, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 			x0 = x;
 			y0 = y;
 		}
@@ -4572,7 +4710,7 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 				mbedit_xtrackslope(i, &tsslope);
 				const int x = margin / 2 + (int)((tsslope - tsmin) * tsscale);
 				const int y = ymax - (int)(dy / 2) - (int)((i - current_id) * dy);
-				xg_drawline(mbedit_xgid, x0, y0, x, y, pixel_values[RED], XG_SOLIDLINE);
+				xg_drawline(mbedit_xgid, x0, y0, x, y, pixel_values[MB_COLOR_RED], XG_SOLIDLINE);
 				x0 = x;
 				y0 = y;
 			}
@@ -4591,7 +4729,7 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 				mbedit_tsvalue(i, show_time, &tsvalue);
 				const int x = margin / 2 + (int)((tsvalue - tsslope - tsmin) * tsscale);
 				const int y = ymax - (int)(dy / 2) - (int)((i - current_id) * dy);
-				xg_drawline(mbedit_xgid, x0, y0, x, y, pixel_values[BLUE], XG_SOLIDLINE);
+				xg_drawline(mbedit_xgid, x0, y0, x, y, pixel_values[MB_COLOR_BLUE], XG_SOLIDLINE);
 				x0 = x;
 				y0 = y;
 			}
@@ -4609,7 +4747,17 @@ int mbedit_plot_all(int plwd, int exgr, int xntrvl, int yntrvl, int plt_size,
 		ping[i].label_y = y;
 		for (int j = 0; j < ping[i].beams_bath; j++) {
 			if (!mb_beam_check_flag_unusable2(ping[i].beamflag[j])) {
-				if (view_mode == MBEDIT_VIEW_WATERFALL) {
+				if (view_mode == MBEDIT_VIEW_WATERFALL && ping[i].dualprofile) {
+					ping[i].bath_x[j] = (int)(xcen + dxscale * ping[i].bathacrosstrack[j]);
+					ping[i].bath_y[j] = (int)(y + dyscale * ((double)ping[i].bath[j] - bathmedian));
+					if (j < ping[i].dualprofilebeam) {
+						ping[i].bath_y[j] -= (int)(dy/4);
+					}
+					else {
+						ping[i].bath_y[j] += (int)(dy/4);
+					}
+				}
+				else if (view_mode == MBEDIT_VIEW_WATERFALL) {
 					ping[i].bath_x[j] = (int)(xcen + dxscale * ping[i].bathacrosstrack[j]);
 					ping[i].bath_y[j] = (int)(y + dyscale * ((double)ping[i].bath[j] - bathmedian));
 				}
@@ -4673,43 +4821,43 @@ int mbedit_plot_beam(int iping, int jbeam) {
 	/* plot the beam */
 	if (info_set && iping == info_ping && jbeam == info_beam) {
 		if (!mb_beam_check_flag_unusable2(ping[iping].beamflag[jbeam]))
-			xg_fillrectangle(mbedit_xgid, ping[iping].bath_x[jbeam] - 4, ping[iping].bath_y[jbeam] - 4, 8, 8, pixel_values[BLUE],
+			xg_fillrectangle(mbedit_xgid, ping[iping].bath_x[jbeam] - 4, ping[iping].bath_y[jbeam] - 4, 8, 8, pixel_values[MB_COLOR_BLUE],
 			                 XG_SOLIDLINE);
 	}
 	else if (jbeam >= 0 && jbeam < ping[iping].beams_bath && !mb_beam_check_flag_unusable2(ping[iping].beamflag[jbeam])) {
-		beam_color = BLACK;
+		beam_color = MB_COLOR_BLACK;
 		if (show_mode == MBEDIT_SHOW_FLAG) {
 			if (mb_beam_ok(ping[iping].beamflag[jbeam]))
-				beam_color = BLACK;
+				beam_color = MB_COLOR_BLACK;
 			else if (mb_beam_check_flag_filter2(ping[iping].beamflag[jbeam]))
-				beam_color = BLUE;
+				beam_color = MB_COLOR_BLUE;
 			else if (mb_beam_check_flag_filter(ping[iping].beamflag[jbeam]))
-				beam_color = BLUE;
+				beam_color = MB_COLOR_BLUE;
 			else if (mb_beam_check_flag_sonar(ping[iping].beamflag[jbeam]))
-				beam_color = GREEN;
+				beam_color = MB_COLOR_GREEN;
 			else {
-				beam_color = RED;
+				beam_color = MB_COLOR_RED;
 //fprintf(stderr, "Beam:%d flag:%u priority:%d detect:%d\n",
 //jbeam,ping[iping].beamflag[jbeam],ping[iping].priority[jbeam],ping[iping].detect[jbeam]);
       }
 		}
 		else if (show_mode == MBEDIT_SHOW_DETECT) {
 			if (ping[iping].detect[jbeam] == MB_DETECT_AMPLITUDE)
-				beam_color = BLACK;
+				beam_color = MB_COLOR_BLACK;
 			else if (ping[iping].detect[jbeam] == MB_DETECT_PHASE)
-				beam_color = RED;
+				beam_color = MB_COLOR_RED;
 			else
-				beam_color = GREEN;
+				beam_color = MB_COLOR_GREEN;
 		}
 		else if (show_mode == MBEDIT_SHOW_PULSE) {
 			if (ping[iping].pulses[jbeam] == MB_PULSE_CW)
-				beam_color = BLACK;
+				beam_color = MB_COLOR_BLACK;
 			else if (ping[iping].pulses[jbeam] == MB_PULSE_UPCHIRP)
-				beam_color = RED;
+				beam_color = MB_COLOR_RED;
 			else if (ping[iping].pulses[jbeam] == MB_PULSE_DOWNCHIRP)
-				beam_color = BLUE;
+				beam_color = MB_COLOR_BLUE;
 			else
-				beam_color = GREEN;
+				beam_color = MB_COLOR_GREEN;
 		}
 		if (mb_beam_ok(ping[iping].beamflag[jbeam]))
 			xg_fillrectangle(mbedit_xgid, ping[iping].bath_x[jbeam] - 2, ping[iping].bath_y[jbeam] - 2, 4, 4,
@@ -4762,7 +4910,7 @@ int mbedit_plot_ping(int iping) {
 		}
 		else if (!last_flagged && mb_beam_ok(ping[iping].beamflag[j])) {
 			if (!dualprofilebreak)
-				xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[BLACK], XG_SOLIDLINE);
+				xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 			else
 				dualprofilebreak = false;
 			last_flagged = false;
@@ -4771,7 +4919,7 @@ int mbedit_plot_ping(int iping) {
 		}
 		else if (mb_beam_ok(ping[iping].beamflag[j])) {
 			if (!dualprofilebreak)
-				xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[RED], XG_SOLIDLINE);
+				xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[MB_COLOR_RED], XG_SOLIDLINE);
 			else
 				dualprofilebreak = false;
 			last_flagged = false;
@@ -4782,7 +4930,7 @@ int mbedit_plot_ping(int iping) {
 		         !mb_beam_check_flag_unusable2(ping[iping].beamflag[j])) {
 			if (j > 0) {
 				if (!dualprofilebreak)
-					xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[RED], XG_SOLIDLINE);
+					xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[MB_COLOR_RED], XG_SOLIDLINE);
 				else
 					dualprofilebreak = false;
 			}
@@ -4865,23 +5013,23 @@ int mbedit_plot_ping_label(int iping, bool save) {
 
 	/* unplot the ping label */
 	xg_fillrectangle(mbedit_xgid, ping[iping].label_x - swidth - 21, ping[iping].label_y - sascent - 1, swidth + 22,
-	                 sascent + sdescent + 2, pixel_values[WHITE], XG_SOLIDLINE);
+	                 sascent + sdescent + 2, pixel_values[MB_COLOR_WHITE], XG_SOLIDLINE);
 
 	/* plot the ping label */
 	if (ping[iping].outbounds == MBEDIT_OUTBOUNDS_UNFLAGGED) {
 		xg_fillrectangle(mbedit_xgid, ping[iping].label_x - swidth, ping[iping].label_y - sascent, swidth, sascent + sdescent,
-		                 pixel_values[RED], XG_SOLIDLINE);
+		                 pixel_values[MB_COLOR_RED], XG_SOLIDLINE);
 		ping[iping].zap_x1 = ping[iping].label_x - swidth - 20;
 		ping[iping].zap_x2 = ping[iping].zap_x1 + 10;
 		ping[iping].zap_y1 = ping[iping].label_y - sascent;
 		ping[iping].zap_y2 = ping[iping].zap_y1 + sascent + sdescent;
-		xg_drawrectangle(mbedit_xgid, ping[iping].zap_x1, ping[iping].zap_y1, 10, sascent + sdescent, pixel_values[BLACK],
+		xg_drawrectangle(mbedit_xgid, ping[iping].zap_x1, ping[iping].zap_y1, 10, sascent + sdescent, pixel_values[MB_COLOR_BLACK],
 		                 XG_SOLIDLINE);
 	}
 	else if (ping[iping].outbounds == MBEDIT_OUTBOUNDS_FLAGGED)
 		xg_fillrectangle(mbedit_xgid, ping[iping].label_x - swidth, ping[iping].label_y - sascent, swidth, sascent + sdescent,
-		                 pixel_values[GREEN], XG_SOLIDLINE);
-	xg_drawstring(mbedit_xgid, ping[iping].label_x - swidth, ping[iping].label_y, string, pixel_values[BLACK], XG_SOLIDLINE);
+		                 pixel_values[MB_COLOR_GREEN], XG_SOLIDLINE);
+	xg_drawstring(mbedit_xgid, ping[iping].label_x - swidth, ping[iping].label_y, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBIO function <%s> completed\n", __func__);
@@ -4910,21 +5058,21 @@ int mbedit_plot_info() {
 		sprintf(string, "Ping:%d  Beam:%d  Time: %2.2d/%2.2d/%4.4d %2.2d:%2.2d:%2.2d.%3.3d", info_ping, info_beam, info_time_i[1],
 		        info_time_i[2], info_time_i[0], info_time_i[3], info_time_i[4], info_time_i[5], (int)(0.001 * info_time_i[6]));
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 - 2 * (sascent + sdescent) + 3, string, pixel_values[BLACK],
+		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 - 2 * (sascent + sdescent) + 3, string, pixel_values[MB_COLOR_BLACK],
 		              XG_SOLIDLINE);
-    fprintf(stdout, "\nSelected soundng:\n%s\n", string);
+    fprintf(stdout, "\nSelected sounding:\n%s\n", string);
 
 		sprintf(string, "Lon:%.5f deg  Lat:%.5f deg  Hdg:%.1f deg  Spd:%.1f km/hr",
             info_navlon, info_navlat, info_heading, info_speed);
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 - 1 * (sascent + sdescent) + 3, string, pixel_values[BLACK],
+		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 - 1 * (sascent + sdescent) + 3, string, pixel_values[MB_COLOR_BLACK],
 		              XG_SOLIDLINE);
     fprintf(stdout, "%s\n", string);
 
 		sprintf(string, "Depth:%.2f  X:%.2f  L:%.2f  Alt:%.2f  Amp:%.2f  Detect:%s  Pulse:%s", info_bath,
 		        info_bathacrosstrack, info_bathalongtrack, info_altitude, info_amp, detect_name[info_detect], pulse_name[info_pulse]);
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 + 3, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 + 3, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
     fprintf(stdout, "%s\n", string);
 	}
 
@@ -4950,15 +5098,15 @@ int mbedit_unplot_beam(int iping, int jbeam) {
 	/* unplot the beam */
 	if (info_set && iping == info_ping && jbeam == info_beam) {
 		if (!mb_beam_check_flag_unusable2(ping[iping].beamflag[jbeam]))
-			xg_fillrectangle(mbedit_xgid, ping[iping].bath_x[jbeam] - 4, ping[iping].bath_y[jbeam] - 4, 8, 8, pixel_values[WHITE],
+			xg_fillrectangle(mbedit_xgid, ping[iping].bath_x[jbeam] - 4, ping[iping].bath_y[jbeam] - 4, 8, 8, pixel_values[MB_COLOR_WHITE],
 			                 XG_SOLIDLINE);
 	}
 	else if (jbeam >= 0 && jbeam < ping[iping].beams_bath) {
 		if (mb_beam_ok(ping[iping].beamflag[jbeam]))
-			xg_fillrectangle(mbedit_xgid, ping[iping].bath_x[jbeam] - 2, ping[iping].bath_y[jbeam] - 2, 4, 4, pixel_values[WHITE],
+			xg_fillrectangle(mbedit_xgid, ping[iping].bath_x[jbeam] - 2, ping[iping].bath_y[jbeam] - 2, 4, 4, pixel_values[MB_COLOR_WHITE],
 			                 XG_SOLIDLINE);
 		else if (!mb_beam_check_flag_unusable2(ping[iping].beamflag[jbeam]))
-			xg_drawrectangle(mbedit_xgid, ping[iping].bath_x[jbeam] - 2, ping[iping].bath_y[jbeam] - 2, 4, 4, pixel_values[WHITE],
+			xg_drawrectangle(mbedit_xgid, ping[iping].bath_x[jbeam] - 2, ping[iping].bath_y[jbeam] - 2, 4, 4, pixel_values[MB_COLOR_WHITE],
 			                 XG_SOLIDLINE);
 	}
 
@@ -4993,7 +5141,7 @@ int mbedit_unplot_ping(int iping) {
 			  xold = ping[iping].bath_x[j];
 			  yold = ping[iping].bath_y[j];
 		  } else {
-			  xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[WHITE], XG_SOLIDLINE);
+			  xg_drawline(mbedit_xgid, xold, yold, ping[iping].bath_x[j], ping[iping].bath_y[j], pixel_values[MB_COLOR_WHITE], XG_SOLIDLINE);
 			  xold = ping[iping].bath_x[j];
 			  yold = ping[iping].bath_y[j];
 		  }
@@ -5028,19 +5176,19 @@ int mbedit_unplot_info() {
 		sprintf(string, "Ping:%d  Beam:%d  Time: %2.2d/%2.2d/%4.4d %2.2d:%2.2d:%2.2d.%3.3d", info_ping, info_beam, info_time_i[1],
 		        info_time_i[2], info_time_i[0], info_time_i[3], info_time_i[4], info_time_i[5], (int)(0.001 * info_time_i[6]));
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 - 2 * (sascent + sdescent) + 3, string, pixel_values[WHITE],
+		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 - 2 * (sascent + sdescent) + 3, string, pixel_values[MB_COLOR_WHITE],
 		              XG_SOLIDLINE);
 
 		sprintf(string, "Lon:%.5f deg  Lat:%.5f deg  Hdg:%.1f deg  Spd:%.1f km/hr",
                 info_navlon, info_navlat, info_heading, info_speed);
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 - 1 * (sascent + sdescent) + 3, string, pixel_values[WHITE],
+		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 - 1 * (sascent + sdescent) + 3, string, pixel_values[MB_COLOR_WHITE],
 		              XG_SOLIDLINE);
 
 		sprintf(string, "Depth:%.2f  X:%.2f  L:%.2f  Alt:%.2f  Amp:%.2f  Detect:%s  Pulse:%s", info_bath,
 		        info_bathacrosstrack, info_bathalongtrack, info_altitude, info_amp, detect_name[info_detect], pulse_name[info_pulse]);
 		xg_justify(mbedit_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 + 3, string, pixel_values[WHITE], XG_SOLIDLINE);
+		xg_drawstring(mbedit_xgid, xcen - swidth / 2, ymin - margin / 2 + 3, string, pixel_values[MB_COLOR_WHITE], XG_SOLIDLINE);
 	}
 
 	const int status = MB_SUCCESS;
@@ -5072,7 +5220,7 @@ int mbedit_action_goto(int ttime_i[7], int hold_size, int buffer_size, int plwd,
 		fprintf(stderr, "dbg2       hold_size:   %d\n", hold_size);
 		fprintf(stderr, "dbg2       buffer_size: %d\n", buffer_size);
 		fprintf(stderr, "dbg2       plot_width:  %d\n", plwd);
-		fprintf(stderr, "dbg2       exager:      %d\n", exgr);
+		fprintf(stderr, "dbg2       exagger:     %d\n", exgr);
 		fprintf(stderr, "dbg2       x_interval:  %d\n", xntrvl);
 		fprintf(stderr, "dbg2       y_interval:  %d\n", yntrvl);
 		fprintf(stderr, "dbg2       plot_size:   %d\n", plt_size);

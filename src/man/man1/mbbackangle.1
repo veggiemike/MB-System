@@ -1,5 +1,5 @@
 2100
-.TH mbbackangle 1 "13 July 2023" "MB-System 5.0" "MB-System 5.0"
+.TH mbbackangle 1 "26 December 2025" "MB-System 5.0" "MB-System 5.0"
 .SH NAME
 \fBmbbackangle\fP \- Generates tables of the average amplitude or
 sidescan values in swath sonar data as a function of
@@ -10,11 +10,12 @@ Version 5.0
 
 .SH SYNOPSIS
 \fBmbbackangle\fP [\fB\-A\fIkind\fP
+\fB\-B\fImode\fP[\fI/ssbeamwidth\fP[\fI/ssdepression\fP]]
 \fB\-C\fP \fB\-D\fP \fB\-F\fIformat\fP
 \fB\-G\fIkind/angle/min/max/nx/ny\fP
 \fB\-I\fIfile\fP
 \fB\-N\fInangle/anglemax\fP \fB\-P\fIpings\fP \fB\-Q\fP
-\fB\-R\fIrefangle\fP \fB\-T\fItopogridfile\fP \fB\-Z\fIaltitude\fP \fB\-V \-H\fP]
+\fB\-R\fIrefangle\fP \fB-S\fP \fB\-T\fItopogridfile\fP \fB\-Z\fIaltitude\fP \fB\-V \-H\fP]
 
 .SH DESCRIPTION
 The program \fBmbbackangle\fP reads a swath sonar data file
@@ -76,6 +77,10 @@ shellscripts that, when executed, will generate plots of the gridded
 histograms overlain with the amplitude versus grazing angle tables in
 the ".aga" and ".sga" files.
 
+If the \fB-S\fP option is used, then \fBmbbackangle\fP skips processing of any swath
+files that have existing amplitude and/or sidecan correction files from a prior use of
+the program.
+
 .SH MB-SYSTEM AUTHORSHIP
 David W. Caress
 .br
@@ -101,6 +106,20 @@ Christian do Santos Ferreira
 Determines if beam amplitude (\fIkind\fP = 1)
 and/or sidescan (\fIkind\fP = 2) data will be processed.
 Default: both amplitude and sidescan data are processed.
+.TP
+.B \-B
+\fImode\fP[\fI/ssbeamwidth\fP[\fI/ssdepression\fP]]
+.br
+Sets the algorithm used to represent the sonar's beam pattern when
+generating the amplitude and/or sidescan versus grazing angle tables.
+If \fImode\fP = 0, an empirical correction is used: the table is defined
+directly by the average amplitude or sidescan value observed at each
+grazing angle bin. If \fImode\fP = 1, a parametric model combining a
+Gaussian transmit/receive beam pattern with spherical spreading is used
+instead; in this case \fIssbeamwidth\fP sets the effective angular beam
+width in degrees of the sidescan sonar, and \fIssdepression\fP sets the
+sonar's depression angle from the horizontal in degrees.
+Default: \fImode\fP = 0; \fIssbeamwidth\fP = 50.0; \fIssdepression\fP = 20.0.
 .TP
 .B \-C
 Normally, \fBmbbackangle\fP produces a table of amplitude vs
@@ -201,6 +220,11 @@ into the grazing angle calculation for each data point.
 Sets the reference angle that will be used by \fBmbprocess\fP in
 applying the amplitude and/or sidescan correction tables generated
 by \fBmbbackangle\fP. Default: \fIrefangle\fP = 30.0 degrees.
+.TP
+.B \-S
+This option causes \fBmbbackangle\fP to skip processing of input raw swath files that have 
+previously processed and are up to date, as evidenced by the existence of amplitude 
+and/or sidescan correction table files older than the raw files and beam edits.
 .TP
 .B \-T
 \fItopogridfile\fP

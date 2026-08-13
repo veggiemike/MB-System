@@ -31,6 +31,29 @@
 # CMAKE_BUILD_TYPE can be: empty, Debug, Release, RelWithDebInfo or MinSizeRel
 #
 #------------------------------------------------------------------------------
+#
+# Two optional documentation targets are not part of the default build (the
+# "all" target) and must be built explicitly. Both require Homebrew (or
+# equivalent) installs of pandoc and weasyprint; htmldocs additionally
+# requires groff and perl. If any required tool is missing, CMake prints a
+# status message at configure time and the target is simply unavailable.
+#
+#   brew install pandoc weasyprint groff
+#
+# - changelog: regenerates the top-level ChangeLog.html and ChangeLog.pdf
+#   from ChangeLog.md (via pandoc + weasyprint), replacing the previously
+#   manual MacDown export workflow.
+#
+#     cmake --build . --target changelog
+#
+# - htmldocs: regenerates src/html/*.html and src/html/*.pdf from the man
+#   pages in src/man/ plus ChangeLog.md/COPYING.md/GPL.md (via man2html,
+#   groff, and pandoc + weasyprint), replacing the previously manual
+#   make_mbhtml workflow.
+#
+#     cmake --build . --target htmldocs
+#
+#------------------------------------------------------------------------------
 
 message("----------------------------------------------------------")
 message("MB-System")
@@ -57,6 +80,9 @@ message("----------------------------------------------------------")
 
 # Define minimum CMake version required
 cmake_minimum_required(VERSION 3.16)
+
+# Export compile commands for IDE tools
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Define project
 project(MB-System 
@@ -88,8 +114,6 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/build-utils")
 option(BUILD_SHARED_LIBS "Build and link with shared libraries" ON)
-SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
-set(CMAKE_MACOSX_RPATH ON)
 
 option(buildGSF "build GSF library" ON)
 option(buildGUIs "build graphical tools" ON)
@@ -97,13 +121,64 @@ option(buildOpenCV "build OpenCV tools" ON)
 option(buildTRN "build MBTRN tools" ON)
 option(buildTRNLCM "build MBTRN LCM tools" OFF)
 option(buildTrnNoRand "build with TRN_NORAND (random seed disabled)" OFF)
-option(buildPCL "build point-cloud-library" OFF)
+option(buildPCL "build point-cloud-library tools" OFF)
 option(buildQt "build Qt tools" OFF)
 option(buildTests "build unit tests exercised by make test" ON)
 if (DEFINED CACHE{otpsDir})
   set(otpsDir $CACHE{otpsDir})
 else()
   set(otpsDir "/usr/local/src/otps")
+endif()
+
+if(APPLE)
+	execute_process(
+		COMMAND sw_vers -productVersion
+		OUTPUT_VARIABLE MACOS_VERSION
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+		ERROR_QUIET
+	)
+	find_program(MACOS_HAVE_HOMEBREW NAMES brew)
+	find_program(MACOS_HAVE_MACPORTS NAMES port)
+	
+	if(${MACOS_VERSION} VERSION_LESS "16")
+		if (MACOS_HAVE_MACPORTS)
+			set(MACOS_USE_MACPORTS TRUE)
+			set(MACOS_USE_HOMEBREW FALSE)
+		elseif (MACOS_HAVE_HOMEBREW)
+			set(MACOS_USE_MACPORTS FALSE)
+			set(MACOS_USE_HOMEBREW TRUE)
+		else()
+			set(MACOS_USE_MACPORTS FALSE)
+			set(MACOS_USE_HOMEBREW FALSE)
+		endif()
+		message("MacOS 15 Sequoia or prior detected")
+	else()
+		if (MACOS_HAVE_HOMEBREW)
+			set(MACOS_USE_MACPORTS FALSE)
+			set(MACOS_USE_HOMEBREW TRUE)
+		elseif (MACOS_HAVE_MACPORTS)
+			set(MACOS_USE_MACPORTS TRUE)
+			set(MACOS_USE_HOMEBREW FALSE)
+		else()
+			set(MACOS_USE_MACPORTS FALSE)
+			set(MACOS_USE_HOMEBREW FALSE)
+		endif()
+		message("MacOS 26 Tahoe or later detected")
+	endif()
+	if(MACOS_HAVE_HOMEBREW)
+		message("MacOS: package manager Homebrew is installed")
+	endif()
+	if(MACOS_HAVE_MACPORTS)
+		message("MacOS: package manager MacPorts is installed")
+	endif()
+	if(MACOS_USE_HOMEBREW)
+		message("MacOS: using packages installed with Homebrew")
+	endif()
+	if(MACOS_USE_MACPORTS)
+		message("MacOS: using packages installed with MacPorts")
+	endif()
+	message("----------------------------------------------------------")
+
 endif()
 
 set(CMAKE_INSTALL_SHARE share) 
@@ -117,6 +192,14 @@ include(CTest)
 # uninstall target
 if(NOT TARGET uninstall)
   add_custom_target(uninstall COMMAND xargs rm -vf < install_manifest.txt)
+endif()
+
+# set RPATH
+if (NOT CMAKE_INSTALL_RPATH)
+	set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_FULL_LIBDIR}")
+endif()
+if(APPLE)
+	set(CMAKE_MACOSX_RPATH ON)
 endif()
 
 # Libraries
@@ -138,13 +221,18 @@ add_subdirectory(src/gmt)
 add_subdirectory(src/utilities)
 add_subdirectory(src/macros)
 add_subdirectory(src/mbgrd2gltf)
+add_subdirectory(src/mbmesh)
 add_subdirectory(src/otps)
+# src/mbnavadjust always builds the mbnavadjust_core library and the
+# Motif/X11-free mbnavadjustmerge CLI; the mbnavadjust GUI (and
+# mbnavadjustfine) are gated internally by that directory's own
+# CMakeLists.txt via buildGUIs.
+add_subdirectory(src/mbnavadjust)
 if(buildGUIs)
   add_subdirectory(src/mbview)
   add_subdirectory(src/mbedit)
   add_subdirectory(src/mbgrdviz)
   add_subdirectory(src/mbeditviz)
-  add_subdirectory(src/mbnavadjust)
   add_subdirectory(src/mbnavedit)
   add_subdirectory(src/mbvelocitytool)
 endif()
@@ -163,9 +251,13 @@ if(buildTRN)
   endif()
 endif()
 if(buildQt)
+  set(MIN_VTK_VERSION "9.3")
   add_subdirectory(src/qt-guilib)
   add_subdirectory(src/qt-mbgrdviz)
-  add_subdirectory(src/qt-mbgrdviz-3)
+  add_subdirectory(src/qt-mbgrdviz-3)  
+  add_subdirectory(src/qt-mbedit)
+  add_subdirectory(src/qt-mbedit-widgets)
+  add_subdirectory(src/pointCloudEditor)
 endif()
 if(buildDeprecated)
   add_subdirectory(src/deprecated)
@@ -183,11 +275,65 @@ endif()
 add_subdirectory(src/man)
 add_subdirectory(src/html)
 add_subdirectory(src/share)
+# src/htmlsrc provides the optional "htmldocs" target that regenerates the
+# man page HTML/PDF documentation installed from src/html; it depends on the
+# mbformat target built above in src/utilities.
+add_subdirectory(src/htmlsrc)
 
+# Optional target to regenerate ChangeLog.html and ChangeLog.pdf from
+# ChangeLog.md, replacing the previously-manual MacDown export workflow.
+# Not part of the default build - run explicitly via:
+#   cmake --build . --target changelog
+find_program(PANDOC_EXECUTABLE pandoc)
+find_program(WEASYPRINT_EXECUTABLE weasyprint)
+if(PANDOC_EXECUTABLE AND WEASYPRINT_EXECUTABLE)
+  add_custom_command(
+    OUTPUT ${CMAKE_SOURCE_DIR}/ChangeLog.html
+    COMMAND ${PANDOC_EXECUTABLE} ${CMAKE_SOURCE_DIR}/ChangeLog.md
+            -f gfm -t html5 --standalone
+            --metadata title=ChangeLog
+            --css=${CMAKE_SOURCE_DIR}/src/htmlsrc/ChangeLog_style.css
+            --embed-resources
+            -o ${CMAKE_SOURCE_DIR}/ChangeLog.html
+    DEPENDS ${CMAKE_SOURCE_DIR}/ChangeLog.md ${CMAKE_SOURCE_DIR}/src/htmlsrc/ChangeLog_style.css
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Generating ChangeLog.html from ChangeLog.md via pandoc"
+    VERBATIM)
+  add_custom_command(
+    OUTPUT ${CMAKE_SOURCE_DIR}/ChangeLog.pdf
+    COMMAND ${WEASYPRINT_EXECUTABLE} ${CMAKE_SOURCE_DIR}/ChangeLog.html ${CMAKE_SOURCE_DIR}/ChangeLog.pdf
+    DEPENDS ${CMAKE_SOURCE_DIR}/ChangeLog.html
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Generating ChangeLog.pdf from ChangeLog.html via weasyprint"
+    VERBATIM)
+  add_custom_target(changelog
+    DEPENDS ${CMAKE_SOURCE_DIR}/ChangeLog.html ${CMAKE_SOURCE_DIR}/ChangeLog.pdf)
+else()
+  message(STATUS "pandoc and/or weasyprint not found - 'changelog' build target "
+                  "unavailable (install via: brew install pandoc weasyprint)")
+endif()
 
 message("----------------------------------------------------------")
 message("CMAKE_SYSTEM_NAME: ${CMAKE_SYSTEM_NAME}")
 message("CMAKE_C_COMPILER_ID: ${CMAKE_C_COMPILER_ID}")
+if(APPLE)
+	message("MacOS Version: ${MACOS_VERSION}")
+	if(${MACOS_VERSION} VERSION_LESS "16")
+		message("MacOS Sequoia or earlier")
+	else()
+		message("MacOS Tahoe or later")
+	endif()
+	if(MACOS_USE_HOMEBREW)
+		message("MacOS: Homebrew used")
+	else()
+		message("MacOS: Homebrew not used")
+	endif()
+	if(MACOS_USE_MACPORTS)
+		message("MacOS: MacPorts used")
+	else()
+		message("MacOS: MacPorts not used")
+	endif()
+endif()
 message("CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
 message("CMAKE_MODULE_PATH: ${CMAKE_MODULE_PATH}")
 message("CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}")
@@ -204,7 +350,9 @@ message("BYTESWAPPED: ${BYTESWAPPED}")
 message("CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
 message("CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 message("CMAKE_INSTALL_RPATH: ${CMAKE_INSTALL_RPATH}")
-message("CMAKE_MACOSX_RPATH: ${CMAKE_MACOSX_RPATH}")
+if(APPLE)
+	message("CMAKE_MACOSX_RPATH: ${CMAKE_MACOSX_RPATH}")
+endif()
 message(OTPS directory: ${otpsDir})
 
 # For debugging: print all set variables

@@ -1,0 +1,172 @@
+/*--------------------------------------------------------------------
+ *    The MB-system:	logger.h	1/5/2026
+ *
+ *    Copyright (c) 2026 by
+ *    David W. Caress (caress@mbari.org)
+ *      Monterey Bay Aquarium Research Institute
+ *      Moss Landing, California, USA
+ *
+ *    MB-System was created by Caress and Chayes in 1992 at the
+ *      Lamont-Doherty Earth Observatory
+ *      Columbia University
+ *      Palisades, NY 10964
+ *
+ *    See README.md file for copying and redistribution conditions.
+ *--------------------------------------------------------------------*/
+
+#ifndef LOGGER_H
+#define LOGGER_H
+
+#include <iostream>
+#include <sstream>
+#include <chrono>
+#include <iomanip>
+#include <ctime>
+#include <vector>
+#include <string>
+
+namespace mbgrd2gltf {
+
+enum class LogLevel { OFF, ERROR, WARN, INFO, DEBUG };
+
+class Logger {
+private:
+  static LogLevel current_level;
+  static bool capture_enabled;
+  static std::vector<std::string> captured_logs;
+
+  static const char* level_to_string(LogLevel level) {
+    switch (level) {
+    case LogLevel::DEBUG:
+      return "DEBUG";
+    case LogLevel::INFO:
+      return "INFO";
+    case LogLevel::WARN:
+      return "WARN";
+    case LogLevel::ERROR:
+      return "ERROR";
+    default:
+      return "OFF";
+    }
+  }
+
+  static std::string get_timestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto time = std::chrono::system_clock::to_time_t(now);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+
+    std::tm tm_buf;
+#ifdef _WIN32
+    localtime_s(&tm_buf, &time);
+#else
+    localtime_r(&time, &tm_buf);
+#endif
+
+    std::ostringstream oss;
+    oss << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S") << '.' << std::setfill('0') << std::setw(3)
+        << ms.count();
+    return oss.str();
+  }
+
+  static std::string extract_filename(const char* path) {
+    std::string p(path);
+    size_t pos = p.find_last_of("/\\");
+    return (pos == std::string::npos) ? p : p.substr(pos + 1);
+  }
+
+public:
+  // Utility function to format integers with comma separators
+  template <typename T>
+  static std::string format_with_commas(T value) {
+    std::string str = std::to_string(value);
+    int pos = str.length() - 3;
+    while (pos > 0) {
+      str.insert(pos, ",");
+      pos -= 3;
+    }
+    return str;
+  }
+
+  static void set_level(LogLevel level) { current_level = level; }
+
+  static bool should_log(LogLevel level) { return level <= current_level; }
+
+  static void start_capture() {
+    capture_enabled = true;
+    captured_logs.clear();
+  }
+
+  static void stop_capture() {
+    capture_enabled = false;
+  }
+
+  static const std::vector<std::string>& get_captured_logs() {
+    return captured_logs;
+  }
+
+  template <typename... Args>
+  static void log(LogLevel level, const char* file, const char* func, int line, Args&&... args) {
+    if (!should_log(level))
+      return;
+
+    std::ostringstream msg;
+    build_message(msg, std::forward<Args>(args)...);
+
+    std::ostringstream full_msg;
+    full_msg << level_to_string(level) << " " << get_timestamp() << " " << extract_filename(file) << " "
+        << func << "():" << line << " " << msg.str();
+
+    std::string log_str = full_msg.str();
+
+    // Output to console
+    std::ostream& out = (level == LogLevel::INFO) ? std::cout : std::cerr;
+    out << log_str << std::endl;
+
+    // Capture if enabled
+    if (capture_enabled) {
+      captured_logs.push_back(log_str);
+    }
+  }
+
+  template <typename... Args>
+  static void debug(const char* file, const char* func, int line, Args&&... args) {
+    log(LogLevel::DEBUG, file, func, line, std::forward<Args>(args)...);
+  }
+
+  template <typename... Args>
+  static void info(const char* file, const char* func, int line, Args&&... args) {
+    log(LogLevel::INFO, file, func, line, std::forward<Args>(args)...);
+  }
+
+  template <typename... Args>
+  static void warn(const char* file, const char* func, int line, Args&&... args) {
+    log(LogLevel::WARN, file, func, line, std::forward<Args>(args)...);
+  }
+
+  template <typename... Args>
+  static void error(const char* file, const char* func, int line, Args&&... args) {
+    log(LogLevel::ERROR, file, func, line, std::forward<Args>(args)...);
+  }
+
+private:
+  static void build_message(std::ostringstream&) {}
+
+  template <typename T, typename... Args>
+  static void build_message(std::ostringstream& oss, T&& first, Args&&... rest) {
+    oss << first;
+    if constexpr (sizeof...(rest) > 0) {
+      oss << " ";
+      build_message(oss, std::forward<Args>(rest)...);
+    }
+  }
+};
+
+// Convenience macros to automatically capture file, function, and line
+#define LOG_DEBUG(...) Logger::debug(__FILE__, __func__, __LINE__, __VA_ARGS__)
+#define LOG_INFO(...) Logger::info(__FILE__, __func__, __LINE__, __VA_ARGS__)
+#define LOG_WARN(...) Logger::warn(__FILE__, __func__, __LINE__, __VA_ARGS__)
+#define LOG_ERROR(...) Logger::error(__FILE__, __func__, __LINE__, __VA_ARGS__)
+
+} // namespace mbgrd2gltf
+
+#endif // LOGGER_H

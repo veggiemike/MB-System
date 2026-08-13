@@ -61,6 +61,10 @@
 #undef PACKAGE_VERSION
 #endif
 
+/* include GMT header file gmt_dev.h without including glib headers not needed by MB-System */
+#ifdef HAVE_GLIB_GTHREAD
+#undef HAVE_GLIB_GTHREAD
+#endif
 #include "gmt_dev.h"
 
 /*  Compatibility with old lower-function/macro names use prior to GMT 5.3.0 */
@@ -315,16 +319,25 @@ int GMT_mbgrd2obj(void *V_API, int mode, void *args) {
 
 	char *root = NULL;
 	if (!Ctrl->G.active) {
-		if (strlen(Ctrl->In.file) > 4 && (strncmp(&Ctrl->In.file[strlen(Ctrl->In.file) - 4], ".grd", 4) == 0 ||
-		                                  strncmp(&Ctrl->In.file[strlen(Ctrl->In.file) - 4], ".GRD", 4) == 0)) {
+		const size_t inlen = strlen(Ctrl->In.file);
+		if (inlen > 4 && (strncmp(&Ctrl->In.file[inlen - 4], ".grd", 4) == 0 ||
+		                  strncmp(&Ctrl->In.file[inlen - 4], ".GRD", 4) == 0)) {
 			Ctrl->G.file = strdup(Ctrl->In.file);
 			char *suffix = &Ctrl->G.file[strlen(Ctrl->G.file) - 4];
 			strcpy(suffix, ".obj");
-			root = strndup(Ctrl->In.file, strlen(Ctrl->In.file) - 4);
+			/* not strndup() (unavailable on Windows): copy the filename minus its ".grd"/".GRD" suffix */
+			root = (char *)malloc(inlen - 4 + 1);
+			if (root != NULL) {
+				memcpy(root, Ctrl->In.file, inlen - 4);
+				root[inlen - 4] = '\0';
+			}
 		}
 		else {
-			Ctrl->G.file = strndup(Ctrl->In.file, (strlen(Ctrl->In.file) + 5));
-			strcat(Ctrl->G.file, ".obj");
+			Ctrl->G.file = (char *)malloc(inlen + 5);
+			if (Ctrl->G.file != NULL) {
+				strcpy(Ctrl->G.file, Ctrl->In.file);
+				strcat(Ctrl->G.file, ".obj");
+			}
 			root = strdup(Ctrl->In.file);
 		}
 		Ctrl->G.active = true;

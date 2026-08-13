@@ -514,7 +514,38 @@ Widget CreatemainWindow(Widget parent) {
 	XtAddCallback(pushButton_importdata, XmNactivateCallback, BxManageCB, (XtPointer) "label_format");
 	XtAddCallback(pushButton_importdata, XmNactivateCallback, BxManageCB, (XtPointer) "textField_format");
 	XtAddCallback(pushButton_importdata, XmNactivateCallback, BxManageCB, (XtPointer) "bulletinBoard_fileselection");
-	XtAddCallback(pushButton_importdata, XmNactivateCallback, do_fileselection_mode, (XtPointer)MBNA_FILESELECTION_IMPORT);
+	XtAddCallback(pushButton_importdata, XmNactivateCallback, do_fileselection_mode, (XtPointer)MBNA_FILESELECTION_IMPORTDATA);
+
+	ac = 0;
+	{
+		XmString tmp0;
+
+		tmp0 = (XmString)BX_CONVERT(pulldownMenu_file, (char *)"Import Swath Data as Single Survey", XmRXmString, 0, &argok);
+		XtSetArg(args[ac], XmNlabelString, tmp0);
+		if (argok)
+			ac++;
+		XtSetArg(
+		    args[ac], XmNfontList,
+		    BX_CONVERT(pulldownMenu_file, (char *)"-*-" SANS "-bold-r-*-*-*-120-75-75-*-*-iso8859-1", XmRFontList, 0, &argok));
+		if (argok)
+			ac++;
+		pushButton_importsurvey = XmCreatePushButton(pulldownMenu_file, (char *)"pushButton_importsurvey", args, ac);
+		XtManageChild(pushButton_importsurvey);
+
+		/**
+		 * Free any memory allocated for resources.
+		 */
+		XmStringFree((XmString)tmp0);
+	}
+
+	XtAddCallback(pushButton_importsurvey, XmNactivateCallback, BxSetValuesCB,
+	              (XtPointer) "xmDialogShell_fileselection.title=Import Swath Data File or Datalist as a Single Survey");
+	XtAddCallback(pushButton_importsurvey, XmNactivateCallback, BxSetValuesCB,
+	              (XtPointer) "label_format.labelString=MBIO Format ID:");
+	XtAddCallback(pushButton_importsurvey, XmNactivateCallback, BxManageCB, (XtPointer) "label_format");
+	XtAddCallback(pushButton_importsurvey, XmNactivateCallback, BxManageCB, (XtPointer) "textField_format");
+	XtAddCallback(pushButton_importsurvey, XmNactivateCallback, BxManageCB, (XtPointer) "bulletinBoard_fileselection");
+	XtAddCallback(pushButton_importsurvey, XmNactivateCallback, do_fileselection_mode, (XtPointer)MBNA_FILESELECTION_IMPORTSURVEY);
 
 	ac = 0;
 	{
@@ -2534,6 +2565,8 @@ Widget CreatemainWindow(Widget parent) {
 	XtAddCallback(fileSelectionBox, XmNcancelCallback, do_fileselection_mode, (XtPointer)MBNA_FILESELECTION_NONE);
 
 	ac = 0;
+	XtSetArg(args[ac], XmNtitle, "Navadjust: Nav Error at Crossings");
+	ac++;
 	XtSetArg(args[ac], XmNwidth, 935);
 	ac++;
 	XtSetArg(args[ac], XmNheight, 685);
@@ -2794,6 +2827,7 @@ Widget CreatemainWindow(Widget parent) {
 		XmStringFree((XmString)tmp0);
 	}
 
+	XtAddCallback(pushButton_naverr_controls, XmNactivateCallback, do_controls_show, (XtPointer)0);
 	XtAddCallback(pushButton_naverr_controls, XmNactivateCallback, BxManageCB, (XtPointer) "form_controls");
 
 	ac = 0;

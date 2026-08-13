@@ -507,9 +507,9 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
   double swath_width;
 
   /* processing variables */
-  int variable_beams = false;
-  int traveltime = false;
-  int beam_flagging = false;
+  bool variable_beams = false;
+  bool traveltime = false;
+  bool beam_flagging = false;
   char mbp_pfile[MBP_FILENAMESIZE];
   FILE *tfp;
   int nnav = 0;
@@ -666,7 +666,7 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
   if (process->mbp_nav_mode == MBP_NAV_ON &&
       (process->mbp_nav_heading == MBP_NAV_ON || process->mbp_nav_speed == MBP_NAV_ON ||
        process->mbp_nav_draft == MBP_NAV_ON || process->mbp_nav_attitude == MBP_NAV_ON) &&
-      process->mbp_nav_format != 9) {
+      process->mbp_nav_format != 9 && process->mbp_nav_format != MB_PR_NAV_FORMAT_NAVLAB) {
     fprintf(stderr, "\nWarning:\n\tNavigation format <%d> does not include \n", process->mbp_nav_format);
     fprintf(stderr, "\theading, speed, draft, roll, pitch and heave values.\n");
     if (process->mbp_nav_heading == MBP_NAV_ON) {
@@ -687,7 +687,7 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
     }
   }
 
-  /* check for format with travel time data */  // TODO(schwehr): Make mb_format_flags take bools.
+  /* check for format with travel time data */ 
   *status = mb_format_flags(verbose, &process->mbp_format, &variable_beams, &traveltime, &beam_flagging, error);
   if (process->mbp_bathrecalc_mode == MBP_BATHRECALC_RAYTRACE && !traveltime) {
     fprintf(stderr, "\nWarning:\n\tFormat %d does not include travel time data.\n", process->mbp_format);
@@ -1220,15 +1220,30 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
 
     /* count the data points in the nav file */
     nnav = 0;
-    if ((tfp = fopen(process->mbp_navfile, "r")) == nullptr) {
-      fprintf(stderr, "\nUnable to Open Navigation File <%s> for reading\n", process->mbp_navfile);
-      fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
-      exit(MB_ERROR_OPEN_FAIL);
-    }
     char *result;
-    while ((result = fgets(buffer, nchar, tfp)) == buffer)
-      nnav++;
-    fclose(tfp);
+    if (process->mbp_nav_format == MB_PR_NAV_FORMAT_NAVLAB) {
+      /* Kongsberg Navlab binary: count records by file size */
+      FILE *bfp;
+      if ((bfp = fopen(process->mbp_navfile, "rb")) == nullptr) {
+        fprintf(stderr, "\nUnable to Open Navigation File <%s> for reading\n", process->mbp_navfile);
+        fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+        exit(MB_ERROR_OPEN_FAIL);
+      }
+      fseeko(bfp, 0, SEEK_END);
+      off_t filesize = ftello(bfp);
+      fclose(bfp);
+      nnav = (int)(filesize / (21 * sizeof(double)));
+    }
+    else {
+      if ((tfp = fopen(process->mbp_navfile, "r")) == nullptr) {
+        fprintf(stderr, "\nUnable to Open Navigation File <%s> for reading\n", process->mbp_navfile);
+        fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+        exit(MB_ERROR_OPEN_FAIL);
+      }
+      while ((result = fgets(buffer, nchar, tfp)) == buffer)
+        nnav++;
+      fclose(tfp);
+    }
 
     /* allocate arrays for nav */
     if (nnav > 1) {
@@ -1264,6 +1279,50 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
 
     /* read the data points in the nav file */
     nnav = 0;
+
+    /* Kongsberg Navlab binary format: read directly, bypassing ASCII loop */
+    if (process->mbp_nav_format == MB_PR_NAV_FORMAT_NAVLAB) {
+      FILE *bfp;
+      if ((bfp = fopen(process->mbp_navfile, "rb")) == nullptr) {
+        fprintf(stderr, "\nUnable to Open Navigation File <%s> for reading\n", process->mbp_navfile);
+        fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+        exit(MB_ERROR_OPEN_FAIL);
+      }
+      bool swap = (mb_swap_check() == MB_YES);
+      double brec[21];
+      while (fread(brec, sizeof(double), 21, bfp) == 21) {
+        if (swap)
+          for (int ii = 0; ii < 21; ii++)
+            mb_swap_double(&brec[ii]);
+        if (nnav > 0 && brec[0] <= ntime[nnav - 1])
+          continue;
+        ntime[nnav]    = brec[0];
+        nlon[nnav]     = brec[2];
+        nlat[nnav]     = brec[1];
+        nheading[nnav] = brec[6];
+        nspeed[nnav]   = 0.0;
+        ndraft[nnav]   = 0.0;
+        nroll[nnav]    = brec[7];
+        npitch[nnav]   = brec[8];
+        nheave[nnav]   = 0.0;
+        /* apply lonflip */
+        if (lonflip == -1 && nlon[nnav] > 0.0)
+          nlon[nnav] -= 360.0;
+        else if (lonflip == 0 && nlon[nnav] < -180.0)
+          nlon[nnav] += 360.0;
+        else if (lonflip == 0 && nlon[nnav] > 180.0)
+          nlon[nnav] -= 360.0;
+        else if (lonflip == 1 && nlon[nnav] < 0.0)
+          nlon[nnav] += 360.0;
+        if (verbose >= 5)
+          fprintf(stderr, "\ndbg5  New navigation point read in program <%s>\ndbg5       nav[%d]: %f %f %f\n",
+                  program_name, nnav, ntime[nnav], nlon[nnav], nlat[nnav]);
+        nnav++;
+      }
+      fclose(bfp);
+    }
+    else {
+
     if ((tfp = fopen(process->mbp_navfile, "r")) == nullptr) {
       fprintf(stderr, "\nUnable to Open navigation File <%s> for reading\n", process->mbp_navfile);
       fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
@@ -1322,7 +1381,7 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
 
       /* deal with nav in L-DEO processed nav format */
       else if (process->mbp_nav_format == 5) {
-        strncpy(dummy, "", 128);
+        strncpy(dummy, "", sizeof(dummy));
         if (buffer[2] == '+') {
           time_j[0] = (int)strtol(strncpy(dummy, buffer, 2), NULL, 10);
           mb_fix_y2k(verbose, time_j[0], &time_j[0]);
@@ -1332,15 +1391,15 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
           time_j[0] = (int)strtol(strncpy(dummy, buffer, 4), NULL, 10);
           ioff = 5;
         }
-        strncpy(dummy, "", 128);
+        strncpy(dummy, "", sizeof(dummy));
         time_j[1] = (int)strtol(strncpy(dummy, buffer + ioff, 3), NULL, 10);
-        strncpy(dummy, "", 128);
+        strncpy(dummy, "", sizeof(dummy));
         ioff += 4;
         hr = (int)strtol(strncpy(dummy, buffer + ioff, 2), NULL, 10);
-        strncpy(dummy, "", 128);
+        strncpy(dummy, "", sizeof(dummy));
         ioff += 3;
         time_j[2] = (int)strtol(strncpy(dummy, buffer + ioff, 2), NULL, 10) + 60 * hr;
-        strncpy(dummy, "", 128);
+        strncpy(dummy, "", sizeof(dummy));
         ioff += 3;
         time_j[3] = (int)strtol(strncpy(dummy, buffer + ioff, 2), NULL, 10);
         time_j[4] = 0;
@@ -1352,18 +1411,18 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
         ioff += 7;
         NorS[0] = buffer[ioff];
         ioff += 1;
-        strncpy(dummy, "", 128);
+        strncpy(dummy, "", sizeof(dummy));
         mlat = atof(strncpy(dummy, buffer + ioff, 3));
-        strncpy(dummy, "", 128);
+        strncpy(dummy, "", sizeof(dummy));
         ioff += 3;
         llat = atof(strncpy(dummy, buffer + ioff, 8));
         strncpy(EorW, "", sizeof(EorW));
         ioff += 9;
         EorW[0] = buffer[ioff];
-        strncpy(dummy, "", 128);
+        strncpy(dummy, "", sizeof(dummy));
         ioff += 1;
         mlon = atof(strncpy(dummy, buffer + ioff, 4));
-        strncpy(dummy, "", 128);
+        strncpy(dummy, "", sizeof(dummy));
         ioff += 4;
         llon = atof(strncpy(dummy, buffer + ioff, 8));
         nlon[nnav] = mlon + llon / 60.;
@@ -1382,7 +1441,7 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
         if (strncmp(buffer, "$", 1) == 0) {
           if (strncmp(&buffer[3], "DAT", 3) == 0 && len > 15) {
             time_set = false;
-            strncpy(dummy, "", 128);
+            strncpy(dummy, "", sizeof(dummy));
             time_i[0] = (int)strtol(strncpy(dummy, buffer + 7, 4), NULL, 10);
             time_i[1] = (int)strtol(strncpy(dummy, buffer + 11, 2), NULL, 10);
             time_i[2] = (int)strtol(strncpy(dummy, buffer + 13, 2), NULL, 10);
@@ -1391,25 +1450,25 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
             time_set = false;
             /* find start of ",hhmmss.ss" */
             if ((bufftmp = strchr(buffer, ',')) != nullptr) {
-              strncpy(dummy, "", 128);
+              strncpy(dummy, "", sizeof(dummy));
               time_i[3] = (int)strtol(strncpy(dummy, bufftmp + 1, 2), NULL, 10);
-              strncpy(dummy, "", 128);
+              strncpy(dummy, "", sizeof(dummy));
               time_i[4] = (int)strtol(strncpy(dummy, bufftmp + 3, 2), NULL, 10);
-              strncpy(dummy, "", 128);
+              strncpy(dummy, "", sizeof(dummy));
               time_i[5] = (int)strtol(strncpy(dummy, bufftmp + 5, 2), NULL, 10);
               if (bufftmp[7] == '.') {
-                strncpy(dummy, "", 128);
+                strncpy(dummy, "", sizeof(dummy));
                 time_i[6] = 10000 * (int)strtol(strncpy(dummy, bufftmp + 8, 2), NULL, 10);
               }
               else
                 time_i[6] = 0;
               /* find start of ",dd,mm,yyyy" */
               if ((bufftmp = strchr(&bufftmp[1], ',')) != nullptr) {
-                strncpy(dummy, "", 128);
+                strncpy(dummy, "", sizeof(dummy));
                 time_i[2] = (int)strtol(strncpy(dummy, bufftmp + 1, 2), NULL, 10);
-                strncpy(dummy, "", 128);
+                strncpy(dummy, "", sizeof(dummy));
                 time_i[1] = (int)strtol(strncpy(dummy, bufftmp + 4, 2), NULL, 10);
-                strncpy(dummy, "", 128);
+                strncpy(dummy, "", sizeof(dummy));
                 time_i[0] = (int)strtol(strncpy(dummy, bufftmp + 7, 4), NULL, 10);
                 time_set = true;
               }
@@ -1423,9 +1482,9 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
             if ((bufftmp = strchr(buffer, ',')) != nullptr) {
               if (process->mbp_nav_format == 7)
                 bufftmp = strchr(&bufftmp[1], ',');
-              strncpy(dummy, "", 128);
+              strncpy(dummy, "", sizeof(dummy));
               degree = (int)strtol(strncpy(dummy, bufftmp + 1, 2), NULL, 10);
-              strncpy(dummy, "", 128);
+              strncpy(dummy, "", sizeof(dummy));
               dminute = atof(strncpy(dummy, bufftmp + 3, 5));
               strncpy(NorS, "", sizeof(NorS));
               bufftmp = strchr(&bufftmp[1], ',');
@@ -1434,9 +1493,9 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
               if (strncmp(NorS, "S", 1) == 0)
                 nlat[nnav] = -nlat[nnav];
               bufftmp = strchr(&bufftmp[1], ',');
-              strncpy(dummy, "", 128);
+              strncpy(dummy, "", sizeof(dummy));
               degree = (int)strtol(strncpy(dummy, bufftmp + 1, 3), NULL, 10);
-              strncpy(dummy, "", 128);
+              strncpy(dummy, "", sizeof(dummy));
               dminute = atof(strncpy(dummy, bufftmp + 4, 5));
               bufftmp = strchr(&bufftmp[1], ',');
               strncpy(EorW, "", sizeof(EorW));
@@ -1589,6 +1648,7 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
       strncpy(buffer, "", sizeof(buffer));
     }
     fclose(tfp);
+    } /* end else (ASCII nav formats) */
 
     /* check for nav */
     if (nnav < 2) {
@@ -1628,7 +1688,7 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
   /* if adjusted nav merging to be done get adjusted nav */
   if (process->mbp_navadj_mode >= MBP_NAVADJ_LL) {
     /* set max number of characters to be read at a time */
-    nchar = 128;
+    nchar = MBP_FILENAMESIZE;;
 
     /* count the data points in the adjusted nav file */
     nanav = 0;
@@ -1644,7 +1704,7 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
     fclose(tfp);
 
     /* allocate arrays for adjusted nav */
-    if (nanav > 1) {
+    if (nanav >= 1) {
       // size = (nanav + 1) * sizeof(double);
       /* status = */ mb_mallocd(verbose, __FILE__, __LINE__, nanav * sizeof(double), (void **)&natime, error);
       /* status = */ mb_mallocd(verbose, __FILE__, __LINE__, nanav * sizeof(double), (void **)&nalon, error);
@@ -1766,19 +1826,33 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
   /* if attitude merging to be done get attitude */
   if (process->mbp_attitude_mode == MBP_ATTITUDE_ON) {
     /* set max number of characters to be read at a time */
-    nchar = 128;
+    nchar = MBP_FILENAMESIZE;;
 
     /* count the data points in the attitude file */
     nattitude = 0;
+    char *result;
+    if (process->mbp_attitude_format == MB_PR_ATTITUDE_FORMAT_NAVLAB) {
+      FILE *bfp;
+      if ((bfp = fopen(process->mbp_attitudefile, "rb")) == nullptr) {
+        fprintf(stderr, "\nUnable to Open Attitude File <%s> for reading\n", process->mbp_attitudefile);
+        fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+        exit(MB_ERROR_OPEN_FAIL);
+      }
+      fseeko(bfp, 0, SEEK_END);
+      off_t filesize = ftello(bfp);
+      fclose(bfp);
+      nattitude = (int)(filesize / (21 * sizeof(double)));
+    }
+    else {
     if ((tfp = fopen(process->mbp_attitudefile, "r")) == nullptr) {
       fprintf(stderr, "\nUnable to Open Attitude File <%s> for reading\n", process->mbp_attitudefile);
       fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
       exit(MB_ERROR_OPEN_FAIL);
     }
-    char *result;
     while ((result = fgets(buffer, nchar, tfp)) == buffer)
       nattitude++;
     fclose(tfp);
+    } /* end else (ASCII attitude formats) */
 
     /* allocate arrays for attitude */
     if (nattitude > 1) {
@@ -1807,6 +1881,37 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
 
     /* read the data points in the attitude file */
     nattitude = 0;
+
+    /* Kongsberg Navlab binary format */
+    if (process->mbp_attitude_format == MB_PR_ATTITUDE_FORMAT_NAVLAB) {
+      FILE *bfp;
+      if ((bfp = fopen(process->mbp_attitudefile, "rb")) == nullptr) {
+        fprintf(stderr, "\nUnable to Open Attitude File <%s> for reading\n", process->mbp_attitudefile);
+        fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+        exit(MB_ERROR_OPEN_FAIL);
+      }
+      bool swap = (mb_swap_check() == MB_YES);
+      double brec[21];
+      while (fread(brec, sizeof(double), 21, bfp) == 21) {
+        if (swap)
+          for (int ii = 0; ii < 21; ii++)
+            mb_swap_double(&brec[ii]);
+        if (nattitude > 0 && brec[0] <= attitudetime[nattitude - 1])
+          continue;
+        attitudetime[nattitude]  = brec[0];
+        attituderoll[nattitude]  = brec[7];
+        attitudepitch[nattitude] = brec[8];
+        attitudeheave[nattitude] = 0.0;
+        if (verbose >= 5)
+          fprintf(stderr, "\ndbg5  New attitude point read in program <%s>\ndbg5       attitude[%d]: %f %f %f %f\n",
+                  program_name, nattitude, attitudetime[nattitude],
+                  attituderoll[nattitude], attitudepitch[nattitude], attitudeheave[nattitude]);
+        nattitude++;
+      }
+      fclose(bfp);
+    }
+    else {
+
     if ((tfp = fopen(process->mbp_attitudefile, "r")) == nullptr) {
       fprintf(stderr, "\nUnable to Open Attitude File <%s> for reading\n", process->mbp_attitudefile);
       fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
@@ -1895,6 +2000,7 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
       strncpy(buffer, "", sizeof(buffer));
     }
     fclose(tfp);
+    } /* end else (ASCII attitude formats) */
 
     /* check for attitude */
     if (nattitude < 2) {
@@ -1924,19 +2030,33 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
   /* if sensordepth merging to be done get sensordepth */
   if (process->mbp_sensordepth_mode == MBP_SENSORDEPTH_ON) {
     /* set max number of characters to be read at a time */
-    nchar = 128;
+    nchar = MBP_FILENAMESIZE;;
 
     /* count the data points in the sensordepth file */
     nsensordepth = 0;
+    char *result;
+    if (process->mbp_sensordepth_format == MB_PR_SENSORDEPTH_FORMAT_NAVLAB) {
+      FILE *bfp;
+      if ((bfp = fopen(process->mbp_sensordepthfile, "rb")) == nullptr) {
+        fprintf(stderr, "\nUnable to Open Sensordepth File <%s> for reading\n", process->mbp_sensordepthfile);
+        fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+        exit(MB_ERROR_OPEN_FAIL);
+      }
+      fseeko(bfp, 0, SEEK_END);
+      off_t filesize = ftello(bfp);
+      fclose(bfp);
+      nsensordepth = (int)(filesize / (21 * sizeof(double)));
+    }
+    else {
     if ((tfp = fopen(process->mbp_sensordepthfile, "r")) == nullptr) {
       fprintf(stderr, "\nUnable to Open Sensordepth File <%s> for reading\n", process->mbp_sensordepthfile);
       fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
       exit(MB_ERROR_OPEN_FAIL);
     }
-    char *result;
     while ((result = fgets(buffer, nchar, tfp)) == buffer)
       nsensordepth++;
     fclose(tfp);
+    } /* end else (ASCII sensordepth formats) */
 
     /* allocate arrays for sensordepth */
     if (nsensordepth > 1) {
@@ -1964,6 +2084,34 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
 
     /* read the data points in the sensordepth file */
     nsensordepth = 0;
+
+    /* Kongsberg Navlab binary format */
+    if (process->mbp_sensordepth_format == MB_PR_SENSORDEPTH_FORMAT_NAVLAB) {
+      FILE *bfp;
+      if ((bfp = fopen(process->mbp_sensordepthfile, "rb")) == nullptr) {
+        fprintf(stderr, "\nUnable to Open Sensordepth File <%s> for reading\n", process->mbp_sensordepthfile);
+        fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+        exit(MB_ERROR_OPEN_FAIL);
+      }
+      bool swap = (mb_swap_check() == MB_YES);
+      double brec[21];
+      while (fread(brec, sizeof(double), 21, bfp) == 21) {
+        if (swap)
+          for (int ii = 0; ii < 21; ii++)
+            mb_swap_double(&brec[ii]);
+        if (nsensordepth > 0 && brec[0] <= fsensordepthtime[nsensordepth - 1])
+          continue;
+        fsensordepthtime[nsensordepth] = brec[0];
+        fsensordepth[nsensordepth]     = brec[3];
+        if (verbose >= 5)
+          fprintf(stderr, "\ndbg5  New sensordepth point read in program <%s>\ndbg5       sensordepth[%d]: %f %f\n",
+                  program_name, nsensordepth, fsensordepthtime[nsensordepth], fsensordepth[nsensordepth]);
+        nsensordepth++;
+      }
+      fclose(bfp);
+    }
+    else {
+
     if ((tfp = fopen(process->mbp_sensordepthfile, "r")) == nullptr) {
       fprintf(stderr, "\nUnable to Open sensordepth File <%s> for reading\n", process->mbp_sensordepthfile);
       fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
@@ -2051,6 +2199,7 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
       strncpy(buffer, "", sizeof(buffer));
     }
     fclose(tfp);
+    } /* end else (ASCII sensordepth formats) */
 
     /* check for sensordepth */
     if (nsensordepth < 2) {
@@ -2080,7 +2229,7 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
   /* if tide correction to be done get tide */
   if (process->mbp_tide_mode == MBP_TIDE_ON) {
     /* set max number of characters to be read at a time */
-    nchar = 128;
+    nchar = MBP_FILENAMESIZE;;
 
     /* count the data points in the tide file */
     ntide = 0;
@@ -2250,7 +2399,7 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
   /* Static file is beam number vs correction */
   if (process->mbp_static_mode == MBP_STATIC_BEAM_ON) {
     /* set max number of characters to be read at a time */
-    nchar = 128;
+    nchar = MBP_FILENAMESIZE;;
 
     /* count the data points in the static file */
     nstatic = 0;
@@ -2335,7 +2484,7 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
   /* Static file is grazing angle vs correction */
   if (process->mbp_static_mode == MBP_STATIC_ANGLE_ON) {
     /* set max number of characters to be read at a time */
-    nchar = 128;
+    nchar = MBP_FILENAMESIZE;;
 
     /* count the data points in the static file */
     nstatic = 0;
@@ -5621,7 +5770,17 @@ void process_file(int verbose, int thread_id, struct mb_process_struct *process,
 
 int main(int argc, char **argv) {
   constexpr char usage_message[] =
-      "mbprocess -Iinfile [-C -Fformat -N -Ooutfile -P -S -T -V -H]";
+      "mbprocess -Iinfile [-C -Fformat -N -Ooutfile -P -S -T -V -H]\n"
+      "\t--format=value {-Fvalue}\n"
+      "\t--force {-P}\n"
+      "\t--help {-H}\n"
+      "\t--input=file {-Ifile}\n"
+      "\t--output=file {-Ofile}\n"
+      "\t--print-status {-S}\n"
+      "\t--strip-comments {-N}\n"
+      "\t--test {-T}\n"
+      "\t--threads=value {-Cvalue}\n"
+      "\t--verbose {-V}\n";
 
   int verbose = 0;
   int status = MB_SUCCESS;
@@ -5658,11 +5817,60 @@ int main(int argc, char **argv) {
 
   /* process argument list */
   {
+    static struct option options[] = {{"verbose", no_argument, nullptr, 0},
+                                      {"help", no_argument, nullptr, 0},
+                                      {"threads", required_argument, nullptr, 0},
+                                      {"format", required_argument, nullptr, 0},
+                                      {"input", required_argument, nullptr, 0},
+                                      {"strip-comments", no_argument, nullptr, 0},
+                                      {"output", required_argument, nullptr, 0},
+                                      {"force", no_argument, nullptr, 0},
+                                      {"print-status", no_argument, nullptr, 0},
+                                      {"test", no_argument, nullptr, 0},
+                                      {nullptr, 0, nullptr, 0}};
+
+    int option_index;
     bool errflg = false;
     int c;
     bool help = false;
-    while ((c = getopt(argc, argv, "VvHhC:c:F:f:I:i:NnO:o:PpSsTt")) != -1)
+    while ((c = getopt_long(argc, argv, "VvHhC:c:F:f:I:i:NnO:o:PpSsTt", options, &option_index)) != -1)
       switch (c) {
+      /* long options all return c=0 */
+      case 0:
+        if (strcmp("verbose", options[option_index].name) == 0) {
+          verbose++;
+        }
+        else if (strcmp("help", options[option_index].name) == 0) {
+          help = true;
+        }
+        else if (strcmp("threads", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &n_threads);
+        }
+        else if (strcmp("format", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &format);
+          mbp_format_specified = true;
+        }
+        else if (strcmp("input", options[option_index].name) == 0) {
+          mbp_ifile_specified = true;
+          sscanf(optarg, "%1023s", read_file);
+        }
+        else if (strcmp("strip-comments", options[option_index].name) == 0) {
+          strip_comments = true;
+        }
+        else if (strcmp("output", options[option_index].name) == 0) {
+          mbp_ofile_specified = true;
+          sscanf(optarg, "%1023s", mbp_ofile);
+        }
+        else if (strcmp("force", options[option_index].name) == 0) {
+          checkuptodate = false;
+        }
+        else if (strcmp("print-status", options[option_index].name) == 0) {
+          printfilestatus = true;
+        }
+        else if (strcmp("test", options[option_index].name) == 0) {
+          testonly = true;
+        }
+        break;
       case 'H':
       case 'h':
         help = true;
@@ -5866,10 +6074,13 @@ int main(int argc, char **argv) {
     int len;
     if (status == MB_SUCCESS && !mbp_ofile_specified && process->mbp_ofile[0] != '/' && process->mbp_ofile[1] != ':' &&
         strrchr(process->mbp_ifile, '/') != nullptr && (len = strrchr(process->mbp_ifile, '/') - process->mbp_ifile + 1) > 1) {
-      strcpy(mbp_ofile, process->mbp_ofile);
-      strncpy(process->mbp_ofile, process->mbp_ifile, len);
-      process->mbp_ofile[len] = '\0';
-      strcat(process->mbp_ofile, mbp_ofile);
+      snprintf(mbp_ofile, sizeof(mbp_ofile), "%s", process->mbp_ofile);
+      char dirprefix[MBP_FILENAMESIZE];
+      if (len >= (int)sizeof(dirprefix))
+        len = sizeof(dirprefix) - 1;
+      strncpy(dirprefix, process->mbp_ifile, len);
+      dirprefix[len] = '\0';
+      snprintf(process->mbp_ofile, sizeof(process->mbp_ofile), "%s%s", dirprefix, mbp_ofile);
     }
 
     /* get mod time for the input file */

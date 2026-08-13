@@ -83,10 +83,8 @@
 #include <Xm/ScrolledW.h>
 #include "MB3DView.h"
 
-/**
- * Common constant and pixmap declarations.
- */
-#include "creation-c.h"
+#include "MB3DView.h"
+extern MB3DViewData mbview_mbgrdviz;
 
 /**
  * Convenience functions from utilities file.
@@ -163,7 +161,7 @@ extern void do_mbview_annotation_degreesminutes(Widget w, XtPointer client_data,
 extern void do_mbview_annotation_degreesdecimal(Widget w, XtPointer client_data, XtPointer call_data);
 extern void do_mbview_profile_width(Widget, XtPointer, XtPointer);
 extern void do_mbview_profile_slope(Widget, XtPointer, XtPointer);
-extern void do_mbview_profile_exager(Widget, XtPointer, XtPointer);
+extern void do_mbview_profile_exagger(Widget, XtPointer, XtPointer);
 extern void do_mbview_profile_dismiss(Widget, XtPointer, XtPointer);
 
 /*
@@ -2209,6 +2207,8 @@ MB3DViewDataPtr MB3DViewCreate(MB3DViewDataPtr class_in, Widget parent, String n
 	XtManageChild(class_in->mbview_drawingArea_mbview);
 
 	ac = 0;
+	XtSetArg(args[ac], XmNtitle, "MBview Profile Display");
+	ac++;
 	XtSetArg(args[ac], XmNx, 814);
 	ac++;
 	XtSetArg(args[ac], XmNy, 1149);
@@ -2424,7 +2424,7 @@ MB3DViewDataPtr MB3DViewCreate(MB3DViewDataPtr class_in, Widget parent, String n
 	{
 		XmString tmp0;
 
-		tmp0 = (XmString)BX_CONVERT(class_in->mbview_form_profile, (char *)"Vertical Exageration", XmRXmString, 0, &argok);
+		tmp0 = (XmString)BX_CONVERT(class_in->mbview_form_profile, (char *)"Vertical exaggeration", XmRXmString, 0, &argok);
 		XtSetArg(args[ac], XmNtitleString, tmp0);
 		if (argok)
 			ac++;
@@ -2451,9 +2451,9 @@ MB3DViewDataPtr MB3DViewCreate(MB3DViewDataPtr class_in, Widget parent, String n
 		                    XmRFontList, 0, &argok));
 		if (argok)
 			ac++;
-		class_in->mbview_scale_profile_exager =
-		    XmCreateScale(class_in->mbview_form_profile, (char *)"mbview_scale_profile_exager", args, ac);
-		XtManageChild(class_in->mbview_scale_profile_exager);
+		class_in->mbview_scale_profile_exagger =
+		    XmCreateScale(class_in->mbview_form_profile, (char *)"mbview_scale_profile_exagger", args, ac);
+		XtManageChild(class_in->mbview_scale_profile_exagger);
 
 		/**
 		 * Free any memory allocated for resources.
@@ -2461,8 +2461,8 @@ MB3DViewDataPtr MB3DViewCreate(MB3DViewDataPtr class_in, Widget parent, String n
 		XmStringFree((XmString)tmp0);
 	}
 
-	XtAddCallback(class_in->mbview_scale_profile_exager, XmNvalueChangedCallback, do_mbview_profile_exager, (XtPointer)0);
-	XtAddCallback(class_in->mbview_scale_profile_exager, XmNdragCallback, do_mbview_profile_exager, (XtPointer)0);
+	XtAddCallback(class_in->mbview_scale_profile_exagger, XmNvalueChangedCallback, do_mbview_profile_exagger, (XtPointer)0);
+	XtAddCallback(class_in->mbview_scale_profile_exagger, XmNdragCallback, do_mbview_profile_exagger, (XtPointer)0);
 
 	ac = 0;
 	{
@@ -2843,6 +2843,8 @@ MB3DViewDataPtr MB3DViewCreate(MB3DViewDataPtr class_in, Widget parent, String n
 	              (XtPointer)0);
 
 	ac = 0;
+	XtSetArg(args[ac], XmNtitle, "MBview 2D Parameters");
+	ac++;
 	XtSetArg(args[ac], XmNx, 1187);
 	ac++;
 	XtSetArg(args[ac], XmNy, 1229);
@@ -3151,6 +3153,8 @@ MB3DViewDataPtr MB3DViewCreate(MB3DViewDataPtr class_in, Widget parent, String n
 	XtAddCallback(class_in->mbview_pushButton_view_2d_dismiss, XmNactivateCallback, do_mbview_2dparmspopdown, (XtPointer)0);
 
 	ac = 0;
+	XtSetArg(args[ac], XmNtitle, "MBview 3D Parameters");
+	ac++;
 	XtSetArg(args[ac], XmNx, 1140);
 	ac++;
 	XtSetArg(args[ac], XmNy, 1098);
@@ -3794,7 +3798,7 @@ MB3DViewDataPtr MB3DViewCreate(MB3DViewDataPtr class_in, Widget parent, String n
 		XmString tmp0;
 
 		tmp0 =
-		    (XmString)BX_CONVERT(class_in->mbview_bulletinBoard_3dparms, (char *)"Vertical Exageration:", XmRXmString, 0, &argok);
+		    (XmString)BX_CONVERT(class_in->mbview_bulletinBoard_3dparms, (char *)"Vertical exaggeration:", XmRXmString, 0, &argok);
 		XtSetArg(args[ac], XmNlabelString, tmp0);
 		if (argok)
 			ac++;
@@ -3813,9 +3817,9 @@ MB3DViewDataPtr MB3DViewCreate(MB3DViewDataPtr class_in, Widget parent, String n
 		                    XmRFontList, 0, &argok));
 		if (argok)
 			ac++;
-		class_in->mbview_label_exager =
-		    XmCreateLabel(class_in->mbview_bulletinBoard_3dparms, (char *)"mbview_label_exager", args, ac);
-		XtManageChild(class_in->mbview_label_exager);
+		class_in->mbview_label_exagger =
+		    XmCreateLabel(class_in->mbview_bulletinBoard_3dparms, (char *)"mbview_label_exagger", args, ac);
+		XtManageChild(class_in->mbview_label_exagger);
 
 		/**
 		 * Free any memory allocated for resources.
@@ -3837,9 +3841,9 @@ MB3DViewDataPtr MB3DViewCreate(MB3DViewDataPtr class_in, Widget parent, String n
 	                    XmRFontList, 0, &argok));
 	if (argok)
 		ac++;
-	class_in->mbview_textField_exageration =
-	    XmCreateTextField(class_in->mbview_bulletinBoard_3dparms, (char *)"mbview_textField_exageration", args, ac);
-	XtManageChild(class_in->mbview_textField_exageration);
+	class_in->mbview_textField_exaggeration =
+	    XmCreateTextField(class_in->mbview_bulletinBoard_3dparms, (char *)"mbview_textField_exaggeration", args, ac);
+	XtManageChild(class_in->mbview_textField_exaggeration);
 
 	ac = 0;
 	{
@@ -3875,6 +3879,8 @@ MB3DViewDataPtr MB3DViewCreate(MB3DViewDataPtr class_in, Widget parent, String n
 	XtAddCallback(class_in->mbview_pushButton_view_3d_dismiss, XmNactivateCallback, do_mbview_3dparmspopdown, (XtPointer)0);
 
 	ac = 0;
+	XtSetArg(args[ac], XmNtitle, "MBview Shading Parameters");
+	ac++;
 	XtSetArg(args[ac], XmNx, 1141);
 	ac++;
 	XtSetArg(args[ac], XmNy, 1117);
@@ -4507,6 +4513,8 @@ MB3DViewDataPtr MB3DViewCreate(MB3DViewDataPtr class_in, Widget parent, String n
 	              (XtPointer)0);
 
 	ac = 0;
+	XtSetArg(args[ac], XmNtitle, "About MBview...");
+	ac++;
 	XtSetArg(args[ac], XmNx, 1049);
 	ac++;
 	XtSetArg(args[ac], XmNy, 1071);
@@ -4895,6 +4903,8 @@ MB3DViewDataPtr MB3DViewCreate(MB3DViewDataPtr class_in, Widget parent, String n
 	XtAddCallback(class_in->mbview_pushButton_about_dismiss, XmNactivateCallback, do_mbview_aboutpopdown, (XtPointer)0);
 
 	ac = 0;
+	XtSetArg(args[ac], XmNtitle, "MBview: Please wait...");
+	ac++;
 	XtSetArg(args[ac], XmNx, 1070);
 	ac++;
 	XtSetArg(args[ac], XmNy, 1289);
@@ -6244,7 +6254,7 @@ MB3DViewDataPtr MB3DViewCreate(MB3DViewDataPtr class_in, Widget parent, String n
 	ac++;
 	XtSetArg(args[ac], XmNtopOffset, 140);
 	ac++;
-	XtSetValues(class_in->mbview_scale_profile_exager, args, ac);
+	XtSetValues(class_in->mbview_scale_profile_exagger, args, ac);
 
 	ac = 0;
 	XtSetArg(args[ac], XmNtopAttachment, XmATTACH_FORM);

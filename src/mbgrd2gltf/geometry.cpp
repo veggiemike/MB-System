@@ -21,7 +21,7 @@
  *
  *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
- /*
+/*
   *    The program MBgrd2gltf, including this source file, was created
   *    by a Capstone Project team at the California State University
   *    Monterey Bay (CSUMB) including Kyle Dowling, Julian Fortin,
@@ -32,165 +32,229 @@
   *--------------------------------------------------------------------*/
 
 #include "geometry.h"
+#include "logger.h"
 
-  // standard library
+// standard library
 #include <cmath>
 #include <iostream>
+#include <sstream>
+#include <locale>
+#include <iomanip>
 
-#define EARTH_RADIUS_M 6371000.0
 #define WGS_84_SEMI_MAJOR_AXIS 6378137.0
 #define WGS_84_INVERSE_FLATTENING 298.257223563
 
 namespace mbgrd2gltf {
-	Geometry::Geometry(const Bathymetry& bathymetry, const Options& options) :
-		_vertices(get_vertices(bathymetry, options.exaggeration())),
-		_triangles(get_triangles(_vertices)) {
-	}
 
-	double Geometry::to_radians(double degrees) {
-		return degrees * (3.1415926535 / 180.0);
-	}
-
-	double Geometry::get_longitude(const Bathymetry& bathymetry, size_t x) {
-		return bathymetry.longitude_min() + bathymetry.longitude_spacing() * (double)x;
-	}
-
-	double Geometry::get_latitude(const Bathymetry& bathymetry, size_t y) {
-		//std::cerr << std::fixed;
-		//std::cerr << "bathymetry.latitude_min(): " << bathymetry.latitude_min() << '\n';
-		//std::cerr << "bathymetry.latitude_max(): " << bathymetry.latitude_max() << '\n';
-		//return bathymetry.latitude_min() + bathymetry.latitude_spacing() * (double)y;
-		return bathymetry.latitude_max() - bathymetry.latitude_spacing() * (double)y;
-	}
-
-	Vertex Geometry::get_earth_centered_vertex(double longitude, double latitude, double altitude, uint32_t id) {
-		// Test with:
-		// longitude, latitude, altitude: -122.503094 37.058946 -1020
-		// x, y, z:                       -2737902.2652    -4297133.60787    3822000.89563
-		//longitude = -122.503094;
-		//latitude = 37.058946;
-		//altitude = -1020;
-
-		//std::cerr << std::fixed;
-		//std::cerr << "longitude, latitude, altitude: " << longitude << ' ' << latitude << ' ' << altitude << '\n';
-		double phi = to_radians(latitude);
-		double theta = to_radians(longitude);
-
-		double cos_phi = cos(phi);
-		double cos_theta = cos(theta);
-		double sin_phi = sin(phi);
-		double sin_theta = sin(theta);
-		double rho = EARTH_RADIUS_M + altitude;
-
-		// this assumes z is up
-		double x = rho * cos_phi * cos_theta;
-		double y = rho * cos_phi * sin_theta;
-		double z = rho * sin_phi;
-
-		//std::cerr << "x, y, z: " << x << ' ' << y << ' ' << z << '\n';
-
-		// Mimic https://github.com/GenericMappingTools/gmt/blob/be890649579be45e94269632786d08890a26dfea/src/gmt_map.c#L9094-L9108
-		// and   https://github.com/x3dom/x3dom/blob/3ace18318cd192e424546569932abfe3e1e2346a/src/nodes/Geospatial/GeoCoordinate.js#L380-L443
-		double F = 1.0 / WGS_84_INVERSE_FLATTENING;
-		double e_squared = F * (2.0 - F);
-
-		double sin_lon = sin(to_radians(longitude));
-		double cos_lon = cos(to_radians(longitude));
-		double sin_lat = sin(to_radians(latitude));
-		double cos_lat = cos(to_radians(latitude));
-
-		double N = WGS_84_SEMI_MAJOR_AXIS / sqrt(1.0 - e_squared * sin_lat * sin_lat);
-		double tmp = (N + altitude) * cos_lat;
-		x = tmp * cos_lon;
-		y = tmp * sin_lon;
-		z = (N * (1 - e_squared) + altitude) * sin_lat;
-
-		//std::cerr << "WGS-84 x, y, z: " << x << ' ' << y << ' ' << z << '\n';
-		// [vagrant@localhost build]$ ./grd-to-gltf Monterey25.grd -e 10 -b
-		// longitude, latitude, altitude: -122.503094 36.440848 -1020.000000
-		// x, y, z: -2753604.329500 -4321778.000725 3783720.828683
-		// WGS-84 x, y, z: -2759951.394247 -4331739.709638 3767050.208608
-		// [vagrant@localhost build]$ echo "-122.503094 36.440848 -1020.000000" | gmt mapproject -E
-		// -2759951.41997    -4331739.72409    3767050.17337
-		//exit(0);
-
-
-		// gltf assumes y is up
-		// With "return Vertex(x, z, y, id)" terrain ends up south of Australia
-		return Vertex(x, y, z, id);
-	}
-
-	Matrix<Vertex> Geometry::get_vertices(const Bathymetry& bathymetry, double vertical_exaggeration) {
-		Matrix<Vertex> out(bathymetry.size_x(), bathymetry.size_y());
-		const auto& altitudes = bathymetry.altitudes();
-		uint32_t vertex_id = 1;
-
-		for (size_t y = 0; y < altitudes.size_y(); ++y) {
-			for (size_t x = 0; x < altitudes.size_x(); ++x) {
-				float altitude = altitudes.at(x, y);
-
-				if (!std::isnan(altitude)) {
-					double longitude = get_longitude(bathymetry, x);
-					double latitude = get_latitude(bathymetry, y);
-					double adjusted_altitude = (double)altitude * vertical_exaggeration;
-					out.at(x, y) = get_earth_centered_vertex(longitude, latitude, adjusted_altitude, vertex_id++);
-				}
-			}
-		}
-
-		return out;
-	}
-
-	std::vector<Triangle> Geometry::get_triangles(const Matrix<Vertex>& vertices) {
-		size_t end_y = vertices.size_y() - 1;
-		size_t end_x = vertices.size_x() - 1;
-		size_t max_triangle_count = 2 * end_x * end_y;
-
-		std::vector<Triangle> out;
-
-		out.reserve(max_triangle_count);
-
-		for (size_t y = 0; y < end_y; ++y) {
-			for (size_t x = 0; x < end_x; ++x) {
-				const auto& bottom_left = vertices.at(x, y);
-				const auto& bottom_right = vertices.at(x + 1, y);
-				const auto& top_left = vertices.at(x, y + 1);
-				const auto& top_right = vertices.at(x + 1, y + 1);
-
-				if (bottom_left.is_valid() && top_right.is_valid()) {
-					if (top_left.is_valid())
-						out.emplace_back(Triangle{
-							bottom_left.index(),
-							top_left.index(),
-							top_right.index()
-							});
-
-					if (bottom_right.is_valid())
-						out.emplace_back(Triangle{
-							bottom_left.index(),
-							top_right.index(),
-							bottom_right.index()
-							});
-				}
-				else if (bottom_right.is_valid() && top_left.is_valid()) {
-					if (bottom_left.is_valid())
-						out.emplace_back(Triangle{
-							bottom_right.index(),
-							bottom_left.index(),
-							top_left.index()
-							});
-
-					if (top_right.is_valid())
-						out.emplace_back(Triangle{
-							bottom_right.index(),
-							top_left.index(),
-							top_right.index()
-							});
-				}
-			}
-		}
-
-		return out;
-	}
-
+Geometry::Geometry(const Bathymetry& bathymetry, const Options& options) {
+  // Apply GeoOrigin offset
+  if (options.is_geoorigin_auto()) {
+    // Automatic GeoOrigin: use geographic center of grid
+    double geoorigin_lon = (bathymetry.longitude_min() + bathymetry.longitude_max()) / 2.0;
+    double geoorigin_lat = (bathymetry.latitude_min() + bathymetry.latitude_max()) / 2.0;
+    
+    // Compute mean altitude from valid altitude values
+    const auto& altitudes = bathymetry.altitudes();
+    double altitude_sum = 0.0;
+    size_t altitude_count = 0;
+    for (size_t y = 0; y < altitudes.size_y(); ++y) {
+      for (size_t x = 0; x < altitudes.size_x(); ++x) {
+        float altitude = altitudes.at(x, y);
+        if (!std::isnan(altitude)) {
+          altitude_sum += altitude;
+          altitude_count++;
+        }
+      }
+    }
+    double geoorigin_elev = (altitude_count > 0) ? (altitude_sum / altitude_count) : 0.0;
+    
+    LOG_INFO("Using automatic GeoOrigin (grid center):", geoorigin_lon, ",", geoorigin_lat, ",", geoorigin_elev);
+    
+    // Compute GeoOrigin ECEF offset
+    Vertex geoorigin_vertex = get_earth_centered_vertex(geoorigin_lon, geoorigin_lat, geoorigin_elev, 0);
+    _geoorigin_x = geoorigin_vertex.x();
+    _geoorigin_y = geoorigin_vertex.y();
+    _geoorigin_z = geoorigin_vertex.z();
+    
+    LOG_INFO("GeoOrigin ECEF offset:", _geoorigin_x, ",", _geoorigin_y, ",", _geoorigin_z);
+  } else if (options.is_geoorigin_set()) {
+    double geoorigin_lon = options.geoorigin_lon();
+    double geoorigin_lat = options.geoorigin_lat();
+    double geoorigin_elev = options.geoorigin_elev();
+    LOG_INFO("Using user-specified GeoOrigin:", geoorigin_lon, ",", geoorigin_lat, ",", geoorigin_elev);
+    
+    // Compute GeoOrigin ECEF offset
+    Vertex geoorigin_vertex = get_earth_centered_vertex(geoorigin_lon, geoorigin_lat, geoorigin_elev, 0);
+    _geoorigin_x = geoorigin_vertex.x();
+    _geoorigin_y = geoorigin_vertex.y();
+    _geoorigin_z = geoorigin_vertex.z();
+    
+    LOG_INFO("GeoOrigin ECEF offset:", _geoorigin_x, ",", _geoorigin_y, ",", _geoorigin_z);
+  } else {
+    // No GeoOrigin - use original ECEF coordinates (no offset)
+    _geoorigin_x = 0.0;
+    _geoorigin_y = 0.0;
+    _geoorigin_z = 0.0;
+    LOG_INFO("Using original ECEF coordinates (no GeoOrigin offset)");
+  }
+  
+  // Generate vertices with GeoOrigin offset applied (or no offset if not set)
+  _vertices = get_vertices(bathymetry, options.exaggeration(), 
+                           _geoorigin_x, _geoorigin_y, _geoorigin_z);
+  
+  size_t valid_vertices = 0;
+  for (const auto& v : _vertices) {
+    if (v.is_valid())
+      valid_vertices++;
+  }
+  LOG_INFO("Created", Logger::format_with_commas(valid_vertices), "vertices");
 }
+
+double Geometry::to_radians(double degrees) { return degrees * (3.1415926535 / 180.0); }
+
+double Geometry::get_longitude(const Bathymetry& bathymetry, size_t x) {
+  return bathymetry.longitude_min() + bathymetry.longitude_spacing() * (double)x;
+}
+
+double Geometry::get_latitude(const Bathymetry& bathymetry, size_t y) {
+  return bathymetry.latitude_max() - bathymetry.latitude_spacing() * (double)y;
+}
+
+Vertex Geometry::get_earth_centered_vertex(double longitude, double latitude, double altitude,
+                                           uint32_t id) {
+  // WGS-84 ellipsoid calculations
+  double F = 1.0 / WGS_84_INVERSE_FLATTENING;
+  double e_squared = F * (2.0 - F);
+
+  double sin_lon = sin(to_radians(longitude));
+  double cos_lon = cos(to_radians(longitude));
+  double sin_lat = sin(to_radians(latitude));
+  double cos_lat = cos(to_radians(latitude));
+
+  double N = WGS_84_SEMI_MAJOR_AXIS / sqrt(1.0 - e_squared * sin_lat * sin_lat);
+  double tmp = (N + altitude) * cos_lat;
+  double x = tmp * cos_lon;
+  double y = tmp * sin_lon;
+  double z = (N * (1 - e_squared) + altitude) * sin_lat;
+
+  // gltf assumes y is up
+  // With "return Vertex(x, z, y, id)" terrain ends up south of Australia
+  return Vertex(x, y, z, id);
+}
+
+Matrix<Vertex> Geometry::get_vertices(const Bathymetry& bathymetry, double vertical_exaggeration,
+                                       double geoorigin_x, double geoorigin_y, double geoorigin_z) {
+  Matrix<Vertex> out(bathymetry.size_x(), bathymetry.size_y());
+  const auto& altitudes = bathymetry.altitudes();
+  uint32_t vertex_id = 1;
+  bool printed_first = false;
+  size_t valid_count = 0;
+
+  for (size_t y = 0; y < altitudes.size_y(); ++y) {
+    for (size_t x = 0; x < altitudes.size_x(); ++x) {
+      float altitude = altitudes.at(x, y);
+
+      if (!std::isnan(altitude)) {
+        double longitude = get_longitude(bathymetry, x);
+        double latitude = get_latitude(bathymetry, y);
+        double adjusted_altitude = (double)altitude * vertical_exaggeration;
+        Vertex vertex = get_earth_centered_vertex(longitude, latitude, adjusted_altitude, vertex_id++);
+        
+        // Print first few valid vertices for debugging
+        if (!printed_first) {
+          if (geoorigin_x != 0.0 || geoorigin_y != 0.0 || geoorigin_z != 0.0) {
+            LOG_INFO("First vertex [", x, ",", y, "] before offset: x=", vertex.x(), 
+                     "y=", vertex.y(), "z=", vertex.z(), 
+                     "lon=", longitude, "lat=", latitude, "alt=", altitude);
+          }
+        }
+        
+        // Apply GeoOrigin offset
+        out.at(x, y) = Vertex(vertex.x() - geoorigin_x, 
+                              vertex.y() - geoorigin_y, 
+                              vertex.z() - geoorigin_z, 
+                              vertex.index());
+        
+        if (!printed_first) {
+          if (geoorigin_x != 0.0 || geoorigin_y != 0.0 || geoorigin_z != 0.0) {
+            LOG_INFO("First vertex [", x, ",", y, "] after offset:  x=", out.at(x, y).x(), 
+                     "y=", out.at(x, y).y(), "z=", out.at(x, y).z());
+          }
+          printed_first = true;
+        }
+        
+        valid_count++;
+        // Print a sample from the middle
+        if (valid_count == 1000) {
+          if (geoorigin_x != 0.0 || geoorigin_y != 0.0 || geoorigin_z != 0.0) {
+            LOG_INFO("Sample vertex #1000 [", x, ",", y, "] before offset: x=", vertex.x(), 
+                     "y=", vertex.y(), "z=", vertex.z());
+            LOG_INFO("Sample vertex #1000 [", x, ",", y, "] after offset:  x=", out.at(x, y).x(), 
+                     "y=", out.at(x, y).y(), "z=", out.at(x, y).z());
+          }
+        }
+      }
+    }
+  }
+
+  return out;
+}
+
+//This function when called will grab the geometry in chunks instead of all in one
+std::vector<Geometry::Tile> Geometry::get_triangles_tiled(const Matrix<Vertex>& vertices,
+                                                          size_t tileSize) {
+  std::vector<Geometry::Tile> tiles;
+
+  // Number of cells. Triangles are generated over cells.
+  const size_t cellsY = (vertices.size_y() > 0) ? vertices.size_y() - 1 : 0;
+  const size_t cellsX = (vertices.size_x() > 0) ? vertices.size_x() - 1 : 0;
+  if (cellsX == 0 || cellsY == 0)
+    return tiles;
+
+  for (size_t ty = 0; ty < cellsY; ty += tileSize) {
+    for (size_t tx = 0; tx < cellsX; tx += tileSize) {
+      const size_t endY = std::min(ty + tileSize, cellsY);
+      const size_t endX = std::min(tx + tileSize, cellsX);
+
+      Geometry::Tile tile;
+      tile.x0 = tx;
+      tile.y0 = ty;
+      tile.x1 = endX;
+      tile.y1 = endY;
+      tile.triangles.reserve(2ull * (endX - tx) * (endY - ty));
+
+      for (size_t y = ty; y < endY; ++y) {
+        for (size_t x = tx; x < endX; ++x) {
+          const auto& bottom_left = vertices.at(x, y);
+          const auto& bottom_right = vertices.at(x + 1, y);
+          const auto& top_left = vertices.at(x, y + 1);
+          const auto& top_right = vertices.at(x + 1, y + 1);
+
+          if (bottom_left.is_valid() && top_right.is_valid()) {
+            if (top_left.is_valid())
+              tile.triangles.emplace_back(
+                  Triangle{bottom_left.index(), top_left.index(), top_right.index()});
+
+            if (bottom_right.is_valid())
+              tile.triangles.emplace_back(
+                  Triangle{bottom_left.index(), top_right.index(), bottom_right.index()});
+          } else if (bottom_right.is_valid() && top_left.is_valid()) {
+            if (bottom_left.is_valid())
+              tile.triangles.emplace_back(
+                  Triangle{bottom_right.index(), bottom_left.index(), top_left.index()});
+
+            if (top_right.is_valid())
+              tile.triangles.emplace_back(
+                  Triangle{bottom_right.index(), top_left.index(), top_right.index()});
+          }
+        }
+      }
+
+      if (!tile.triangles.empty())
+        tiles.push_back(std::move(tile));
+    }
+  }
+
+  return tiles;
+}
+} // namespace mbgrd2gltf

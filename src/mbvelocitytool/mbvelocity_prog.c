@@ -34,6 +34,7 @@
  * Date:        June 6, 1993
  */
 
+#include <getopt.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -72,7 +73,15 @@ static char help_message[] = "MBVELOCITYTOOL is an interactive water velocity pr
                              "profiles obtained from XBTs, CTDs, or  \ndatabases, and to construct new profiles consistent with "
                              "these  \nvarious sources of information.";
 static char usage_message[] =
-    "mbvelocitytool [-Byr/mo/da/hr/mn/sc -Eyr/mo/da/hr/mn/sc \n\t-Fformat -Ifile -Ssvpfile -Wsvpfile -V -H]";
+    "mbvelocitytool\n"
+    "\t--begin-time=yr/mo/da/hr/mn/sc {-Byr/mo/da/hr/mn/sc}\n"
+    "\t--display-svp-file=svpfile {-Ssvpfile}\n"
+    "\t--edit-svp-file=svpfile {-Wsvpfile}\n"
+    "\t--end-time=yr/mo/da/hr/mn/sc {-Eyr/mo/da/hr/mn/sc}\n"
+    "\t--format=format_id {-Fformat_id}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--verbose {-V}\n\n";
 
 int error = MB_ERROR_NO_ERROR;
 int verbose = 0;
@@ -244,9 +253,49 @@ int mbvt_init(int argc, char **argv) {
 	strcpy(sfile, "");
 	strcpy(wfile, "");
 
+	static struct option options[] = {{"verbose", no_argument, NULL, 0},
+	                                   {"help", no_argument, NULL, 0},
+	                                   {"begin-time", required_argument, NULL, 0},
+	                                   {"display-svp-file", required_argument, NULL, 0},
+	                                   {"edit-svp-file", required_argument, NULL, 0},
+	                                   {"end-time", required_argument, NULL, 0},
+	                                   {"format", required_argument, NULL, 0},
+	                                   {"input", required_argument, NULL, 0},
+	                                   {NULL, 0, NULL, 0}};
+	int option_index;
+
 	/* process argument list */
-	while ((c = getopt(argc, argv, "B:b:E:e:F:f:I:i:S:s:W:w:VvHh")) != -1)
+	while ((c = getopt_long(argc, argv, "B:b:E:e:F:f:I:i:S:s:W:w:VvHh", options, &option_index)) != -1)
 		switch (c) {
+		/* long options all return c=0 */
+		case 0:
+			if (strcmp("verbose", options[option_index].name) == 0) {
+				verbose++;
+			}
+			else if (strcmp("help", options[option_index].name) == 0) {
+				help++;
+			}
+			else if (strcmp("begin-time", options[option_index].name) == 0) {
+				sscanf(optarg, "%d/%d/%d/%d/%d/%d", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &btime_i[5]);
+				btime_i[6] = 0;
+			}
+			else if (strcmp("display-svp-file", options[option_index].name) == 0) {
+				sscanf(optarg, "%s", sfile);
+			}
+			else if (strcmp("edit-svp-file", options[option_index].name) == 0) {
+				sscanf(optarg, "%s", wfile);
+			}
+			else if (strcmp("end-time", options[option_index].name) == 0) {
+				sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
+				etime_i[6] = 0;
+			}
+			else if (strcmp("format", options[option_index].name) == 0) {
+				sscanf(optarg, "%d", &format);
+			}
+			else if (strcmp("input", options[option_index].name) == 0) {
+				sscanf(optarg, "%s", ifile);
+			}
+			break;
 		case 'H':
 		case 'h':
 			help++;
@@ -597,13 +646,16 @@ int mbvt_open_edit_profile(char *file) {
 	profile->nalloc = MAX(10 * profile->n, 60);
 	size = profile->nalloc * sizeof(int);
 	status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&edit_x, &error);
-	status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&edit_y, &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&edit_y, &error);
 	size = profile->nalloc * sizeof(double);
-	status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&(profile->depth), &error);
-	status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&(profile->velocity), &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&(profile->depth), &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&(profile->velocity), &error);
 
 	/* if error initializing memory then quit */
-	if (error != MB_ERROR_NO_ERROR) {
+	if (status != MB_SUCCESS) {
 		mb_error(verbose, error, &message);
 		fprintf(stderr, "\nMBIO Error allocating data arrays:\n%s\n", message);
 		fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
@@ -690,15 +742,18 @@ int mbvt_new_edit_profile() {
 	profile->nalloc = 10 * NUM_EDIT_START;
 	size = profile->nalloc * sizeof(int);
 	status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&edit_x, &error);
-	status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&edit_y, &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&edit_y, &error);
 	size = profile->nalloc * sizeof(double);
 	profile->depth = NULL;
 	profile->velocity = NULL;
-	status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&(profile->depth), &error);
-	status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&(profile->velocity), &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&(profile->depth), &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, size, (void **)&(profile->velocity), &error);
 
 	/* if error initializing memory then quit */
-	if (error != MB_ERROR_NO_ERROR) {
+	if (status != MB_SUCCESS) {
 		mb_error(verbose, error, &message);
 		fprintf(stderr, "\nMBIO Error allocating data arrays:\n%s\n", message);
 		fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
@@ -1021,10 +1076,11 @@ int mbvt_open_display_profile(char *file) {
 	profile->velocity = NULL;
 	profile->nalloc = profile->n;
 	status = mb_mallocd(verbose, __FILE__, __LINE__, profile->nalloc * sizeof(double), (void **)&(profile->depth), &error);
-	status = mb_mallocd(verbose, __FILE__, __LINE__, profile->nalloc * sizeof(double), (void **)&(profile->velocity), &error);
+	if (status == MB_SUCCESS)
+		status = mb_mallocd(verbose, __FILE__, __LINE__, profile->nalloc * sizeof(double), (void **)&(profile->velocity), &error);
 
 	/* if error initializing memory then quit */
-	if (error != MB_ERROR_NO_ERROR) {
+	if (status != MB_SUCCESS) {
 		mb_error(verbose, error, &message);
 		fprintf(stderr, "\nMBIO Error allocating data arrays:\n%s\n", message);
 		fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
@@ -1120,7 +1176,7 @@ int mbvt_get_display_names(int *nlist, char *list[MAX_PROFILES]) {
 int mbvt_delete_display_profile(int select) {
 	struct profile *profile;
 	int status = MB_SUCCESS;
-	int i, j;
+	int i;
 
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBIO function <%s> called\n", __func__);
@@ -1138,16 +1194,13 @@ int mbvt_delete_display_profile(int select) {
 		mb_freed(verbose, __FILE__, __LINE__, (void **)&profile->depth, &error);
 		mb_freed(verbose, __FILE__, __LINE__, (void **)&profile->velocity, &error);
 
-		/* reorder remaining profiles */
+		/* reorder remaining profiles -- move each struct (including its
+		   depth/velocity pointers and nalloc) down as a unit rather than
+		   copying array elements into the previous slot's existing buffer,
+		   which was sized for that slot's own (possibly smaller) profile */
 		for (i = select + 1; i < ndisplay; i++) {
-			profile_display[i - 1].n = profile_display[i].n;
-			strcpy(profile_display[i - 1].name, profile_display[i].name);
-			for (j = 0; j < profile_display[i - 1].n; j++) {
-				profile_display[i - 1].depth[j] = profile_display[i].depth[j];
-				profile_display[i - 1].velocity[j] = profile_display[i].velocity[j];
-			}
+			profile_display[i - 1] = profile_display[i];
 		}
-		ndisplay--;
 	}
 	else
 		status = MB_FAILURE;
@@ -1228,7 +1281,7 @@ int mbvt_plot() {
 	xg_setclip(mbvt_xgid, borders[0], borders[2], borders[1] - borders[0], borders[3] - borders[2]);
 
 	/* clear screen */
-	xg_fillrectangle(mbvt_xgid, borders[0], borders[2], borders[1] - borders[0], borders[3] - borders[2], pixel_values[WHITE],
+	xg_fillrectangle(mbvt_xgid, borders[0], borders[2], borders[1] - borders[0], borders[3] - borders[2], pixel_values[MB_COLOR_WHITE],
 	                 XG_SOLIDLINE);
 
 	/* set scaling */
@@ -1253,37 +1306,37 @@ int mbvt_plot() {
 	ny_int = (ymaximum - yminimum) / deltay + 1;
 
 	/* plot grid */
-	xg_drawline(mbvt_xgid, xmin, ymin, xmin, ymax, pixel_values[BLACK], XG_SOLIDLINE);
-	xg_drawline(mbvt_xgid, xmax, ymin, xmax, ymax, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawline(mbvt_xgid, xmin, ymin, xmin, ymax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+	xg_drawline(mbvt_xgid, xmax, ymin, xmax, ymax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	for (i = 0; i < nx_int; i++) {
 		xx = xmin + i * x_int;
 		vx = xminimum + i * deltax;
-		xg_drawline(mbvt_xgid, xx, ymin, xx, ymax, pixel_values[BLACK], XG_DASHLINE);
+		xg_drawline(mbvt_xgid, xx, ymin, xx, ymax, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
 		sprintf(string, "%.1f", vx);
 		xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbvt_xgid, xx - swidth / 2, ymax + sascent + 5, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbvt_xgid, xx - swidth / 2, ymax + sascent + 5, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	}
-	xg_drawline(mbvt_xgid, xmin, ymin, xmax, ymin, pixel_values[BLACK], XG_SOLIDLINE);
-	xg_drawline(mbvt_xgid, xmin, ymax, xmax, ymax, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawline(mbvt_xgid, xmin, ymin, xmax, ymin, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+	xg_drawline(mbvt_xgid, xmin, ymax, xmax, ymax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	for (i = 0; i < ny_int; i++) {
 		yy = ymin + i * y_int;
 		vy = yminimum + i * deltay;
-		xg_drawline(mbvt_xgid, xmin, yy, xmax, yy, pixel_values[BLACK], XG_DASHLINE);
+		xg_drawline(mbvt_xgid, xmin, yy, xmax, yy, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
 		sprintf(string, "%.1f", vy);
 		xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbvt_xgid, xmin - swidth - 5, yy + sascent / 2, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbvt_xgid, xmin - swidth - 5, yy + sascent / 2, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	}
 	strcpy(string, "Water Sound Velocity Profiles");
 	xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-	xg_drawstring(mbvt_xgid, xcen - swidth / 2, ymin - 2 * sascent + 10, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbvt_xgid, xcen - swidth / 2, ymin - 2 * sascent + 10, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	strcpy(string, "Water Sound Velocity (m/s)");
 	xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-	xg_drawstring(mbvt_xgid, xcen - swidth / 2, ymax + 2 * sascent + 10, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbvt_xgid, xcen - swidth / 2, ymax + 2 * sascent + 10, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	strcpy(string, "Depth");
 	xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-	xg_drawstring(mbvt_xgid, xmin - 2 * swidth - 10, ycen - sascent, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbvt_xgid, xmin - 2 * swidth - 10, ycen - sascent, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	strcpy(string, "(m)");
-	xg_drawstring(mbvt_xgid, xmin - 2 * swidth, ycen + sascent, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbvt_xgid, xmin - 2 * swidth, ycen + sascent, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 
 	/* turn clipping on */
 
@@ -1298,7 +1351,7 @@ int mbvt_plot() {
 			xx = MIN(xx, 32000);
 			yy = MIN(yy, 32000);
 			/*		xg_drawrectangle(mbvt_xgid, xx-2, yy-2, 4, 4,
-			            pixel_values[color],XG_SOLIDLINE);*/
+			            pixel_values[MB_COLOR_color],XG_SOLIDLINE);*/
 			if (j > 0)
 				xg_drawline(mbvt_xgid, xxo, yyo, xx, yy, pixel_values[color], XG_SOLIDLINE);
 			xxo = xx;
@@ -1313,9 +1366,9 @@ int mbvt_plot() {
 			yy = ymin + (profile_edit.depth[j] - yminimum) * yscale;
 			xx = MIN(xx, 32000);
 			yy = MIN(yy, 32000);
-			xg_fillrectangle(mbvt_xgid, xx - 2, yy - 2, 4, 4, pixel_values[BLACK], XG_SOLIDLINE);
+			xg_fillrectangle(mbvt_xgid, xx - 2, yy - 2, 4, 4, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 			if (j > 0) {
-				xg_drawline(mbvt_xgid, xxo, yyo, xx, yy, pixel_values[BLACK], XG_SOLIDLINE);
+				xg_drawline(mbvt_xgid, xxo, yyo, xx, yy, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 			}
 			xxo = xx;
 			yyo = yy;
@@ -1350,18 +1403,18 @@ int mbvt_plot() {
 	nyr_int = (yrmaximum - yrminimum) / deltayr / 2 + 1;
 
 	/* plot grid */
-	xg_drawline(mbvt_xgid, xrmin, yrmin, xrmin, yrmax, pixel_values[BLACK], XG_SOLIDLINE);
-	xg_drawline(mbvt_xgid, xrmax, yrmin, xrmax, yrmax, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawline(mbvt_xgid, xrmin, yrmin, xrmin, yrmax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+	xg_drawline(mbvt_xgid, xrmax, yrmin, xrmax, yrmax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	for (i = 0; i < nxr_int; i++) {
 		xx = xrmin + i * xr_int;
 		vx = xrminimum + i * deltaxr;
-		xg_drawline(mbvt_xgid, xx, yrmin, xx, yrmax, pixel_values[BLACK], XG_DASHLINE);
+		xg_drawline(mbvt_xgid, xx, yrmin, xx, yrmax, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
 		sprintf(string, "%.0f", vx);
 		xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbvt_xgid, xx - swidth / 2, yrmax + sascent + 5, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbvt_xgid, xx - swidth / 2, yrmax + sascent + 5, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	}
-	xg_drawline(mbvt_xgid, xrmin, yrmin, xrmax, yrmin, pixel_values[BLACK], XG_SOLIDLINE);
-	xg_drawline(mbvt_xgid, xrmin, yrmax, xrmax, yrmax, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawline(mbvt_xgid, xrmin, yrmin, xrmax, yrmin, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+	xg_drawline(mbvt_xgid, xrmin, yrmax, xrmax, yrmax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	if (resrange > 100.0)
 		sprintf(format_str, "%s", "%.0f");
 	else if (resrange > 10.0)
@@ -1371,34 +1424,34 @@ int mbvt_plot() {
 	for (i = 0; i < nyr_int; i++) {
 		yy = yrcen + i * yr_int;
 		vy = i * deltayr;
-		xg_drawline(mbvt_xgid, xrmin, yy, xrmax, yy, pixel_values[BLACK], XG_DASHLINE);
+		xg_drawline(mbvt_xgid, xrmin, yy, xrmax, yy, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
 		sprintf(string, format_str, vy);
 		xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbvt_xgid, xrmin - swidth - 5, yy + sascent / 2, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbvt_xgid, xrmin - swidth - 5, yy + sascent / 2, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 		yy = yrcen - i * yr_int;
 		vy = -i * deltayr;
-		xg_drawline(mbvt_xgid, xrmin, yy, xrmax, yy, pixel_values[BLACK], XG_DASHLINE);
+		xg_drawline(mbvt_xgid, xrmin, yy, xrmax, yy, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
 		sprintf(string, format_str, vy);
 		xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbvt_xgid, xrmin - swidth - 5, yy + sascent / 2, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbvt_xgid, xrmin - swidth - 5, yy + sascent / 2, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	}
 	if (nbuffer > 0) {
 		sprintf(string, "Depth Range:  minimum: %5.0f m   maximum: %5.0f m", bath_min, bath_max);
 		xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbvt_xgid, borders[1] / 2 - swidth / 2, yrmin - 4 * sascent + 14, string, pixel_values[BLACK],
+		xg_drawstring(mbvt_xgid, borders[1] / 2 - swidth / 2, yrmin - 4 * sascent + 14, string, pixel_values[MB_COLOR_BLACK],
 		              XG_SOLIDLINE);
 	}
 	strcpy(string, "Swath Bathymetry Beam Residuals");
 	xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-	xg_drawstring(mbvt_xgid, xrcen - swidth / 2, yrmin - 2 * sascent + 10, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbvt_xgid, xrcen - swidth / 2, yrmin - 2 * sascent + 10, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	strcpy(string, "Bathymetry Beam Number");
 	xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-	xg_drawstring(mbvt_xgid, xrcen - swidth / 2, yrmax + 2 * sascent + 10, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbvt_xgid, xrcen - swidth / 2, yrmax + 2 * sascent + 10, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	strcpy(string, "Residual");
 	xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-	xg_drawstring(mbvt_xgid, xrmin - swidth - 30, yrcen - sascent, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbvt_xgid, xrmin - swidth - 30, yrcen - sascent, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	strcpy(string, "(m)");
-	xg_drawstring(mbvt_xgid, xrmin - swidth - 10, yrcen + sascent, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbvt_xgid, xrmin - swidth - 10, yrcen + sascent, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 
 	/* turn clipping on for residual plot box */
 	xg_setclip(mbvt_xgid, xrmin, yrmin, (xrmax - xrmin), (yrmax - yrmin));
@@ -1413,10 +1466,10 @@ int mbvt_plot() {
 				yy = MIN(yy, 32000);
 				yyl = yrmin + (residual[i] - res_sd[i] - yrminimum) * yrscale;
 				yyu = yrmin + (residual[i] + res_sd[i] - yrminimum) * yrscale;
-				xg_fillrectangle(mbvt_xgid, xx - 2, yy - 2, 4, 4, pixel_values[BLACK], XG_SOLIDLINE);
-				xg_drawline(mbvt_xgid, xx, yyl, xx, yyu, pixel_values[BLACK], XG_SOLIDLINE);
+				xg_fillrectangle(mbvt_xgid, xx - 2, yy - 2, 4, 4, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+				xg_drawline(mbvt_xgid, xx, yyl, xx, yyu, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 				if (i > 0 && nresidual[i - 1] > 0)
-					xg_drawline(mbvt_xgid, xxo, yyo, xx, yy, pixel_values[BLACK], XG_SOLIDLINE);
+					xg_drawline(mbvt_xgid, xxo, yyo, xx, yy, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 				xxo = xx;
 				yyo = yy;
 			}
@@ -1462,43 +1515,43 @@ int mbvt_plot() {
 	nyp_int = (ypmaximum - ypminimum) / deltayp + 1;
 
 	/* plot grid */
-	xg_drawline(mbvt_xgid, xpmin, ypmin, xpmin, ypmax, pixel_values[BLACK], XG_SOLIDLINE);
-	xg_drawline(mbvt_xgid, xpmax, ypmin, xpmax, ypmax, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawline(mbvt_xgid, xpmin, ypmin, xpmin, ypmax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+	xg_drawline(mbvt_xgid, xpmax, ypmin, xpmax, ypmax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	for (i = 0; i < nxp_int; i++) {
 		xx = xpcen + i * xp_int;
 		vx = i * deltaxp;
-		xg_drawline(mbvt_xgid, xx, ypmin, xx, ypmax, pixel_values[BLACK], XG_DASHLINE);
+		xg_drawline(mbvt_xgid, xx, ypmin, xx, ypmax, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
 		sprintf(string, "%.1f", vx);
 		xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbvt_xgid, xx - swidth / 2, ypmax + sascent + 5, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbvt_xgid, xx - swidth / 2, ypmax + sascent + 5, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 		xx = xpcen - i * xp_int;
 		vx = -i * deltaxp;
-		xg_drawline(mbvt_xgid, xx, ypmin, xx, ypmax, pixel_values[BLACK], XG_DASHLINE);
+		xg_drawline(mbvt_xgid, xx, ypmin, xx, ypmax, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
 		sprintf(string, "%.1f", vx);
 		xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbvt_xgid, xx - swidth / 2, ypmax + sascent + 5, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbvt_xgid, xx - swidth / 2, ypmax + sascent + 5, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	}
-	xg_drawline(mbvt_xgid, xpmin, ypmin, xpmax, ypmin, pixel_values[BLACK], XG_SOLIDLINE);
-	xg_drawline(mbvt_xgid, xpmin, ypmax, xpmax, ypmax, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawline(mbvt_xgid, xpmin, ypmin, xpmax, ypmin, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+	xg_drawline(mbvt_xgid, xpmin, ypmax, xpmax, ypmax, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	for (i = 0; i < nyp_int; i++) {
 		yy = ypmin + i * yp_int;
 		vy = ypminimum + i * deltayp;
-		xg_drawline(mbvt_xgid, xpmin, yy, xpmax, yy, pixel_values[BLACK], XG_DASHLINE);
+		xg_drawline(mbvt_xgid, xpmin, yy, xpmax, yy, pixel_values[MB_COLOR_BLACK], XG_DASHLINE);
 		sprintf(string, "%.1f", vy);
 		xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-		xg_drawstring(mbvt_xgid, xpmin - swidth - 5, yy + sascent / 2, string, pixel_values[BLACK], XG_SOLIDLINE);
+		xg_drawstring(mbvt_xgid, xpmin - swidth - 5, yy + sascent / 2, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	}
 	strcpy(string, "Raypaths");
 	xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-	xg_drawstring(mbvt_xgid, xpcen - swidth / 2, ypmin - 2 * sascent + 10, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbvt_xgid, xpcen - swidth / 2, ypmin - 2 * sascent + 10, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	strcpy(string, "Acrosstrack Distance (m)");
 	xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-	xg_drawstring(mbvt_xgid, xpcen - swidth / 2, ypmax + 2 * sascent + 10, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbvt_xgid, xpcen - swidth / 2, ypmax + 2 * sascent + 10, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	strcpy(string, "Depth");
 	xg_justify(mbvt_xgid, string, &swidth, &sascent, &sdescent);
-	xg_drawstring(mbvt_xgid, xpmin - 2 * swidth - 10, ypcen - sascent, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbvt_xgid, xpmin - 2 * swidth - 10, ypcen - sascent, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	strcpy(string, "(m)");
-	xg_drawstring(mbvt_xgid, xpmin - 2 * swidth, ypcen + sascent, string, pixel_values[BLACK], XG_SOLIDLINE);
+	xg_drawstring(mbvt_xgid, xpmin - 2 * swidth, ypcen + sascent, string, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 
 	/* turn clipping on for raypath plot box */
 	xg_setclip(mbvt_xgid, xpmin, ypmin, (xpmax - xpmin), (ypmax - ypmin));
@@ -1514,11 +1567,11 @@ int mbvt_plot() {
 					yy = ypmin + (raypathy[i][j] - ypminimum) * ypscale;
 					xx = MIN(xx, 32000);
 					yy = MIN(yy, 32000);
-					xg_drawline(mbvt_xgid, xxo, yyo, xx, yy, pixel_values[BLACK], XG_SOLIDLINE);
+					xg_drawline(mbvt_xgid, xxo, yyo, xx, yy, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 					xxo = xx;
 					yyo = yy;
 				}
-				xg_fillrectangle(mbvt_xgid, xx - 2, yy - 2, 4, 4, pixel_values[RED], XG_SOLIDLINE);
+				xg_fillrectangle(mbvt_xgid, xx - 2, yy - 2, 4, 4, pixel_values[MB_COLOR_RED], XG_SOLIDLINE);
 			}
 		}
 
@@ -1660,13 +1713,13 @@ int mbvt_action_drag_node(int x, int y) {
 			y = ymin;
 
 		/* unplot the current ping */
-		xg_fillrectangle(mbvt_xgid, edit_x[active] - 2, edit_y[active] - 2, 4, 4, pixel_values[WHITE], XG_SOLIDLINE);
+		xg_fillrectangle(mbvt_xgid, edit_x[active] - 2, edit_y[active] - 2, 4, 4, pixel_values[MB_COLOR_WHITE], XG_SOLIDLINE);
 		if (active > 0) {
-			xg_drawline(mbvt_xgid, edit_x[active - 1], edit_y[active - 1], edit_x[active], edit_y[active], pixel_values[WHITE],
+			xg_drawline(mbvt_xgid, edit_x[active - 1], edit_y[active - 1], edit_x[active], edit_y[active], pixel_values[MB_COLOR_WHITE],
 			            XG_SOLIDLINE);
 		}
 		if (active < profile_edit.n - 1) {
-			xg_drawline(mbvt_xgid, edit_x[active], edit_y[active], edit_x[active + 1], edit_y[active + 1], pixel_values[WHITE],
+			xg_drawline(mbvt_xgid, edit_x[active], edit_y[active], edit_x[active + 1], edit_y[active + 1], pixel_values[MB_COLOR_WHITE],
 			            XG_SOLIDLINE);
 		}
 
@@ -1678,18 +1731,18 @@ int mbvt_action_drag_node(int x, int y) {
 
 		/* replot the current svp */
 		if (active > 0) {
-			xg_drawline(mbvt_xgid, edit_x[active - 1], edit_y[active - 1], edit_x[active], edit_y[active], pixel_values[BLACK],
+			xg_drawline(mbvt_xgid, edit_x[active - 1], edit_y[active - 1], edit_x[active], edit_y[active], pixel_values[MB_COLOR_BLACK],
 			            XG_SOLIDLINE);
 		}
 		if (active < profile_edit.n - 1) {
-			xg_drawline(mbvt_xgid, edit_x[active], edit_y[active], edit_x[active + 1], edit_y[active + 1], pixel_values[BLACK],
+			xg_drawline(mbvt_xgid, edit_x[active], edit_y[active], edit_x[active + 1], edit_y[active + 1], pixel_values[MB_COLOR_BLACK],
 			            XG_SOLIDLINE);
 		}
 		if (active > 0)
-			xg_fillrectangle(mbvt_xgid, edit_x[active - 1] - 2, edit_y[active - 1] - 2, 4, 4, pixel_values[BLACK], XG_SOLIDLINE);
-		xg_fillrectangle(mbvt_xgid, edit_x[active] - 2, edit_y[active] - 2, 4, 4, pixel_values[BLACK], XG_SOLIDLINE);
+			xg_fillrectangle(mbvt_xgid, edit_x[active - 1] - 2, edit_y[active - 1] - 2, 4, 4, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
+		xg_fillrectangle(mbvt_xgid, edit_x[active] - 2, edit_y[active] - 2, 4, 4, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 		if (active < profile_edit.n - 1)
-			xg_fillrectangle(mbvt_xgid, edit_x[active + 1] - 2, edit_y[active + 1] - 2, 4, 4, pixel_values[BLACK], XG_SOLIDLINE);
+			xg_fillrectangle(mbvt_xgid, edit_x[active + 1] - 2, edit_y[active + 1] - 2, 4, 4, pixel_values[MB_COLOR_BLACK], XG_SOLIDLINE);
 	}
 	else
 		status = MB_FAILURE;
@@ -1894,9 +1947,9 @@ int mbvt_open_swath_file(char *file, int form, int *numload) {
 	double distance;
 	double altitude;
 	double sensordepth;
-	int variable_beams;
-	int traveltime;  // TODO(schwehr): bool
-	int beam_flagging;
+	bool variable_beams;
+	bool traveltime;
+	bool beam_flagging;
 	mb_path command;
 	mb_path string;
 	char svp_file[2048];
@@ -2137,121 +2190,147 @@ int mbvt_open_swath_file(char *file, int form, int *numload) {
 		error = MB_ERROR_NO_ERROR;
 	}
 
-	/* allocate resicual arrays to accommodate greatest number of beams */
-	if (status == MB_SUCCESS) {
-		status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&depth, &error);
-		status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&acrosstrack, &error);
-		status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&angle, &error);
-		status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&residual_acrosstrack, &error);
-		status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&residual_altitude, &error);
-		status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&residual, &error);
-		status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&res_sd, &error);
-		status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(int), (void **)&nresidual, &error);
-	}
-
 	/* set error message */
 	if (nbuffer <= 0)
 		do_error_dialog("No data were read from the input", "swath file. You may have specified an",
 		                "incorrect MB-System format id!");
+	
+		/* turn message off */
+		do_message_off();
 
-	if (ssv_start <= 0.0)
-		ssv_start = 1500.0;
+	/* if successful, process and display */
+	if (status == MB_SUCCESS && nbuffer > 0) {
 
-	/* get approximate min max depths */
-	bath_min = 10000.0;
-	bath_max = 0.0;
-	for (k = 0; k < nbuffer; k++) {
-		/* loop over the beams */
-		for (i = 0; i < ping[k].beams_bath; i++) {
-			if (mb_beam_ok(ping[k].beamflag[i])) {
-				depth[i] = 750 * ping[k].ttimes[i] * cos(DTR * ping[k].angles[i]) + ping[k].sensordepth + ping[k].heave[i];
+		/* allocate resicual arrays to accommodate greatest number of beams
+		   (check status after every call -- mb_mallocd() resets *error to
+		   MB_ERROR_NO_ERROR on each successful call, so a later success would
+		   otherwise silently mask an earlier allocation failure and let the
+		   NULL result be used below) */
+		status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&depth, &error);
+		if (status == MB_SUCCESS)
+			status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&acrosstrack, &error);
+		if (status == MB_SUCCESS)
+			status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&angle, &error);
+		if (status == MB_SUCCESS)
+			status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&residual_acrosstrack, &error);
+		if (status == MB_SUCCESS)
+			status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&residual_altitude, &error);
+		if (status == MB_SUCCESS)
+			status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&residual, &error);
+		if (status == MB_SUCCESS)
+			status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double), (void **)&res_sd, &error);
+		if (status == MB_SUCCESS)
+			status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(int), (void **)&nresidual, &error);
 
-				/* get min max depths */
-				if (depth[i] < bath_min)
-					bath_min = depth[i];
-				if (depth[i] > bath_max)
-					bath_max = depth[i];
+		/* if error initializing memory then quit rather than use the NULL result below */
+		if (status != MB_SUCCESS) {
+			mb_error(verbose, error, &message);
+			fprintf(stderr, "\nMBIO Error allocating data arrays:\n%s\n", message);
+			fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+			exit(error);
+		}
+
+		if (ssv_start <= 0.0)
+			ssv_start = 1500.0;
+	
+		/* get approximate min max depths */
+		bath_min = 10000.0;
+		bath_max = 0.0;
+		for (k = 0; k < nbuffer; k++) {
+			/* loop over the beams */
+			for (i = 0; i < ping[k].beams_bath; i++) {
+				if (mb_beam_ok(ping[k].beamflag[i])) {
+					depth[i] = 750 * ping[k].ttimes[i] * cos(DTR * ping[k].angles[i]) + ping[k].sensordepth + ping[k].heave[i];
+	
+					/* get min max depths */
+					if (depth[i] < bath_min)
+						bath_min = depth[i];
+					if (depth[i] > bath_max)
+						bath_max = depth[i];
+				}
 			}
 		}
-	}
-
-	/* set maxdepth and apply */
-	if (bath_max > 0.0 && bath_max < 13000.0) {
-		maxdepth = 1.25 * bath_max;
-		resrange = 0.02 * bath_max;
-		if (resrange > 200.0)
-			resrange = 200.0;
-		else if (resrange < 0.1)
-			resrange = 0.1;
-		do_set_controls();
-	}
-
-	/* output info */
-	if (verbose >= 1) {
-		if (status == MB_SUCCESS)
-			fprintf(stderr, "\nSwath Sonar File <%s> read\n", swathfile);
-		else
-			fprintf(stderr, "\nSwath Sonar File <%s> not read\n", swathfile);
-		fprintf(stderr, "Swath Sonar Data Format ID:   %d\n", format);
-		fprintf(stderr, "Records loaded into buffer: %d\n", *numload);
-		fprintf(stderr, "Records in buffer:          %d\n", nbuffer);
-	}
-
-	/* turn message off */
-	do_message_off();
-
-	/* get editable svp if needed */
-	if (edit != true)
-		mbvt_new_edit_profile();
-
-	/* add Levitus display profile if nav available */
-	if (navlon_levitus != 0.0 || navlat_levitus != 0.0) {
-		sprintf(command, "mblevitus -R%f/%f -Ombvt_levitus_tmp.svp\n", navlon_levitus, navlat_levitus);
-		/* const int shellstatus = */ system(command);
-		mbvt_open_display_profile("mbvt_levitus_tmp.svp");
-		/* const int shellstatus = */ remove("mbvt_levitus_tmp.svp");
-	}
-
-	/* load svp files generated by mbsvplist if available */
-	bool done = false;
-	count = 0;
-	while (!done) {
-		sprintf(svp_file, "%s_%3.3d.svp", swathfile, count);
-		if ((fstat = stat(svp_file, &file_status)) == 0 && (file_status.st_mode & S_IFMT) != S_IFDIR) {
-			mbvt_open_display_profile(svp_file);
+	
+		/* set maxdepth and apply */
+		if (bath_max > 0.0 && bath_max < 13000.0) {
+			maxdepth = 1.25 * bath_max;
+			resrange = 0.02 * bath_max;
+			if (resrange > 200.0)
+				resrange = 200.0;
+			else if (resrange < 0.1)
+				resrange = 0.1;
+			do_set_controls();
 		}
-		else if (count > 0)
-			done = true;
-		count++;
+	
+		/* output info */
+		if (verbose >= 1) {
+			if (status == MB_SUCCESS)
+				fprintf(stderr, "\nSwath Sonar File <%s> read\n", swathfile);
+			else
+				fprintf(stderr, "\nSwath Sonar File <%s> not read\n", swathfile);
+			fprintf(stderr, "Swath Sonar Data Format ID:   %d\n", format);
+			fprintf(stderr, "Records loaded into buffer: %d\n", *numload);
+			fprintf(stderr, "Records in buffer:          %d\n", nbuffer);
+		}
+	
+		/* get editable svp if needed */
+		if (edit != true)
+			mbvt_new_edit_profile();
+	
+		/* add Levitus display profile if nav available */
+		if (navlon_levitus != 0.0 || navlat_levitus != 0.0) {
+			sprintf(command, "mblevitus -R%f/%f -Ombvt_levitus_tmp.svp\n", navlon_levitus, navlat_levitus);
+			/* const int shellstatus = */ system(command);
+			mbvt_open_display_profile("mbvt_levitus_tmp.svp");
+			/* const int shellstatus = */ remove("mbvt_levitus_tmp.svp");
+		}
+	
+		/* load svp files generated by mbsvplist if available */
+		bool done = false;
+		count = 0;
+		while (!done) {
+			sprintf(svp_file, "%s_%3.3d.svp", swathfile, count);
+			if ((fstat = stat(svp_file, &file_status)) == 0 && (file_status.st_mode & S_IFMT) != S_IFDIR) {
+				mbvt_open_display_profile(svp_file);
+			}
+			else if (count > 0)
+				done = true;
+			count++;
+		}
+	
+		/* allocate memory for raytracing arrays */
+		status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(int), (void **)&nraypath, &error);
+		if (status == MB_SUCCESS)
+			status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double *), (void **)&raypathx, &error);
+		if (status == MB_SUCCESS)
+			status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double *), (void **)&raypathy, &error);
+		if (status == MB_SUCCESS)
+			status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double *), (void **)&raypatht, &error);
+		nraypathmax = 100 * profile_edit.n;
+		for (i = 0; status == MB_SUCCESS && i < beams_bath; i++) {
+			status = mb_mallocd(verbose, __FILE__, __LINE__, nraypathmax * sizeof(double), (void **)&(raypathx[i]), &error);
+			if (status == MB_SUCCESS)
+				status = mb_mallocd(verbose, __FILE__, __LINE__, nraypathmax * sizeof(double), (void **)&(raypathy[i]), &error);
+			if (status == MB_SUCCESS)
+				status = mb_mallocd(verbose, __FILE__, __LINE__, nraypathmax * sizeof(double), (void **)&(raypatht[i]), &error);
+		}
+
+		/* if error initializing memory then quit */
+		if (status != MB_SUCCESS) {
+			mb_error(verbose, error, &message);
+			fprintf(stderr, "\nMBIO Error allocating data arrays:\n%s\n", message);
+			fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
+			exit(error);
+		}
+	
+		/* process the data */
+		if (status == MB_SUCCESS && edit)
+			status = mbvt_process_multibeam();
+	
+		/* plot everything */
+		mbvt_plot();
 	}
-
-	/* allocate memory for raytracing arrays */
-	status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(int), (void **)&nraypath, &error);
-	status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double *), (void **)&raypathx, &error);
-	status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double *), (void **)&raypathy, &error);
-	status = mb_mallocd(verbose, __FILE__, __LINE__, beams_bath * sizeof(double *), (void **)&raypatht, &error);
-	nraypathmax = 100 * profile_edit.n;
-	for (i = 0; i < beams_bath; i++) {
-		status = mb_mallocd(verbose, __FILE__, __LINE__, nraypathmax * sizeof(double), (void **)&(raypathx[i]), &error);
-		status = mb_mallocd(verbose, __FILE__, __LINE__, nraypathmax * sizeof(double), (void **)&(raypathy[i]), &error);
-		status = mb_mallocd(verbose, __FILE__, __LINE__, nraypathmax * sizeof(double), (void **)&(raypatht[i]), &error);
-	}
-
-	/* if error initializing memory then quit */
-	if (error != MB_ERROR_NO_ERROR) {
-		mb_error(verbose, error, &message);
-		fprintf(stderr, "\nMBIO Error allocating data arrays:\n%s\n", message);
-		fprintf(stderr, "\nProgram <%s> Terminated\n", program_name);
-		exit(error);
-	}
-
-	/* process the data */
-	if (status == MB_SUCCESS && edit)
-		status = mbvt_process_multibeam();
-
-	/* plot everything */
-	mbvt_plot();
-
+	
 	if (verbose >= 2) {
 		fprintf(stderr, "\ndbg2  MBIO function <%s> completed\n", __func__);
 		fprintf(stderr, "dbg2  Return values:\n");
@@ -2315,7 +2394,7 @@ int mbvt_deallocate_swath() {
 		nresidual = NULL;
 
 		for (i = 0; i < MBVT_BUFFER_SIZE; i++) {
-			if (ping[i].allocated > 0 && ping[i].allocated != 60) {
+			if (ping[i].allocated > 0) {
 				ping[i].allocated = 0;
 				free(ping[i].beamflag);
 				free(ping[i].bath);
@@ -2363,7 +2442,7 @@ int mbvt_process_multibeam() {
 	int ray_stat;
 	double factor;
 	double sx, sy, sxx, sxy;
-	double delta, a, b;
+	double delta, a = 0.0, b = 0.0;
 	int ns;
 	double depth_predict, res;
 	double sensordepth, sensordepthshift, heave_use;
@@ -2434,6 +2513,7 @@ int mbvt_process_multibeam() {
 
 		/* find a good heave value */
 		found = false;
+		heave_use = 0.0;
 		for (i = 0; i < ping[k].beams_bath && !found; i++) {
 			if (mb_beam_ok(ping[k].beamflag[i])) {
 				heave_use = ping[k].heave[i];
@@ -2515,15 +2595,18 @@ int mbvt_process_multibeam() {
 		/* reset first flag */
 		first = false;
 
-		/* get linear fit to ping */
-		if (ns > 0) {
+		/* get linear fit to ping -- need at least two points for a well-defined
+		   fit; with exactly one point delta is exactly zero (0/0 = NaN) */
+		if (ns > 1) {
 			delta = ns * sxx - sx * sx;
-			a = (sxx * sy - sx * sxy) / delta;
-			b = (ns * sxy - sx * sy) / delta;
+			if (delta != 0.0) {
+				a = (sxx * sy - sx * sxy) / delta;
+				b = (ns * sxy - sx * sy) / delta;
+			}
 		}
 
 		/* get residuals */
-		if (ns > 0) {
+		if (ns > 1) {
 			/* output some debug values */
 			if (verbose >= 5)
 				fprintf(stderr, "dbg5       beam   xtrack   depth     fit    residual\n");

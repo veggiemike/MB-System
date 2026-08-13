@@ -106,6 +106,7 @@ constexpr char usage_message[] =
     "\t--attitude-file-format=format_id\n"
     "\t--attitude-async=record_kind\n"
     "\t--attitude-sensor=sensor_id\n\n"
+    "\t--attitude-zero-heave\n\n"
     "\t--soundspeed-file=file\n"
     "\t--soundspeed-file-format=format_id\n"
     "\t--soundspeed-async=record_kind\n"
@@ -148,8 +149,16 @@ constexpr char usage_message[] =
     "\t--kluge-sensordepth-from-heave\n"
     "\t--kluge-early-MBARI-Mapping-AUV\n"
     "\t--kluge-flipsign-roll\n"
-    "\t--kluge-flipsign-pitch\n";
-
+    "\t--kluge-flipsign-pitch\n"
+    "\t--kluge-set-beamwidths=beamwidth-acrosstrack/beamwidth-alongtrack\n"
+    "\t--kluge-set-beamwidth-acrosstrack=beamwidth-acrosstrack\n"
+    "\t--kluge-set-beamwidth-alongtrack=beamwidth-alongtrack\n"
+    "\t--kluge-ignore-duplicate-pings\n"
+    "\t--kluge-xducer-depth-from-heave\n"
+    "\t--kluge-xducer-depth-from-sensordepth\n"
+    "\t--kluge-xducer-depth-from-heave-and-sensordepth\n"
+    "\t--kluge-rangescale\n"
+    "\t--kluge-fix-wissl2-ranges\n";
 /*--------------------------------------------------------------------*/
 
 int main(int argc, char **argv) {
@@ -193,6 +202,15 @@ int main(int argc, char **argv) {
   bool kluge_early_mbari_mapping_auv = false;
   bool kluge_flipsign_roll = false;
   bool kluge_flipsign_pitch = false;
+  bool kluge_setbeamwidthacrosstrack = false;
+  bool kluge_setbeamwidthalongtrack = false;
+  bool kluge_ignore_duplicate_pings = false;
+  bool kluge_xducer_depth_from_heave = false;
+  bool kluge_xducer_depth_from_sensordepth = false;
+  bool kluge_xducer_depth_from_heaveandsensordepth = false;
+  bool kluge_rangescale = false;
+  double kluge_rangescale_factor = 1.0;
+  bool kluge_fix_wissl2_ranges = false;
 
   mb_path sensordepth_file;
   memset(sensordepth_file, 0, sizeof(mb_path));
@@ -238,6 +256,7 @@ int main(int argc, char **argv) {
   int attitude_file_format = 0;
   int attitude_async = MB_DATA_DATA;
   int attitude_sensor = -1;
+  bool zero_heave = false;
   merge_t soundspeed_mode = MBPREPROCESS_MERGE_OFF;
   int soundspeed_file_format = 0;
   int soundspeed_async = MB_DATA_DATA;
@@ -279,6 +298,7 @@ int main(int argc, char **argv) {
                                       {"attitude-file-format", required_argument, nullptr, 0},
                                       {"attitude-async", required_argument, nullptr, 0},
                                       {"attitude-sensor", required_argument, nullptr, 0},
+                                      {"attitude-zero-heave", no_argument, nullptr, 0},
                                       {"soundspeed-file", required_argument, nullptr, 0},
                                       {"soundspeed-file-format", required_argument, nullptr, 0},
                                       {"soundspeed-async", required_argument, nullptr, 0},
@@ -293,12 +313,13 @@ int main(int argc, char **argv) {
                                       {"time-latency-apply-all-ancilliary", no_argument, nullptr, 0},
                                       {"time-latency-apply-survey", no_argument, nullptr, 0},
                                       {"time-latency-apply-all", no_argument, nullptr, 0},
-                                      {"time-latency-apply-nav", no_argument, nullptr, 0},
+                                      {"time-latency-apply-altitude", no_argument, nullptr, 0},
                                       {"filter", required_argument, nullptr, 0},
                                       {"filter-apply-nav", no_argument, nullptr, 0},
                                       {"filter-apply-sensordepth", no_argument, nullptr, 0},
                                       {"filter-apply-heading", no_argument, nullptr, 0},
                                       {"filter-apply-attitude", no_argument, nullptr, 0},
+                                      {"filter-apply-altitude", no_argument, nullptr, 0},
                                       {"filter-apply-all-ancilliary", no_argument, nullptr, 0},
                                       {"recalculate-bathymetry", no_argument, nullptr, 0},
                                       {"no-change-survey", no_argument, nullptr, 0},
@@ -323,6 +344,15 @@ int main(int argc, char **argv) {
                                       {"kluge-early-MBARI-Mapping-AUV", no_argument, nullptr, 0},
                                       {"kluge-flipsign-roll", no_argument, nullptr, 0},
                                       {"kluge-flipsign-pitch", no_argument, nullptr, 0},
+                                      {"kluge-set-beamwidths", required_argument, nullptr, 0},
+                                      {"kluge-set-beamwidth-acrosstrack", required_argument, nullptr, 0},
+                                      {"kluge-set-beamwidth-alongtrack", required_argument, nullptr, 0},
+                                      {"kluge-ignore-duplicate-pings", no_argument, nullptr, 0},
+                                      {"kluge-xducer-depth-from-heave", no_argument, nullptr, 0},
+                                      {"kluge-xducer-depth-from-sensordepth", no_argument, nullptr, 0},
+                                      {"kluge-xducer-depth-from-heave-and-sensordepth", no_argument, nullptr, 0},
+                                      {"kluge-rangescale", required_argument, nullptr, 0},
+                                      {"kluge-fix-wissl2-ranges", no_argument, nullptr, 0},
                                       {nullptr, 0, nullptr, 0}};
 
     int option_index;
@@ -342,7 +372,7 @@ int main(int argc, char **argv) {
         /*-------------------------------------------------------
          * Define input file and format (usually a datalist) */
         else if (strcmp("input", options[option_index].name) == 0) {
-          strcpy(read_file, optarg);
+          snprintf(read_file, sizeof(read_file), "%s", optarg);
         }
         else if (strcmp("format", options[option_index].name) == 0) {
           /* n = */ sscanf(optarg, "%d", &format);
@@ -375,7 +405,7 @@ int main(int argc, char **argv) {
          * Define source of navigation - could be an external file
          * or an internal asynchronous record */
         else if (strcmp("nav-file", options[option_index].name) == 0) {
-          strcpy(nav_file, optarg);
+          snprintf(nav_file, sizeof(nav_file), "%s", optarg);
           nav_mode = MBPREPROCESS_MERGE_FILE;
           preprocess_pars.recalculate_bathymetry = true;
         }
@@ -396,7 +426,7 @@ int main(int argc, char **argv) {
          * Define source of sensordepth - could be an external file
          * or an internal asynchronous record */
         else if (strcmp("sensordepth-file", options[option_index].name) == 0) {
-          strcpy(sensordepth_file, optarg);
+          snprintf(sensordepth_file, sizeof(sensordepth_file), "%s", optarg);
           sensordepth_mode = MBPREPROCESS_MERGE_FILE;
           preprocess_pars.recalculate_bathymetry = true;
         }
@@ -417,7 +447,7 @@ int main(int argc, char **argv) {
          * Define source of heading - could be an external file
          * or an internal asynchronous record */
         else if (strcmp("heading-file", options[option_index].name) == 0) {
-          strcpy(heading_file, optarg);
+          snprintf(heading_file, sizeof(heading_file), "%s", optarg);
           heading_mode = MBPREPROCESS_MERGE_FILE;
           preprocess_pars.recalculate_bathymetry = true;
         }
@@ -438,7 +468,7 @@ int main(int argc, char **argv) {
          * Define source of altitude - could be an external file
          * or an internal asynchronous record */
         else if (strcmp("altitude-file", options[option_index].name) == 0) {
-          strcpy(altitude_file, optarg);
+          snprintf(altitude_file, sizeof(altitude_file), "%s", optarg);
           altitude_mode = MBPREPROCESS_MERGE_FILE;
         }
         else if (strcmp("altitude-file-format", options[option_index].name) == 0) {
@@ -456,7 +486,7 @@ int main(int argc, char **argv) {
          * Define source of attitude - could be an external file
          * or an internal asynchronous record */
         else if (strcmp("attitude-file", options[option_index].name) == 0) {
-          strcpy(attitude_file, optarg);
+          snprintf(attitude_file, sizeof(attitude_file), "%s", optarg);
           attitude_mode = MBPREPROCESS_MERGE_FILE;
           preprocess_pars.recalculate_bathymetry = true;
         }
@@ -473,11 +503,14 @@ int main(int argc, char **argv) {
           /* n = */ sscanf(optarg, "%d", &attitude_sensor);
           preprocess_pars.recalculate_bathymetry = true;
         }
+        else if (strcmp("attitude-zero-heave", options[option_index].name) == 0) {
+          zero_heave = true;
+        }
         /*-------------------------------------------------------
          * Define source of soundspeed - could be an external file
          * or an internal asynchronous record */
         else if (strcmp("soundspeed-file", options[option_index].name) == 0) {
-          strcpy(soundspeed_file, optarg);
+          snprintf(soundspeed_file, sizeof(soundspeed_file), "%s", optarg);
           soundspeed_mode = MBPREPROCESS_MERGE_FILE;
           preprocess_pars.modify_soundspeed = true;
           preprocess_pars.recalculate_bathymetry = true;
@@ -503,7 +536,7 @@ int main(int argc, char **argv) {
          * will be applied to - nav, sensordepth, heading, attitude,
          * or all. */
         else if (strcmp("time-latency-file", options[option_index].name) == 0) {
-          strcpy(time_latency_file, optarg);
+          snprintf(time_latency_file, sizeof(time_latency_file), "%s", optarg);
           time_latency_mode = MB_SENSOR_TIME_LATENCY_MODEL;
         }
         else if (strcmp("time-latency-file-format", options[option_index].name) == 0) {
@@ -531,7 +564,7 @@ int main(int argc, char **argv) {
           preprocess_pars.recalculate_bathymetry = true;
         }
         else if (strcmp("time-latency-apply-altitude", options[option_index].name) == 0) {
-          time_latency_apply = time_latency_apply | MBPREPROCESS_TIME_LATENCY_APPLY_ATTITUDE;
+          time_latency_apply = time_latency_apply | MBPREPROCESS_TIME_LATENCY_APPLY_ALTITUDE;
           preprocess_pars.recalculate_bathymetry = true;
         }
         else if (strcmp("time-latency-apply-all-ancilliary", options[option_index].name) == 0) {
@@ -569,7 +602,7 @@ int main(int argc, char **argv) {
           preprocess_pars.recalculate_bathymetry = true;
         }
         else if (strcmp("filter-apply-altitude", options[option_index].name) == 0) {
-          filter_apply = filter_apply | MBPREPROCESS_TIME_LATENCY_APPLY_ATTITUDE;
+          filter_apply = filter_apply | MBPREPROCESS_TIME_LATENCY_APPLY_ALTITUDE;
           preprocess_pars.recalculate_bathymetry = true;
         }
         else if (strcmp("filter-apply-all-ancilliary", options[option_index].name) == 0) {
@@ -725,6 +758,79 @@ int main(int argc, char **argv) {
           preprocess_pars.n_kluge++;
           kluge_flipsign_pitch = true;
         }
+        else if (strcmp("kluge-set-beamwidths", options[option_index].name) == 0) {
+        	double kluge_beamwidth_acrosstrack, kluge_beamwidth_alongtrack;
+          const int n = sscanf(optarg, "%lf/%lf", &kluge_beamwidth_acrosstrack, &kluge_beamwidth_alongtrack);
+          if (n == 2) {
+            preprocess_pars.kluge_id[preprocess_pars.n_kluge] = MB_PR_KLUGE_SETBEAMWIDTHACROSSTRACK;
+            double *dptr = (double *)&preprocess_pars.kluge_pars[preprocess_pars.n_kluge * MB_PR_KLUGE_PAR_SIZE];
+            *dptr = kluge_beamwidth_acrosstrack;
+            preprocess_pars.n_kluge++;
+            kluge_setbeamwidthacrosstrack = true;
+            preprocess_pars.kluge_id[preprocess_pars.n_kluge] = MB_PR_KLUGE_SETBEAMWIDTHALONGTRACK;
+            dptr = (double *)&preprocess_pars.kluge_pars[preprocess_pars.n_kluge * MB_PR_KLUGE_PAR_SIZE];
+            *dptr = kluge_beamwidth_alongtrack;
+            preprocess_pars.n_kluge++;
+            kluge_setbeamwidthalongtrack = true;
+          }
+        }
+        else if (strcmp("kluge-set-beamwidth-acrosstrack", options[option_index].name) == 0) {
+        	double kluge_beamwidth_acrosstrack;
+          const int n = sscanf(optarg, "%lf", &kluge_beamwidth_acrosstrack);
+          if (n == 1) {
+            preprocess_pars.kluge_id[preprocess_pars.n_kluge] = MB_PR_KLUGE_SETBEAMWIDTHACROSSTRACK;
+            double *dptr = (double *)&preprocess_pars.kluge_pars[preprocess_pars.n_kluge * MB_PR_KLUGE_PAR_SIZE];
+            *dptr = kluge_beamwidth_acrosstrack;
+            preprocess_pars.n_kluge++;
+            kluge_setbeamwidthacrosstrack = true;
+          }
+        }
+        else if (strcmp("kluge-set-beamwidth-alongtrack", options[option_index].name) == 0) {
+        	double kluge_beamwidth_alongtrack;
+          const int n = sscanf(optarg, "%lf", &kluge_beamwidth_alongtrack);
+          if (n == 1) {
+            preprocess_pars.kluge_id[preprocess_pars.n_kluge] = MB_PR_KLUGE_SETBEAMWIDTHALONGTRACK;
+            double *dptr = (double *)&preprocess_pars.kluge_pars[preprocess_pars.n_kluge * MB_PR_KLUGE_PAR_SIZE];
+            *dptr = kluge_beamwidth_alongtrack;
+            preprocess_pars.n_kluge++;
+            kluge_setbeamwidthalongtrack = true;
+          }
+        }
+        else if (strcmp("kluge-ignore-duplicate-pings", options[option_index].name) == 0) {
+          preprocess_pars.kluge_id[preprocess_pars.n_kluge] = MB_PR_KLUGE_IGNOREDUPLICATEPINGS;
+          preprocess_pars.n_kluge++;
+        	kluge_ignore_duplicate_pings = true;
+        }
+        else if (strcmp("kluge-xducer-depth-from-heave", options[option_index].name) == 0) {
+          preprocess_pars.kluge_id[preprocess_pars.n_kluge] = MB_PR_KLUGE_XDUCER_DEPTH_FROM_HEAVE;
+          preprocess_pars.n_kluge++;
+        	kluge_xducer_depth_from_heave = true;
+        }
+        else if (strcmp("kluge-xducer-depth-from-sensordepth", options[option_index].name) == 0) {
+          preprocess_pars.kluge_id[preprocess_pars.n_kluge] = MB_PR_KLUGE_XDUCER_DEPTH_FROM_SENSORDEPTH;
+          preprocess_pars.n_kluge++;
+        	kluge_xducer_depth_from_sensordepth = true;
+        }
+        else if (strcmp("kluge-xducer-depth-from-heave-and-sensordepth", options[option_index].name) == 0) {
+          preprocess_pars.kluge_id[preprocess_pars.n_kluge] = MB_PR_KLUGE_XDUCER_DEPTH_FROM_HEAVEANDSENSORDEPTH;
+          preprocess_pars.n_kluge++;
+        	kluge_xducer_depth_from_heaveandsensordepth = true;
+        }
+        else if (strcmp("kluge-rangescale", options[option_index].name) == 0) {
+          const int n = sscanf(optarg, "%lf", &	kluge_rangescale_factor);
+          if (n == 1) {
+            preprocess_pars.kluge_id[preprocess_pars.n_kluge] = MB_PR_KLUGE_RANGESCALE;
+            double *dptr = (double *)&preprocess_pars.kluge_pars[preprocess_pars.n_kluge * MB_PR_KLUGE_PAR_SIZE];
+            *dptr = kluge_rangescale_factor;
+            preprocess_pars.n_kluge++;
+            kluge_rangescale = true;
+          }
+        }
+        else if (strcmp("kluge-fix-wissl2-ranges", options[option_index].name) == 0) {
+          preprocess_pars.kluge_id[preprocess_pars.n_kluge] = MB_PR_KLUGE_FIXWISSL2RANGES;
+          preprocess_pars.n_kluge++;
+          kluge_fix_wissl2_ranges = true;
+        }
 
         break;
       case '?':
@@ -851,6 +957,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "dbg2       attitude_file_format:         %d\n", attitude_file_format);
     fprintf(stderr, "dbg2       attitude_async:               %d\n", attitude_async);
     fprintf(stderr, "dbg2       attitude_sensor:              %d\n", attitude_sensor);
+    fprintf(stderr, "dbg2       attitude_zero_heave:          %d\n", zero_heave);
     fprintf(stderr, "dbg2  Source of soundspeed data:\n");
     fprintf(stderr, "dbg2       soundspeed_mode:              %d\n", soundspeed_mode);
     fprintf(stderr, "dbg2       soundspeed_file:              %s\n", soundspeed_file);
@@ -909,6 +1016,15 @@ int main(int argc, char **argv) {
     fprintf(stderr, "dbg2       kluge_early_mbari_mapping_auv        %d\n", kluge_early_mbari_mapping_auv);
     fprintf(stderr, "dbg2       kluge_flipsign_roll                  %d\n", kluge_flipsign_roll);
     fprintf(stderr, "dbg2       kluge_flipsign_pitch                 %d\n", kluge_flipsign_pitch);
+    fprintf(stderr, "dbg2       kluge_setbeamwidthacrosstrack        %d\n", kluge_setbeamwidthacrosstrack);
+    fprintf(stderr, "dbg2       kluge_setbeamwidthalongtrack         %d\n", kluge_setbeamwidthalongtrack);
+    fprintf(stderr, "dbg2       kluge_ignore_duplicate_pings         %d\n", kluge_ignore_duplicate_pings);
+    fprintf(stderr, "dbg2       kluge_xducer_depth_from_heave        %d\n", kluge_xducer_depth_from_heave);
+    fprintf(stderr, "dbg2       kluge_xducer_depth_from_sensordepth  %d\n", kluge_xducer_depth_from_sensordepth);
+    fprintf(stderr, "dbg2       kluge_xducer_depth_from_heaveandsensordepth  %d\n", kluge_xducer_depth_from_heaveandsensordepth);
+    fprintf(stderr, "dbg2       kluge_rangescale                     %d\n", kluge_rangescale);
+    fprintf(stderr, "dbg2       kluge_rangescale_factor              %f\n", kluge_rangescale_factor);
+    fprintf(stderr, "dbg2       kluge_fix_wissl2_ranges              %d\n", kluge_fix_wissl2_ranges);
     fprintf(stderr, "dbg2  Additional output:\n");
     fprintf(stderr, "dbg2       output_sensor_fnv:            %d\n", output_sensor_fnv);
     fprintf(stderr, "dbg2  Skip existing output files:\n");
@@ -966,6 +1082,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "     attitude_file_format:         %d\n", attitude_file_format);
     fprintf(stderr, "     attitude_async:               %d\n", attitude_async);
     fprintf(stderr, "     attitude_sensor:              %d\n", attitude_sensor);
+    fprintf(stderr, "     attitude_zero_heave:          %d\n", zero_heave);
     fprintf(stderr, "Source of soundspeed data:\n");
     fprintf(stderr, "     soundspeed_mode:              %d\n", soundspeed_mode);
     fprintf(stderr, "     soundspeed_file:              %s\n", soundspeed_file);
@@ -1024,6 +1141,15 @@ int main(int argc, char **argv) {
     fprintf(stderr, "     kluge_early_mbari_mapping_auv        %d\n", kluge_early_mbari_mapping_auv);
     fprintf(stderr, "     kluge_flipsign_roll                  %d\n", kluge_flipsign_roll);
     fprintf(stderr, "     kluge_flipsign_pitch                 %d\n", kluge_flipsign_pitch);
+    fprintf(stderr, "     kluge_setbeamwidthacrosstrack        %d\n", kluge_setbeamwidthacrosstrack);
+    fprintf(stderr, "     kluge_setbeamwidthalongtrack         %d\n", kluge_setbeamwidthalongtrack);
+    fprintf(stderr, "     kluge_ignore_duplicate_pings         %d\n", kluge_ignore_duplicate_pings);
+    fprintf(stderr, "     kluge_xducer_depth_from_heave        %d\n", kluge_xducer_depth_from_heave);
+    fprintf(stderr, "     kluge_xducer_depth_from_sensordepth  %d\n", kluge_xducer_depth_from_sensordepth);
+    fprintf(stderr, "     kluge_xducer_depth_from_heaveandsensordepth  %d\n", kluge_xducer_depth_from_heaveandsensordepth);
+    fprintf(stderr, "     kluge_rangescale                     %d\n", kluge_rangescale);
+    fprintf(stderr, "     kluge_rangescale_factor              %f\n", kluge_rangescale_factor);
+    fprintf(stderr, "     kluge_fix_wissl2_ranges              %d\n", kluge_fix_wissl2_ranges);
     fprintf(stderr, "Additional output:\n");
     fprintf(stderr, "     output_sensor_fnv:            %d\n", output_sensor_fnv);
     fprintf(stderr, "Skip existing output files:\n");
@@ -1439,17 +1565,15 @@ int main(int argc, char **argv) {
 
     /* if a different output directory was set by user, reset file path */
     if (output_directory_set) {
-      char buffer[MB_PATH_MAXLINE] = "";
-      strcpy(buffer, output_directory);
-      if (buffer[strlen(output_directory) - 1] != '/')
-        strcat(buffer, "/");
-      char *filenameptr;
-      if (strrchr(ofile, '/') != nullptr)
-        filenameptr = strrchr(ofile, '/') + 1;
+      char filenameptr_buf[MB_PATH_MAXLINE];
+      const char *filenameptr = strrchr(ofile, '/');
+      filenameptr = (filenameptr != nullptr) ? filenameptr + 1 : ofile;
+      snprintf(filenameptr_buf, sizeof(filenameptr_buf), "%s", filenameptr);
+      const size_t dirlen = strlen(output_directory);
+      if (dirlen > 0 && output_directory[dirlen - 1] == '/')
+        snprintf(ofile, sizeof(ofile), "%s%s", output_directory, filenameptr_buf);
       else
-        filenameptr = ofile;
-      strcat(buffer, filenameptr);
-      strcpy(ofile, buffer);
+        snprintf(ofile, sizeof(ofile), "%s/%s", output_directory, filenameptr_buf);
     }
 
     /* Figure out if the file should be preprocessed - don't if it looks like
@@ -2004,6 +2128,13 @@ int main(int argc, char **argv) {
       attitude_roll[i], attitude_pitch[i], attitude_heave[i]);
   }
 #endif
+
+	/* zero heave values if requested */
+	if (zero_heave) {
+		for (int i=0;i<n_attitude;i++) {
+			attitude_heave[i] = 0.0;
+		}
+	}
 
   /* deal with correcting MBARI Mapping AUV pressure depth time jumps */
   if (kluge_timejumps_mbaripressure) {
@@ -2574,17 +2705,15 @@ int main(int argc, char **argv) {
 
     /* if a different output directory was set by user, reset file path */
     if (output_directory_set) {
-      char buffer[MB_PATH_MAXLINE] = "";
-      strcpy(buffer, output_directory);
-      if (buffer[strlen(output_directory) - 1] != '/')
-        strcat(buffer, "/");
-      char *filenameptr;
-      if (strrchr(ofile, '/') != nullptr)
-        filenameptr = strrchr(ofile, '/') + 1;
+      char filenameptr_buf[MB_PATH_MAXLINE];
+      const char *filenameptr = strrchr(ofile, '/');
+      filenameptr = (filenameptr != nullptr) ? filenameptr + 1 : ofile;
+      snprintf(filenameptr_buf, sizeof(filenameptr_buf), "%s", filenameptr);
+      const size_t dirlen = strlen(output_directory);
+      if (dirlen > 0 && output_directory[dirlen - 1] == '/')
+        snprintf(ofile, sizeof(ofile), "%s%s", output_directory, filenameptr_buf);
       else
-        filenameptr = ofile;
-      strcat(buffer, filenameptr);
-      strcpy(ofile, buffer);
+        snprintf(ofile, sizeof(ofile), "%s/%s", output_directory, filenameptr_buf);
     }
 
     /* Figure out if the file should be preprocessed - don't if it looks like
@@ -2839,6 +2968,7 @@ int main(int argc, char **argv) {
 
       double last_survey_time_d[MB_SUBSENSOR_NUM_MAX];
       memset(last_survey_time_d, 0, MB_SUBSENSOR_NUM_MAX * sizeof(double));
+      double time_prior_d = 0.0;
 
       /* ------------------------------- */
       /* write comments to output file   */
@@ -2849,6 +2979,7 @@ int main(int argc, char **argv) {
         /* reset error */
         status = MB_SUCCESS;
         error = MB_ERROR_NO_ERROR;
+        bool output_ok = true;
 
         /* read next data record */
         status = mb_get_all(verbose, imbio_ptr, &istore_ptr, &kind, time_i, &time_d, &navlon_org, &navlat_org, &speed_org,
@@ -2921,6 +3052,8 @@ int main(int argc, char **argv) {
           (kind == MB_DATA_DATA || kind == MB_DATA_SUBBOTTOM_MCS || kind == MB_DATA_SUBBOTTOM_CNTRBEAM ||
            kind == MB_DATA_SUBBOTTOM_SUBBOTTOM || kind == MB_DATA_SIDESCAN2 || kind == MB_DATA_SIDESCAN3 ||
            kind == MB_DATA_WATER_COLUMN)) {
+           
+					bool output_ok = true;
 
           /* call mb_extract_nav to get attitude */
           status = mb_extract_nav(verbose, imbio_ptr, istore_ptr, &kind, time_i, &time_d, &navlon_org, &navlat_org,
@@ -3069,10 +3202,10 @@ int main(int argc, char **argv) {
           pitch = pitch_org;
           heave = heave_org;
 		  
-		  /* reset time_i */
-		  if (timestamp_changed) {
-			  mb_get_date(verbose, time_d, time_i);
-		  }
+					/* reset time_i */
+					if (timestamp_changed) {
+						mb_get_date(verbose, time_d, time_i);
+					}
 
           /* set up preprocess structure */
           preprocess_pars.target_sensor = target_sensor;
@@ -3110,6 +3243,7 @@ int main(int argc, char **argv) {
            *   2) if attitude values changed rotate bathymetry accordingly
            *   3) if any values changed reinsert the data */
           if (status == MB_FAILURE) {
+fprintf(stderr, "**** DOING GENERIC PREPROCESS!!!\n");
             /* reset status and error */
             status = MB_SUCCESS;
             error = MB_ERROR_NO_ERROR;
@@ -3192,9 +3326,18 @@ int main(int argc, char **argv) {
             }
           }
         }
+        
+        if (kluge_ignore_duplicate_pings && kind == MB_DATA_DATA) {
+        	if (fabs(time_d - time_prior_d) < MB_ESF_MAXTIMEDIFF) {
+        		output_ok = false;
+        		fprintf(stderr, "Kluge ignore duplicate pings - duplicate ping skipped - Timestamps: %.6f %.6f\n", time_d, time_prior_d);
+        	}
+        }
+        if (kind == MB_DATA_DATA)
+        	time_prior_d = time_d;
 
         /* write some data */
-        if (error == MB_ERROR_NO_ERROR) {
+        if (error == MB_ERROR_NO_ERROR && output_ok) {
           status = mb_put_all(verbose, ombio_ptr, istore_ptr, false, kind, time_i, time_d, navlon, navlat, speed, heading,
                     obeams_bath, obeams_amp, opixels_ss, beamflag, bath, amp, bathacrosstrack, bathalongtrack, ss,
                     ssacrosstrack, ssalongtrack, comment, &error);

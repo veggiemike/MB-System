@@ -11,7 +11,7 @@
 <CENTER><H3><U>MB-System Unix Manual Page</U></H3></CENTER>
 <PRE>
 <H1>mbbackangle</H1>
-Section:  MB-System 5.0  (1)<BR>Updated:  13 July 2023 <BR><A HREF="#index">Index</A>
+Section:  MB-System 5.0  (1)<BR>Updated:  26 December 2025 <BR><A HREF="#index">Index</A>
 <HR>
 
 <A NAME="lbAB">&nbsp;</A>
@@ -30,11 +30,12 @@ Version 5.0
 <H2>SYNOPSIS</H2>
 
 <B>mbbackangle</B> [<B>-A</B><I>kind</I>
+<B>-B</B><I>mode</I>[<I>/ssbeamwidth</I>[<I>/ssdepression</I>]]
 <B>-C</B> <B>-D</B> <B>-F</B><I>format</I>
 <B>-G</B><I>kind/angle/min/max/nx/ny</I>
 <B>-I</B><I>file</I>
 <B>-N</B><I>nangle/anglemax</I> <B>-P</B><I>pings</I> <B>-Q</B>
-<B>-R</B><I>refangle</I> <B>-T</B><I>topogridfile</I> <B>-Z</B><I>altitude</I> <B>-V -H</B>]
+<B>-R</B><I>refangle</I> <B>-S</B> <B>-T</B><I>topogridfile</I> <B>-Z</B><I>altitude</I> <B>-V -H</B>]
 <P>
 <A NAME="lbAE">&nbsp;</A>
 <H2>DESCRIPTION</H2>
@@ -98,6 +99,10 @@ shellscripts that, when executed, will generate plots of the gridded
 histograms overlain with the amplitude versus grazing angle tables in
 the &quot;.aga&quot; and &quot;.sga&quot; files.
 <P>
+If the <B>-S</B> option is used, then <B>mbbackangle</B> skips processing of any swath
+files that have existing amplitude and/or sidecan correction files from a prior use of
+the program.
+<P>
 <A NAME="lbAF">&nbsp;</A>
 <H2>MB-SYSTEM AUTHORSHIP</H2>
 
@@ -137,6 +142,22 @@ Christian do Santos Ferreira
 Determines if beam amplitude (<I>kind</I> = 1)
 and/or sidescan (<I>kind</I> = 2) data will be processed.
 Default: both amplitude and sidescan data are processed.
+<DT><B>-B</B>
+
+<DD>
+<I>mode</I>[<I>/ssbeamwidth</I>[<I>/ssdepression</I>]]
+<BR>
+
+Sets the algorithm used to represent the sonar's beam pattern when
+generating the amplitude and/or sidescan versus grazing angle tables.
+If <I>mode</I> = 0, an empirical correction is used: the table is defined
+directly by the average amplitude or sidescan value observed at each
+grazing angle bin. If <I>mode</I> = 1, a parametric model combining a
+Gaussian transmit/receive beam pattern with spherical spreading is used
+instead; in this case <I>ssbeamwidth</I> sets the effective angular beam
+width in degrees of the sidescan sonar, and <I>ssdepression</I> sets the
+sonar's depression angle from the horizontal in degrees.
+Default: <I>mode</I> = 0; <I>ssbeamwidth</I> = 50.0; <I>ssdepression</I> = 20.0.
 <DT><B>-C</B>
 
 <DD>
@@ -253,6 +274,12 @@ into the grazing angle calculation for each data point.
 Sets the reference angle that will be used by <B>mbprocess</B> in
 applying the amplitude and/or sidescan correction tables generated
 by <B>mbbackangle</B>. Default: <I>refangle</I> = 30.0 degrees.
+<DT><B>-S</B>
+
+<DD>
+This option causes <B>mbbackangle</B> to skip processing of input raw swath files that have 
+previously processed and are up to date, as evidenced by the existence of amplitude 
+and/or sidescan correction table files older than the raw files and beam edits.
 <DT><B>-T</B>
 
 <DD>

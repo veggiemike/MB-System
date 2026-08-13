@@ -29,7 +29,6 @@
  * Date:  April 21, 1996
  */
 
-
 #ifndef MB_DEFINE_H_
 #define MB_DEFINE_H_
 
@@ -37,17 +36,22 @@
 #include <stdint.h>
 
 /* Define version and date for this release */
-#define MB_VERSION "5.8.2"
-#define MB_VERSION_DATE "19 August 2025"
+#define MB_VERSION "5.8.3beta16"
+#define MB_VERSION_DATE "26 July 2026"
 
 /* CMake supports current OS's and so there is only one form of RPC and XDR and no mb_config.h file */
 #ifdef CMAKE_BUILD_SYSTEM
 
+#ifdef _WIN32
+  /* Windows lacks SunRPC/TIRPC, so use the mb_xdr_win32 replacement */
+#  include <mb_xdr_win32.h>
+#else
 #  include <rpc/rpc.h>
 #  include <rpc/types.h>
 #  include <rpc/xdr.h>
+#endif // end _WIN32
 
-#else // Begin Autotools section supporting legacy OS's
+#else // End CMAKE_BUILD_SYSTEM, Begin Autotools section supporting legacy OS's
 
 #include <mb_config.h>
 
@@ -58,7 +62,7 @@
 #  endif
 #  include <WinSock2.h>
 #  include <Windows.h>
-#endif
+#endif // end _WIN32
 
 /* For XDR/RPC */
 #ifndef _WIN32
@@ -184,6 +188,10 @@ typedef char mb_command[MB_COMMAND_LENGTH];
 /* maximum number of asynchronous nav samples per record */
 #define MB_NAV_MAX 256
 
+/* maximum number of record types that can specified to have contents dumped during
+   reading for debugging */
+#define MB_NUM_DEBUG_RECORD_MAX 10
+
 /* file mode (read or write) */
 typedef enum {
   MB_FILEMODE_READ = 0,
@@ -251,6 +259,26 @@ typedef enum {
 #define MB_SOUNDSPEEDALGORITHM_CHENMILLERO   1
 #define MB_SOUNDSPEEDALGORITHM_WILSON     2
 #define MB_SOUNDSPEEDALGORITHM_DELGROSSO   3
+
+// MB-System graphics color and linestyle definitions
+typedef enum {
+  MB_COLOR_WHITE = 0,
+  MB_COLOR_BLACK,
+  MB_COLOR_RED,
+  MB_COLOR_ORANGE,
+  MB_COLOR_YELLOW,
+  MB_COLOR_GREEN,
+  MB_COLOR_BLUEGREEN,
+  MB_COLOR_BLUE,
+  MB_COLOR_PURPLE,
+  MB_COLOR_CORAL,
+  MB_COLOR_LIGHTGREY,
+  MB_NDrawingColors
+} mb_color_t;
+typedef enum {
+  MB_SOLID_LINE = 0,
+  MB_DASH_LINE
+} mb_linestyle_t;
 
 /* min max round define */
 #ifndef MIN
@@ -329,14 +357,14 @@ int mb_fileiobuffer(int verbose, int *fileiobuffer);
 int mb_format_register(int verbose, int *format, void *mbio_ptr, int *error);
 int mb_format_info(int verbose, int *format, int *system, int *beams_bath_max, int *beams_amp_max, int *pixels_ss_max,
                    char *format_name, char *system_name, char *format_description, int *numfile, int *filetype,
-                   int *variable_beams, int *traveltime, int *beam_flagging, int *platform_source, int *nav_source,
+                   bool *variable_beams, bool *traveltime, bool *beam_flagging, int *platform_source, int *nav_source,
                    int *sensordepth_source, int *heading_source, int *attitude_source, int *svp_source, double *beamwidth_xtrack,
                    double *beamwidth_ltrack, int *error);
 int mb_format(int verbose, int *format, int *error);
 int mb_format_system(int verbose, int *format, int *system, int *error);
 int mb_format_description(int verbose, int *format, char *description, int *error);
 int mb_format_dimensions(int verbose, int *format, int *beams_bath_max, int *beams_amp_max, int *pixels_ss_max, int *error);
-int mb_format_flags(int verbose, int *format, int *variable_beams, int *traveltime, int *beam_flagging, int *error);
+int mb_format_flags(int verbose, int *format, bool *variable_beams, bool *traveltime, bool *beam_flagging, int *error);
 int mb_format_source(int verbose, int *format, int *platform_source, int *nav_source, int *sensordepth_source, int *heading_source,
                      int *attitude_source, int *svp_source, int *error);
 int mb_format_beamwidth(int verbose, int *format, double *beamwidth_xtrack, double *beamwidth_ltrack, int *error);
@@ -361,7 +389,7 @@ int mb_datalist_readorg(int verbose, void *datalist_ptr, char *path, int *format
 int mb_datalist_recursion(int verbose, void *datalist_ptr, bool print, int *recursion, int *error);
 int mb_datalist_close(int verbose, void **datalist_ptr, int *error);
 int mb_imagelist_open(int verbose, void **imagelist_ptr, char *path, int *error);
-int mb_imagelist_read(int verbose, void *imagelist_ptr, int *imagestatus,
+int mb_imagelist_read(int verbose, void *imagelist_ptr, int *imagestatus, bool *rectified, 
                       char *path0, char *path1, char *dpath,
                       double *time_d0, double *time_d1,
                       double *gain0, double *gain1,
@@ -376,6 +404,7 @@ int mb_check_info(int verbose, char *file, int lonflip, double bounds[4], bool *
 bool mb_should_make_fbt(int verbose, int format);
 bool mb_should_make_fnv(int verbose, int format);
 int mb_make_info(int verbose, bool force, char *file, int format, int *error);
+int mb_make_info_datalist(int verbose, bool force, char *read_file, int *format, int *error);
 int mb_get_fbt(int verbose, char *file, int *format, int *error);
 int mb_get_fnv(int verbose, char *file, int *format, int *error);
 int mb_get_ffa(int verbose, char *file, int *format, int *error);
@@ -402,6 +431,11 @@ int mb_input_init(int verbose, char *socket_definition, int format, int pings,
                   int (*input_read)(int verbose, void *mbio_ptr, size_t *size, char *buffer, int *error),
                   int (*input_close)(int verbose, void *mbio_ptr, int *error),
                   int *error);
+int mb_set_debug_records(int verbose, void *mbio_ptr, 
+									bool enable_debug_record_type_listing, 
+									int num_debug_record_identifiers, 
+									mb_name *debug_record_identifiers,
+									int *error);
 int mb_write_init(int verbose, char *file, int format, void **mbio_ptr, int *beams_bath, int *beams_amp, int *pixels_ss,
                   int *error);
 int mb_close(int verbose, void **mbio_ptr, int *error);
@@ -475,6 +509,10 @@ int mb_detects(int verbose, void *mbio_ptr, void *store_ptr, int *kind, int *nbe
 int mb_pulses(int verbose, void *mbio_ptr, void *store_ptr, int *kind, int *nbeams, int *pulses, int *error);
 int mb_gains(int verbose, void *mbio_ptr, void *store_ptr, int *kind, double *transmit_gain, double *pulse_length,
              double *receive_gain, int *error);
+int mb_sonarsettings(int verbose, void *mbio_ptr, void *store_ptr, int *kind, double *frequency,
+             double *sample_rate, double *tx_pulse_width, double *power_selection, double *gain_selection,
+             double *absorption, double *spreading, double *sound_velocity, double *beamwidth_tx,
+             double *beamwidth_rx, int *error);
 int mb_makess(int verbose, void *mbio_ptr, void *store_ptr, int pixel_size_set, double *pixel_size,
                          int swath_width_set, double *swath_width, int pixel_int, int *error);
 int mb_extract_rawssdimensions(int verbose, void *mbio_ptr, void *store_ptr, int *kind, double *sample_interval,
@@ -768,4 +806,8 @@ bool mb_bitpack_writevalue(void *mbbpptr, unsigned int value);
 }  /* extern "C" */
 #endif
 
-#endif  /* MB_DEFINE_H_ */
+#endif /* MB_DEFINE_H_ */
+
+
+
+

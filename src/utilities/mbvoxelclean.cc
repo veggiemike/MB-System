@@ -196,7 +196,7 @@ int main(int argc, char **argv) {
         {"format", required_argument, nullptr, 0},
         {"voxel-size", required_argument, nullptr, 0},
         {"occupy-threshold", required_argument, nullptr, 0},
-        {"count-flagged", required_argument, nullptr, 0},
+        {"count-flagged", no_argument, nullptr, 0},
         {"flag-empty", no_argument, nullptr, 0},
         {"ignore-empty", no_argument, nullptr, 0},
         {"unflag-occupied", no_argument, nullptr, 0},
@@ -398,8 +398,8 @@ int main(int argc, char **argv) {
 
   int kind = MB_DATA_NONE;
   char swathfileread[MB_PATH_MAXLINE];
-  int variable_beams;
-  int traveltime;
+  bool variable_beams;
+  bool traveltime;
   double btime_d;
   double etime_d;
 
@@ -466,7 +466,7 @@ int main(int argc, char **argv) {
   /* loop over all files to be read */
   while (read_data) {
     bool oktoprocess = true;
-    int beam_flagging;  // TODO(schwehr): Make mb_format_flags take a bool
+    bool beam_flagging; 
 
     /* check format and get format flags */
     if ((status = mb_format_flags(verbose, &format, &variable_beams, &traveltime, &beam_flagging, &error)) != MB_SUCCESS) {
@@ -972,7 +972,7 @@ int main(int argc, char **argv) {
       const int n_voxel_x = (x_max - x_min) / voxel_size_xy + 3;
       x_min = x_min - 0.5 * voxel_size_xy;
       x_max = x_min + n_voxel_x * voxel_size_xy;
-      const int n_voxel_y = (x_max - y_min) / voxel_size_xy + 3;
+      const int n_voxel_y = (y_max - y_min) / voxel_size_xy + 3;
       y_min = y_min - 0.5 * voxel_size_xy;
       y_max = y_min + n_voxel_y * voxel_size_xy;
       const int n_voxel_z = (z_max - z_min) / voxel_size_z + 3;

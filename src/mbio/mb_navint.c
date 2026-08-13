@@ -1216,7 +1216,21 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 	/* count the records */
 	*error = MB_ERROR_NO_ERROR;
 	nrecord = 0;
-	if ((tfp = fopen(merge_nav_file, "r")) != NULL) {
+	if (merge_nav_format == MB_PR_NAV_FORMAT_NAVLAB) {
+		/* Kongsberg Navlab binary: count records from file size */
+		FILE *bfp;
+		if ((bfp = fopen(merge_nav_file, "rb")) != NULL) {
+			fseeko(bfp, 0, SEEK_END);
+			off_t filesize = ftello(bfp);
+			fclose(bfp);
+			nrecord = (int)(filesize / (21 * sizeof(double)));
+		}
+		else {
+			*error = MB_ERROR_OPEN_FAIL;
+			status = MB_FAILURE;
+		}
+	}
+	else if ((tfp = fopen(merge_nav_file, "r")) != NULL) {
 		/* loop over reading the records */
 		while ((result = fgets(buffer, nchar, tfp)) == buffer)
 			nrecord++;
@@ -1253,7 +1267,63 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 		bool time_set;
 		bool nav_ok;
 		nrecord = 0;
-		if ((tfp = fopen(merge_nav_file, "r")) == NULL) {
+		if (merge_nav_format == MB_PR_NAV_FORMAT_NAVLAB) {
+			/* Kongsberg Navlab binary format (navlab_smooth.bin)
+			 * Records: 21 x little-endian float64, no header
+			 *   [0] time_d (Unix epoch seconds)
+			 *   [1] latitude (decimal degrees, positive north)
+			 *   [2] longitude (decimal degrees, positive east)
+			 * Speed not available; set to 0.0
+			 */
+			FILE *bfp;
+			if ((bfp = fopen(merge_nav_file, "rb")) == NULL) {
+				*error = MB_ERROR_OPEN_FAIL;
+				status = MB_FAILURE;
+			}
+			else {
+				bool swap = (mb_swap_check() == MB_YES);
+				double brec[21];
+				while (fread(brec, sizeof(double), 21, bfp) == 21) {
+					if (!swap)
+						for (int ii = 0; ii < 21; ii++)
+							mb_swap_double(&brec[ii]);
+					nav_ok = true;
+					n_time_d[nrecord] = brec[0];
+					n_lat[nrecord]    = brec[1];
+					n_lon[nrecord]    = brec[2];
+					n_speed[nrecord]  = 0.0;
+					/* apply lonflip */
+					if (merge_nav_lonflip == -1 && n_lon[nrecord] > 0.0)
+						n_lon[nrecord] -= 360.0;
+					else if (merge_nav_lonflip == 0 && n_lon[nrecord] < -180.0)
+						n_lon[nrecord] += 360.0;
+					else if (merge_nav_lonflip == 0 && n_lon[nrecord] > 180.0)
+						n_lon[nrecord] -= 360.0;
+					else if (merge_nav_lonflip == 1 && n_lon[nrecord] < 0.0)
+						n_lon[nrecord] += 360.0;
+					if (verbose >= 5) {
+						fprintf(stderr, "\ndbg5  New navigation point read in function <%s>\n", __func__);
+						fprintf(stderr, "dbg5       nav[%d]: %f %f %f\n", nrecord,
+						        n_time_d[nrecord], n_lon[nrecord], n_lat[nrecord]);
+					}
+					if (nrecord == 0)
+						nrecord++;
+					else if (n_time_d[nrecord] > n_time_d[nrecord - 1])
+						nrecord++;
+					else if (nrecord > 0 && n_time_d[nrecord] <= n_time_d[nrecord - 1] && verbose >= 5) {
+						fprintf(stderr, "\ndbg5  Navigation time error in function <%s>\n", __func__);
+						fprintf(stderr, "dbg5       nav[%d]: %f %f %f\n", nrecord - 1,
+						        n_time_d[nrecord - 1], n_lon[nrecord - 1], n_lat[nrecord - 1]);
+						fprintf(stderr, "dbg5       nav[%d]: %f %f %f\n", nrecord,
+						        n_time_d[nrecord], n_lon[nrecord], n_lat[nrecord]);
+					}
+				}
+				/* get the good record count */
+				*merge_nav_num = nrecord;
+				fclose(bfp);
+			}
+		}
+		else if ((tfp = fopen(merge_nav_file, "r")) == NULL) {
 			*error = MB_ERROR_OPEN_FAIL;
 			status = MB_FAILURE;
 		}
@@ -1316,7 +1386,7 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 
 				/* deal with nav in L-DEO processed nav format */
 				else if (merge_nav_format == MB_PR_NAV_FORMAT_LDEO) {
-					strncpy(dummy, "", 128);
+					strncpy(dummy, "", MBP_FILENAMESIZE);
 					if (buffer[2] == '+') {
 						time_j[0] = strtol(strncpy(dummy, buffer, 2), NULL, 10);
 						mb_fix_y2k(verbose, time_j[0], &time_j[0]);
@@ -1326,15 +1396,15 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 						time_j[0] = strtol(strncpy(dummy, buffer, 4), NULL, 10);
 						ioff = 5;
 					}
-					strncpy(dummy, "", 128);
+					strncpy(dummy, "", MBP_FILENAMESIZE);
 					time_j[1] = strtol(strncpy(dummy, buffer + ioff, 3), NULL, 10);
-					strncpy(dummy, "", 128);
+					strncpy(dummy, "", MBP_FILENAMESIZE);
 					ioff += 4;
 					hr = strtol(strncpy(dummy, buffer + ioff, 2), NULL, 10);
-					strncpy(dummy, "", 128);
+					strncpy(dummy, "", MBP_FILENAMESIZE);
 					ioff += 3;
 					time_j[2] = strtol(strncpy(dummy, buffer + ioff, 2), NULL, 10) + 60 * hr;
-					strncpy(dummy, "", 128);
+					strncpy(dummy, "", MBP_FILENAMESIZE);
 					ioff += 3;
 					time_j[3] = strtol(strncpy(dummy, buffer + ioff, 2), NULL, 10);
 					time_j[4] = 0;
@@ -1346,18 +1416,18 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 					ioff += 7;
 					NorS[0] = buffer[ioff];
 					ioff += 1;
-					strncpy(dummy, "", 128);
+					strncpy(dummy, "", MBP_FILENAMESIZE);
 					mlat = strtod(strncpy(dummy, buffer + ioff, 3), NULL);
-					strncpy(dummy, "", 128);
+					strncpy(dummy, "", MBP_FILENAMESIZE);
 					ioff += 3;
 					llat = strtod(strncpy(dummy, buffer + ioff, 8), NULL);
 					strncpy(EorW, "", sizeof(EorW));
 					ioff += 9;
 					EorW[0] = buffer[ioff];
-					strncpy(dummy, "", 128);
+					strncpy(dummy, "", MBP_FILENAMESIZE);
 					ioff += 1;
 					mlon = strtod(strncpy(dummy, buffer + ioff, 4), NULL);
-					strncpy(dummy, "", 128);
+					strncpy(dummy, "", MBP_FILENAMESIZE);
 					ioff += 4;
 					llon = strtod(strncpy(dummy, buffer + ioff, 8), NULL);
 					n_lon[nrecord] = mlon + llon / 60.;
@@ -1377,7 +1447,7 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 					if (strncmp(buffer, "$", 1) == 0) {
 						if (strncmp(&buffer[3], "DAT", 3) == 0 && len > 15) {
 							time_set = false;
-							strncpy(dummy, "", 128);
+							strncpy(dummy, "", MBP_FILENAMESIZE);
 							time_i[0] = strtol(strncpy(dummy, buffer + 7, 4), NULL, 10);
 							time_i[1] = strtol(strncpy(dummy, buffer + 11, 2), NULL, 10);
 							time_i[2] = strtol(strncpy(dummy, buffer + 13, 2), NULL, 10);
@@ -1386,25 +1456,25 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 							time_set = false;
 							/* find start of ",hhmmss.ss" */
 							if ((bufftmp = strchr(buffer, ',')) != NULL) {
-								strncpy(dummy, "", 128);
+								strncpy(dummy, "", MBP_FILENAMESIZE);
 								time_i[3] = strtol(strncpy(dummy, bufftmp + 1, 2), NULL, 10);
-								strncpy(dummy, "", 128);
+								strncpy(dummy, "", MBP_FILENAMESIZE);
 								time_i[4] = strtol(strncpy(dummy, bufftmp + 3, 2), NULL, 10);
-								strncpy(dummy, "", 128);
+								strncpy(dummy, "", MBP_FILENAMESIZE);
 								time_i[5] = strtol(strncpy(dummy, bufftmp + 5, 2), NULL, 10);
 								if (bufftmp[7] == '.') {
-									strncpy(dummy, "", 128);
+									strncpy(dummy, "", MBP_FILENAMESIZE);
 									time_i[6] = 10000 * strtol(strncpy(dummy, bufftmp + 8, 2), NULL, 10);
 								}
 								else
 									time_i[6] = 0;
 								/* find start of ",dd,mm,yyyy" */
 								if ((bufftmp = strchr(&bufftmp[1], ',')) != NULL) {
-									strncpy(dummy, "", 128);
+									strncpy(dummy, "", MBP_FILENAMESIZE);
 									time_i[2] = strtol(strncpy(dummy, bufftmp + 1, 2), NULL, 10);
-									strncpy(dummy, "", 128);
+									strncpy(dummy, "", MBP_FILENAMESIZE);
 									time_i[1] = strtol(strncpy(dummy, bufftmp + 4, 2), NULL, 10);
-									strncpy(dummy, "", 128);
+									strncpy(dummy, "", MBP_FILENAMESIZE);
 									time_i[0] = strtol(strncpy(dummy, bufftmp + 7, 4), NULL, 10);
 									time_set = true;
 								}
@@ -1418,9 +1488,9 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 							if ((bufftmp = strchr(buffer, ',')) != NULL) {
 								if (merge_nav_format == 7)
 									bufftmp = strchr(&bufftmp[1], ',');
-								strncpy(dummy, "", 128);
+								strncpy(dummy, "", MBP_FILENAMESIZE);
 								degree = strtol(strncpy(dummy, bufftmp + 1, 2), NULL, 10);
-								strncpy(dummy, "", 128);
+								strncpy(dummy, "", MBP_FILENAMESIZE);
 								dminute = strtod(strncpy(dummy, bufftmp + 3, 5), NULL);
 								strncpy(NorS, "", sizeof(NorS));
 								bufftmp = strchr(&bufftmp[1], ',');
@@ -1429,9 +1499,9 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 								if (strncmp(NorS, "S", 1) == 0)
 									n_lat[nrecord] = -n_lat[nrecord];
 								bufftmp = strchr(&bufftmp[1], ',');
-								strncpy(dummy, "", 128);
+								strncpy(dummy, "", MBP_FILENAMESIZE);
 								degree = strtol(strncpy(dummy, bufftmp + 1, 3), NULL, 10);
-								strncpy(dummy, "", 128);
+								strncpy(dummy, "", MBP_FILENAMESIZE);
 								dminute = strtod(strncpy(dummy, bufftmp + 4, 5), NULL);
 								bufftmp = strchr(&bufftmp[1], ',');
 								strncpy(EorW, "", sizeof(EorW));
@@ -1479,7 +1549,7 @@ int mb_loadnavdata(int verbose, char *merge_nav_file, int merge_nav_format, int 
 				}
 
 				/* deal with nav in form: yr mon day hour min sec time_d lon lat heading speed sensordepth roll pitch heave */
-				else if (merge_nav_format == MB_PR_NAV_FORMAT_FBT) {
+				else if (merge_nav_format == MB_PR_NAV_FORMAT_FNV) {
 					nget = sscanf(buffer, "%d %d %d %d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", &time_i[0], &time_i[1],
 					              &time_i[2], &time_i[3], &time_i[4], &sec, &n_time_d[nrecord], &n_lon[nrecord], &n_lat[nrecord],
 					              &heading, &n_speed[nrecord], &sensordepth, &roll, &pitch, &heave);
@@ -1640,7 +1710,21 @@ int mb_loadsensordepthdata(int verbose, char *merge_sensordepth_file, int merge_
 	/* count the records */
 	*error = MB_ERROR_NO_ERROR;
 	nrecord = 0;
-	if ((tfp = fopen(merge_sensordepth_file, "r")) != NULL) {
+	if (merge_sensordepth_format == MB_PR_SENSORDEPTH_FORMAT_NAVLAB) {
+		/* Kongsberg Navlab binary: count records from file size */
+		FILE *bfp;
+		if ((bfp = fopen(merge_sensordepth_file, "rb")) != NULL) {
+			fseeko(bfp, 0, SEEK_END);
+			off_t filesize = ftello(bfp);
+			fclose(bfp);
+			nrecord = (int)(filesize / (21 * sizeof(double)));
+		}
+		else {
+			*error = MB_ERROR_OPEN_FAIL;
+			status = MB_FAILURE;
+		}
+	}
+	else if ((tfp = fopen(merge_sensordepth_file, "r")) != NULL) {
 		/* loop over reading the records */
 		while ((result = fgets(buffer, nchar, tfp)) == buffer)
 			nrecord++;
@@ -1670,7 +1754,47 @@ int mb_loadsensordepthdata(int verbose, char *merge_sensordepth_file, int merge_
 	if (status == MB_SUCCESS) {
 		bool sensordepth_ok;
 		nrecord = 0;
-		if ((tfp = fopen(merge_sensordepth_file, "r")) == NULL) {
+		if (merge_sensordepth_format == MB_PR_SENSORDEPTH_FORMAT_NAVLAB) {
+			/* Kongsberg Navlab binary format
+			 *   [0] time_d (Unix epoch seconds)
+			 *   [3] depth (meters, positive down)
+			 */
+			FILE *bfp;
+			if ((bfp = fopen(merge_sensordepth_file, "rb")) == NULL) {
+				*error = MB_ERROR_OPEN_FAIL;
+				status = MB_FAILURE;
+			}
+			else {
+				bool swap = (mb_swap_check() == MB_YES);
+				double brec[21];
+				while (fread(brec, sizeof(double), 21, bfp) == 21) {
+					if (!swap)
+						for (int ii = 0; ii < 21; ii++)
+							mb_swap_double(&brec[ii]);
+					n_time_d[nrecord]     = brec[0];
+					n_sensordepth[nrecord] = brec[3];
+					if (verbose >= 5) {
+						fprintf(stderr, "\ndbg5  New sensordepth point read in function <%s>\n", __func__);
+						fprintf(stderr, "dbg5       sensordepth[%d]: %f %f\n", nrecord,
+						        n_time_d[nrecord], n_sensordepth[nrecord]);
+					}
+					if (nrecord == 0)
+						nrecord++;
+					else if (n_time_d[nrecord] > n_time_d[nrecord - 1])
+						nrecord++;
+					else if (nrecord > 0 && n_time_d[nrecord] <= n_time_d[nrecord - 1] && verbose >= 5) {
+						fprintf(stderr, "\ndbg5  sensordepth time error in function <%s>\n", __func__);
+						fprintf(stderr, "dbg5       sensordepth[%d]: %f %f\n", nrecord - 1,
+						        n_time_d[nrecord - 1], n_sensordepth[nrecord - 1]);
+						fprintf(stderr, "dbg5       sensordepth[%d]: %f %f\n", nrecord,
+						        n_time_d[nrecord], n_sensordepth[nrecord]);
+					}
+				}
+				*merge_sensordepth_num = nrecord;
+				fclose(bfp);
+			}
+		}
+		else if ((tfp = fopen(merge_sensordepth_file, "r")) == NULL) {
 			*error = MB_ERROR_OPEN_FAIL;
 			status = MB_FAILURE;
 		}
@@ -2023,7 +2147,21 @@ int mb_loadheadingdata(int verbose, char *merge_heading_file, int merge_heading_
 	/* count the records */
 	*error = MB_ERROR_NO_ERROR;
 	nrecord = 0;
-	if ((tfp = fopen(merge_heading_file, "r")) != NULL) {
+	if (merge_heading_format == MB_PR_HEADING_FORMAT_NAVLAB) {
+		/* Kongsberg Navlab binary: count records from file size */
+		FILE *bfp;
+		if ((bfp = fopen(merge_heading_file, "rb")) != NULL) {
+			fseeko(bfp, 0, SEEK_END);
+			off_t filesize = ftello(bfp);
+			fclose(bfp);
+			nrecord = (int)(filesize / (21 * sizeof(double)));
+		}
+		else {
+			*error = MB_ERROR_OPEN_FAIL;
+			status = MB_FAILURE;
+		}
+	}
+	else if ((tfp = fopen(merge_heading_file, "r")) != NULL) {
 		/* loop over reading the records */
 		while ((result = fgets(buffer, nchar, tfp)) == buffer)
 			nrecord++;
@@ -2053,7 +2191,47 @@ int mb_loadheadingdata(int verbose, char *merge_heading_file, int merge_heading_
 	if (status == MB_SUCCESS) {
 		bool heading_ok;
 		nrecord = 0;
-		if ((tfp = fopen(merge_heading_file, "r")) == NULL) {
+		if (merge_heading_format == MB_PR_HEADING_FORMAT_NAVLAB) {
+			/* Kongsberg Navlab binary format
+			 *   [0] time_d (Unix epoch seconds)
+			 *   [6] heading (degrees, 0-360, clockwise from north)
+			 */
+			FILE *bfp;
+			if ((bfp = fopen(merge_heading_file, "rb")) == NULL) {
+				*error = MB_ERROR_OPEN_FAIL;
+				status = MB_FAILURE;
+			}
+			else {
+				bool swap = (mb_swap_check() == MB_YES);
+				double brec[21];
+				while (fread(brec, sizeof(double), 21, bfp) == 21) {
+					if (!swap)
+						for (int ii = 0; ii < 21; ii++)
+							mb_swap_double(&brec[ii]);
+					n_time_d[nrecord]  = brec[0];
+					n_heading[nrecord] = brec[6];
+					if (verbose >= 5) {
+						fprintf(stderr, "\ndbg5  New heading point read in function <%s>\n", __func__);
+						fprintf(stderr, "dbg5       heading[%d]: %f %f\n", nrecord,
+						        n_time_d[nrecord], n_heading[nrecord]);
+					}
+					if (nrecord == 0)
+						nrecord++;
+					else if (n_time_d[nrecord] > n_time_d[nrecord - 1])
+						nrecord++;
+					else if (nrecord > 0 && n_time_d[nrecord] <= n_time_d[nrecord - 1] && verbose >= 5) {
+						fprintf(stderr, "\ndbg5  heading time error in function <%s>\n", __func__);
+						fprintf(stderr, "dbg5       heading[%d]: %f %f\n", nrecord - 1,
+						        n_time_d[nrecord - 1], n_heading[nrecord - 1]);
+						fprintf(stderr, "dbg5       heading[%d]: %f %f\n", nrecord,
+						        n_time_d[nrecord], n_heading[nrecord]);
+					}
+				}
+				*merge_heading_num = nrecord;
+				fclose(bfp);
+			}
+		}
+		else if ((tfp = fopen(merge_heading_file, "r")) == NULL) {
 			*error = MB_ERROR_OPEN_FAIL;
 			status = MB_FAILURE;
 		}
@@ -2240,7 +2418,21 @@ int mb_loadattitudedata(int verbose, char *merge_attitude_file, int merge_attitu
 	/* count the records */
 	*error = MB_ERROR_NO_ERROR;
 	nrecord = 0;
-	if ((tfp = fopen(merge_attitude_file, "r")) != NULL) {
+	if (merge_attitude_format == MB_PR_ATTITUDE_FORMAT_NAVLAB) {
+		/* Kongsberg Navlab binary: count records from file size */
+		FILE *bfp;
+		if ((bfp = fopen(merge_attitude_file, "rb")) != NULL) {
+			fseeko(bfp, 0, SEEK_END);
+			off_t filesize = ftello(bfp);
+			fclose(bfp);
+			nrecord = (int)(filesize / (21 * sizeof(double)));
+		}
+		else {
+			*error = MB_ERROR_OPEN_FAIL;
+			status = MB_FAILURE;
+		}
+	}
+	else if ((tfp = fopen(merge_attitude_file, "r")) != NULL) {
 		/* loop over reading the records */
 		while ((result = fgets(buffer, nchar, tfp)) == buffer)
 			nrecord++;
@@ -2275,7 +2467,51 @@ int mb_loadattitudedata(int verbose, char *merge_attitude_file, int merge_attitu
 	/* read the records */
 	if (status == MB_SUCCESS) {
 		nrecord = 0;
-		if ((tfp = fopen(merge_attitude_file, "r")) == NULL) {
+		if (merge_attitude_format == MB_PR_ATTITUDE_FORMAT_NAVLAB) {
+			/* Kongsberg Navlab binary format
+			 *   [0] time_d (Unix epoch seconds)
+			 *   [7] roll   (degrees, positive starboard up)
+			 *   [8] pitch  (degrees, positive bow up) -- have to flip sign for the internal MB-System convention
+			 * Heave not available; set to 0.0
+			 */
+			FILE *bfp;
+			if ((bfp = fopen(merge_attitude_file, "rb")) == NULL) {
+				*error = MB_ERROR_OPEN_FAIL;
+				status = MB_FAILURE;
+			}
+			else {
+				bool swap = (mb_swap_check() == MB_YES);
+				double brec[21];
+				while (fread(brec, sizeof(double), 21, bfp) == 21) {
+					if (!swap)
+						for (int ii = 0; ii < 21; ii++)
+							mb_swap_double(&brec[ii]);
+					n_time_d[nrecord] = brec[0];
+					n_roll[nrecord]   = brec[7];
+					n_pitch[nrecord]  = -brec[8];
+					n_heave[nrecord]  = 0.0;
+					if (verbose >= 5) {
+						fprintf(stderr, "\ndbg5  New attitude point read in function <%s>\n", __func__);
+						fprintf(stderr, "dbg5       attitude[%d]: %f %f %f %f\n", nrecord,
+						        n_time_d[nrecord], n_roll[nrecord], n_pitch[nrecord], n_heave[nrecord]);
+					}
+					if (nrecord == 0)
+						nrecord++;
+					else if (n_time_d[nrecord] > n_time_d[nrecord - 1])
+						nrecord++;
+					else if (nrecord > 0 && n_time_d[nrecord] <= n_time_d[nrecord - 1] && verbose >= 5) {
+						fprintf(stderr, "\ndbg5  attitude time error in function <%s>\n", __func__);
+						fprintf(stderr, "dbg5       attitude[%d]: %f %f %f %f\n", nrecord - 1,
+						        n_time_d[nrecord - 1], n_roll[nrecord - 1], n_pitch[nrecord - 1], n_heave[nrecord - 1]);
+						fprintf(stderr, "dbg5       attitude[%d]: %f %f %f %f\n", nrecord,
+						        n_time_d[nrecord], n_roll[nrecord], n_pitch[nrecord], n_heave[nrecord]);
+					}
+				}
+				*merge_attitude_num = nrecord;
+				fclose(bfp);
+			}
+		}
+		else if ((tfp = fopen(merge_attitude_file, "r")) == NULL) {
 			*error = MB_ERROR_OPEN_FAIL;
 			status = MB_FAILURE;
 		}

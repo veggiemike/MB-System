@@ -431,13 +431,13 @@ int do_mbgrdviz_init(int argc, char **argv, int verbosity) {
 
   /* set about version label */
   char value_text[MB_PATH_MAXLINE];
-  sprintf(value_text, "::#TimesMedium14:t\"MB-System Release %s\"#TimesMedium14\"%s\"", MB_VERSION, MB_VERSION_DATE);
+  snprintf(value_text, sizeof(value_text), "::#TimesMedium14:t\"MB-System Release %s\"#TimesMedium14\"%s\"", MB_VERSION, MB_VERSION_DATE);
   set_mbview_label_multiline_string(label_about_version, value_text);
 
   /* get additional widgets */
-  fileSelectionList = (Widget)XmFileSelectionBoxGetChild(fileSelectionBox, XmDIALOG_LIST);
-  fileSelectionText = (Widget)XmFileSelectionBoxGetChild(fileSelectionBox, XmDIALOG_TEXT);
-  XtUnmanageChild((Widget)XmFileSelectionBoxGetChild(fileSelectionBox, XmDIALOG_HELP_BUTTON));
+  fileSelectionList = (Widget)XtNameToWidget(fileSelectionBox, "*ItemsList");
+  fileSelectionText = (Widget)XtNameToWidget(fileSelectionBox, "Text");
+  XtUnmanageChild((Widget)XtNameToWidget(fileSelectionBox, "Help"));
 
   /* set up survey planning widgets */
 
@@ -1475,7 +1475,7 @@ void do_mbgrdviz_openfile(Widget w, XtPointer client_data, XtPointer call_data) 
   XmFileSelectionBoxCallbackStruct *acs = (XmFileSelectionBoxCallbackStruct *)call_data;
 
   /* read the input file name */
-  XmStringGetLtoR(acs->value, XmSTRING_DEFAULT_CHARSET, &file_ptr);
+  file_ptr = (char *)XmStringUnparse(acs->value, NULL, XmCHARSET_TEXT, XmCHARSET_TEXT, NULL, 0, XmOUTPUT_ALL);
   if (strlen(file_ptr) <= 0 && file_ptr != NULL) {
     XtFree(file_ptr);
     file_ptr = NULL;
@@ -1729,7 +1729,7 @@ int do_mbgrdviz_openprimary(char *input_file_ptr) {
   double mbv_slope_colortable_max;
   int mbv_secondary_colortable;
   int mbv_secondary_colortable_mode;
-  double mbv_exageration;
+  double mbv_exaggeration;
   double mbv_modelelevation3d;
   double mbv_modelazimuth3d;
   double mbv_viewelevation3d;
@@ -1849,7 +1849,7 @@ int do_mbgrdviz_openprimary(char *input_file_ptr) {
       mbv_secondary_colortable_mode = MBV_COLORTABLE_NORMAL;
       // double mbv_secondary_colortable_min = 0.0;
       // double mbv_secondary_colortable_max = 0.0;
-      mbv_exageration = 1.0;
+      mbv_exaggeration = 1.0;
       mbv_modelelevation3d = 90.0;
       mbv_modelazimuth3d = 0.0;
       mbv_viewelevation3d = 90.0;
@@ -1932,7 +1932,7 @@ int do_mbgrdviz_openprimary(char *input_file_ptr) {
           mbv_primaryslope_histogram, mbv_secondary_histogram, mbv_primary_shade_mode, mbv_slope_shade_mode,
           mbv_secondary_shade_mode, mbv_grid_contour_mode, mbv_site_view_mode, mbv_route_view_mode, 
           mbv_nav_view_mode, mbv_navswathbounds_view_mode, mbv_navdrape_view_mode, mbv_vector_view_mode, 
-          mbv_exageration, mbv_modelelevation3d, mbv_modelazimuth3d,
+          mbv_exaggeration, mbv_modelelevation3d, mbv_modelazimuth3d,
           mbv_viewelevation3d, mbv_viewazimuth3d, mbv_illuminate_magnitude, mbv_illuminate_elevation,
           mbv_illuminate_azimuth, mbv_slope_magnitude, mbv_overlay_shade_magnitude, mbv_overlay_shade_center,
           mbv_overlay_shade_mode, mbv_contour_interval, mbv_display_projection_mode, mbv_display_projection_id, &error);
@@ -2508,8 +2508,13 @@ int do_mbgrdviz_openroute(size_t instance, char *input_file_ptr) {
           /* read the data from the buffer */
           if (route_version_major > 1) {
             nget = sscanf(buffer, "%lf,%lf,%lf,%d", &lon, &lat, &topo, &waypoint);
-          } else {
+          } else if (route_version_major == 1) {
             nget = sscanf(buffer, "%lf %lf %lf %d", &lon, &lat, &topo, &waypoint);
+          } else {
+            nget = sscanf(buffer, "%lf,%lf,%lf,%d", &lon, &lat, &topo, &waypoint);
+            if (nget < 2) {
+            	nget = sscanf(buffer, "%lf %lf %lf %d", &lon, &lat, &topo, &waypoint);
+            }
           }
           if ((rawroutefile && nget >= 2) ||
               (!rawroutefile && nget >= 3 && waypoint > MBV_ROUTE_WAYPOINT_NONE))
@@ -3117,10 +3122,23 @@ int do_mbgrdviz_saverisiscriptheading(size_t instance, char *output_file_ptr) {
             mb_path projection_id;
 
             /* calculate eastings and northings using an LTM projection */
+            //if (reference_lat > -80.0 && reference_lat < 84.0) {
+            //  if (reference_lon > 180.0)
+            //    reference_lon -= 360.0;
+            //  sprintf(projection_id, "LTM%.5f/%.5f", reference_lon, reference_lat);
+            //}
+
+            /* calculate eastings and northings using an UTM projection */
             if (reference_lat > -80.0 && reference_lat < 84.0) {
-              if (reference_lon > 180.0)
-                reference_lon -= 360.0;
-              sprintf(projection_id, "LTM%.5f/%.5f", reference_lon, reference_lat);
+							if (reference_lon < 180.0)
+								reference_lon += 360.0;
+							if (reference_lon >= 180.0)
+								reference_lon -= 360.0;
+							const int utm_zone = (int)(((reference_lon + 183.0) / 6.0) + 0.5);
+							if (reference_lat >= 0.0)
+								snprintf(projection_id, sizeof(projection_id), "UTM%2.2dN", utm_zone);
+							else
+								snprintf(projection_id, sizeof(projection_id), "UTM%2.2dS", utm_zone);
             }
 
             /* else if more northerly than 84 deg N then use
@@ -5944,7 +5962,7 @@ void do_mbgrdviz_open_region(Widget w, XtPointer client_data, XtPointer call_dat
           data_source->primary_shade_mode, data_source->slope_shade_mode, data_source->secondary_shade_mode,
           data_source->grid_contour_mode, data_source->site_view_mode, data_source->route_view_mode,
           data_source->nav_view_mode, data_source->navswathbounds_view_mode, data_source->navdrape_view_mode, data_source->vector_view_mode,
-          data_source->exageration, data_source->modelelevation3d, data_source->modelazimuth3d,
+          data_source->exaggeration, data_source->modelelevation3d, data_source->modelazimuth3d,
           data_source->viewelevation3d, data_source->viewazimuth3d, data_source->illuminate_magnitude,
           data_source->illuminate_elevation, data_source->illuminate_azimuth, data_source->slope_magnitude,
           data_source->overlay_shade_magnitude, data_source->overlay_shade_center, data_source->overlay_shade_mode,
@@ -6563,9 +6581,22 @@ void do_mbgrdviz_generate_survey(Widget w, XtPointer client_data, XtPointer call
 
   /* generate survey lines from area and add as new route */
   if (status == MB_SUCCESS) {
-    /* delete current working route if defined */
+    /* delete current working route if defined - but first confirm that
+       working_route still refers to the survey route we created. Its
+       index can go stale if the user deleted some other route via
+       3D-view picking while this dialog stayed open, which shifts route
+       array indices and would otherwise make working_route refer to an
+       unrelated route */
     if (working_route > -1) {
-      mbview_deleteroute(verbose, instance, working_route, &error);
+      int wr_nroutewaypoint, wr_nroutpoint, wr_routecolor, wr_routesize;
+      double wr_routedistancelateral, wr_routedistancetopo;
+      char wr_routename[MB_PATH_MAXLINE];
+      int wr_status = mbview_getrouteinfo(verbose, instance, working_route, &wr_nroutewaypoint, &wr_nroutpoint,
+                                          wr_routename, &wr_routecolor, &wr_routesize, &wr_routedistancelateral,
+                                          &wr_routedistancetopo, &error);
+      if (wr_status == MB_SUCCESS && strcmp(wr_routename, survey_name) == 0) {
+        mbview_deleteroute(verbose, instance, working_route, &error);
+      }
       working_route = -1;
     }
 

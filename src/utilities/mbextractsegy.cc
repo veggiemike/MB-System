@@ -63,7 +63,7 @@ typedef enum {
 } waypoint_t;
 constexpr double MBES_ONLINE_THRESHOLD = 15.0;
 constexpr int MBES_ONLINE_COUNT = 30;
-constexpr int MBES_NUM_PLOT_MAX = 50;
+constexpr int MBES_NUM_PLOT_MAX = 100;
 constexpr double MBES_MAX_SWEEP = 1.0;
 
 constexpr char program_name[] = "MBextractsegy";
@@ -72,10 +72,23 @@ constexpr char help_message[] =
     "or seismic reflection data from data supported by MB-System and\n"
     "rewrites it as a SEGY file in the form used by SIOSEIS.";
 constexpr char usage_message[] =
-    "mbextractsegy [-Byr/mo/dy/hr/mn/sc/us -Eyr/mo/dy/hr/mn/sc/us -Fformat\n"
-    "    -Ifile -Jxscale/yscale -Lstartline/lineroot\n"
-    "    -Osegyfile -Qtimelistfile -Rroutefile\n"
-    "    -Ssampleformat -Zplotmax -H -V]";
+    "mbextractsegy\n"
+    "\t--begin-time=yr/mo/da/hr/mn/sc/us {-Byr/mo/da/hr/mn/sc/us}\n"
+    "\t--check-route-bearing {-M}\n"
+    "\t--end-time=yr/mo/da/hr/mn/sc/us {-Eyr/mo/da/hr/mn/sc/us}\n"
+    "\t--format=format {-Fformat}\n"
+    "\t--help {-H}\n"
+    "\t--input=file {-Ifile}\n"
+    "\t--output=segyfile {-Osegyfile}\n"
+    "\t--plot-max=plotmax {-Zplotmax}\n"
+    "\t--plot-scale=xscale/yscale/maxwidth {-Jxscale/yscale/maxwidth}\n"
+    "\t--range-threshold=rangethreshold {-Urangethreshold}\n"
+    "\t--route=routefile {-Rroutefile}\n"
+    "\t--sample-format=sampleformat {-Ssampleformat}\n"
+    "\t--start-line=startline/lineroot {-Lstartline/lineroot}\n"
+    "\t--time-list=timelistfile {-Qtimelistfile}\n"
+    "\t--time-shift=timeshift {-Ttimeshift}\n"
+    "\t--verbose {-V}\n\n";
 
 /*--------------------------------------------------------------------*/
 
@@ -116,12 +129,96 @@ int main(int argc, char **argv) {
   char segy_suffix[8] = "segy";
 
   {
+    static struct option options[] = {
+        {"begin-time", required_argument, nullptr, 0},
+        {"check-route-bearing", no_argument, nullptr, 0},
+        {"end-time", required_argument, nullptr, 0},
+        {"format", required_argument, nullptr, 0},
+        {"help", no_argument, nullptr, 0},
+        {"input", required_argument, nullptr, 0},
+        {"output", required_argument, nullptr, 0},
+        {"plot-max", required_argument, nullptr, 0},
+        {"plot-scale", required_argument, nullptr, 0},
+        {"range-threshold", required_argument, nullptr, 0},
+        {"route", required_argument, nullptr, 0},
+        {"sample-format", required_argument, nullptr, 0},
+        {"start-line", required_argument, nullptr, 0},
+        {"time-list", required_argument, nullptr, 0},
+        {"time-shift", required_argument, nullptr, 0},
+        {"verbose", no_argument, nullptr, 0},
+        {nullptr, 0, nullptr, 0}};
+
+    int option_index;
     bool errflg = false;
     int c;
     bool help = false;
-    while ((c = getopt(argc, argv, "B:b:D:d:E:e:F:f:I:i:J:j:L:l:MmO:o:Q:q:R:r:S:s:T:t:U:u:Z:z:VvHh")) != -1)
+    while ((c = getopt_long(argc, argv, "B:b:E:e:F:f:I:i:J:j:L:l:MmO:o:Q:q:R:r:S:s:T:t:U:u:Z:z:VvHh", options, &option_index)) != -1)
     {
       switch (c) {
+      /* long options all return c=0 */
+      case 0:
+        if (strcmp("begin-time", options[option_index].name) == 0) {
+          sscanf(optarg, "%d/%d/%d/%d/%d/%d", &btime_i[0], &btime_i[1], &btime_i[2], &btime_i[3], &btime_i[4], &btime_i[5]);
+          btime_i[6] = 0;
+        }
+        else if (strcmp("check-route-bearing", options[option_index].name) == 0) {
+          checkroutebearing = true;
+        }
+        else if (strcmp("end-time", options[option_index].name) == 0) {
+          sscanf(optarg, "%d/%d/%d/%d/%d/%d", &etime_i[0], &etime_i[1], &etime_i[2], &etime_i[3], &etime_i[4], &etime_i[5]);
+          etime_i[6] = 0;
+        }
+        else if (strcmp("format", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &format);
+        }
+        else if (strcmp("help", options[option_index].name) == 0) {
+          help = true;
+        }
+        else if (strcmp("input", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", read_file);
+        }
+        else if (strcmp("output", options[option_index].name) == 0) {
+          mb_path tmpstr;
+          sscanf(optarg, "%1023s", tmpstr);
+          if (strcmp(tmpstr, "segy") == 0)
+            snprintf(segy_suffix, sizeof(segy_suffix), "segy");
+          else if (strcmp(tmpstr, "sgy") == 0)
+            snprintf(segy_suffix, sizeof(segy_suffix), "sgy");
+          else {
+            strncpy(output_root, tmpstr, sizeof(output_root));
+            output_root_set = true;
+          }
+        }
+        else if (strcmp("plot-max", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &zmax);
+        }
+        else if (strcmp("plot-scale", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf/%lf/%lf", &xscale, &yscale, &maxwidth);
+        }
+        else if (strcmp("range-threshold", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &rangethreshold);
+        }
+        else if (strcmp("route", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", route_file);
+          route_file_set = true;
+        }
+        else if (strcmp("sample-format", options[option_index].name) == 0) {
+          sscanf(optarg, "%d", &sampleformat);
+        }
+        else if (strcmp("start-line", options[option_index].name) == 0) {
+          sscanf(optarg, "%d/%1023s", &startline, lineroot);
+        }
+        else if (strcmp("time-list", options[option_index].name) == 0) {
+          sscanf(optarg, "%1023s", timelist_file);
+          timelist_file_set = true;
+        }
+        else if (strcmp("time-shift", options[option_index].name) == 0) {
+          sscanf(optarg, "%lf", &timeshift);
+        }
+        else if (strcmp("verbose", options[option_index].name) == 0) {
+          verbose++;
+        }
+        break;
       case 'H':
       case 'h':
         help = true;
@@ -332,6 +429,10 @@ int main(int argc, char **argv) {
   double seafloordepthmax = -1.0;
   double seafloordepthminplot[MBES_NUM_PLOT_MAX];
   double seafloordepthmaxplot[MBES_NUM_PLOT_MAX];
+	for (int i = 0; i < MBES_NUM_PLOT_MAX; i++) {
+		seafloordepthminplot[i] = -1.0;
+		seafloordepthmaxplot[i] = -1.0;
+	}
   double sweep;
   double delay;
   double startlon;
@@ -517,8 +618,8 @@ int main(int argc, char **argv) {
     seafloordepthmax = -1.0;
     nplot = 0;
     for (int i = 0; i < MBES_NUM_PLOT_MAX; i++) {
-      seafloordepthminplot[i] = -1;
-      seafloordepthmaxplot[i] = -1;
+      seafloordepthminplot[i] = -1.0;
+      seafloordepthmaxplot[i] = -1.0;
     }
     oktowrite = 0;
     rangeok = false;
@@ -769,8 +870,8 @@ int main(int argc, char **argv) {
           seafloordepthmax = -1.0;
           nplot = 0;
           for (int i = 0; i < MBES_NUM_PLOT_MAX; i++) {
-            seafloordepthminplot[i] = -1;
-            seafloordepthmaxplot[i] = -1;
+            seafloordepthminplot[i] = -1.0;
+            seafloordepthmaxplot[i] = -1.0;
           }
           oktowrite = 0;
           rangeok = false;
@@ -793,8 +894,8 @@ int main(int argc, char **argv) {
 
         /* allocate the required memory */
         if (status == MB_SUCCESS && segytraceheader.nsamps > segydata_alloc) {
-          status =
-              mb_mallocd(verbose, __FILE__, __LINE__, segytraceheader.nsamps * samplesize, (void **)&segydata, &error);
+          status = mb_reallocd(verbose, __FILE__, __LINE__, segytraceheader.nsamps * samplesize, 
+          										(void **)&segydata, &error);
           if (status == MB_SUCCESS)
             segydata_alloc = segytraceheader.nsamps;
           else
@@ -803,7 +904,7 @@ int main(int argc, char **argv) {
         if (status == MB_SUCCESS &&
             (buffer_alloc < MB_SEGY_TRACEHEADER_LENGTH || buffer_alloc < segytraceheader.nsamps * samplesize)) {
           buffer_alloc = std::max(MB_SEGY_TRACEHEADER_LENGTH, segytraceheader.nsamps * samplesize);
-          status = mb_mallocd(verbose, __FILE__, __LINE__, buffer_alloc, (void **)&buffer, &error);
+          status = mb_reallocd(verbose, __FILE__, __LINE__, buffer_alloc, (void **)&buffer, &error);
           if (status != MB_SUCCESS)
             buffer_alloc = 0;
         }
@@ -961,7 +1062,7 @@ int main(int argc, char **argv) {
           }
 
           /* check for new section plot */
-          if (nwrite > 0 && (nwrite % nshotmax) == 0)
+          if (nwrite > 0 && (nwrite % nshotmax) == 0 && nplot < MBES_NUM_PLOT_MAX - 1)
             nplot++;
 
           /* get seafloor depth min and max */
@@ -1451,8 +1552,20 @@ int mbes_generateplots(int verbose, FILE *sfp, char *output_root, char *segy_suf
     fprintf(stderr, "dbg2       verbose:    %d\n", verbose);
   }
 
+
   int status = MB_SUCCESS;
   mb_command command = {0};
+  
+  /* The maximum useful plot length is about nshotmax shots, so
+      we break longer files up into multiple plots */
+  // const int nshot = endshot - startshot + 1;
+  int nplot = nwrite / nshotmax;
+  if (nwrite % nshotmax > 0)
+    nplot++;
+fprintf(stderr, "%s:%d:%s: seafloordepthminmax: %f %f \n", __FILE__, __LINE__, __FUNCTION__, seafloordepthmin, seafloordepthmax);
+for (int i = 0; i <   nwrite / nshotmax; i++) {
+fprintf(stderr, "%s:%d:%s: nplot: %d seafloordepthminmax: %f %f \n", __FILE__, __LINE__, __FUNCTION__, i, seafloordepthminplot[i], seafloordepthmaxplot[i]);
+}
 
   /* use mbsegyinfo to generate sinf files */
   if (sampleformat == MB_SEGY_SAMPLEFORMAT_ANALYTIC) {
@@ -1508,12 +1621,6 @@ int mbes_generateplots(int verbose, FILE *sfp, char *output_root, char *segy_suf
     snprintf(scale, sizeof(scale), "-Jx-%f/%f", xscale, yscale);
 
   /* output commands to first cut plotting script file */
-  /* The maximum useful plot length is about nshotmax shots, so
-      we break longer files up into multiple plots */
-  // const int nshot = endshot - startshot + 1;
-  int nplot = nwrite / nshotmax;
-  if (nwrite % nshotmax > 0)
-    nplot++;
 
   /* calculate sweep needed for all of the data in the line - if this is more than 1.0 seconds,
     then make section plots using only the sweep needed for each section alone */

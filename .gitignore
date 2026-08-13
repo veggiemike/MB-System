@@ -245,5 +245,6 @@ src/utilities/mbstripnan
 src/utilities/mbswplspreprocess
 includes.txt
 cppcheck.txt
+WINDOWS_PORTING_SESSION.md
 
 /FOO

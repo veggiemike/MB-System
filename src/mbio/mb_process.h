@@ -716,18 +716,27 @@
 #define MB_PR_KLUGE_EARLYMBARIMAPPINGAUV 10
 #define MB_PR_KLUGE_FLIPSIGNROLL 11
 #define MB_PR_KLUGE_FLIPSIGNPITCH 12
+#define MB_PR_KLUGE_SETBEAMWIDTHACROSSTRACK 13
+#define MB_PR_KLUGE_SETBEAMWIDTHALONGTRACK 14
+#define MB_PR_KLUGE_IGNOREDUPLICATEPINGS 15
+#define MB_PR_KLUGE_XDUCER_DEPTH_FROM_HEAVE 16
+#define MB_PR_KLUGE_XDUCER_DEPTH_FROM_SENSORDEPTH 17
+#define MB_PR_KLUGE_XDUCER_DEPTH_FROM_HEAVEANDSENSORDEPTH 18
+#define MB_PR_KLUGE_RANGESCALE 19
+#define MB_PR_KLUGE_FIXWISSL2RANGES 20
 
-#define MB_PR_NAV_FORMAT_TLLS		1
+#define MB_PR_NAV_FORMAT_TLLS		  1
 #define MB_PR_NAV_FORMAT_YMDHMSLL	2
 #define MB_PR_NAV_FORMAT_YJHMSLL	3
 #define MB_PR_NAV_FORMAT_YJMSLL		4
-#define MB_PR_NAV_FORMAT_LDEO		5
+#define MB_PR_NAV_FORMAT_LDEO		  5
 #define MB_PR_NAV_FORMAT_NMEAGLL	6
 #define MB_PR_NAV_FORMAT_NMEAGGA	7
 #define MB_PR_NAV_FORMAT_SIMRAD90	8
-#define MB_PR_NAV_FORMAT_FBT		9
+#define MB_PR_NAV_FORMAT_FNV	   	9
 #define MB_PR_NAV_FORMAT_R2NAV		10
 #define MB_PR_NAV_FORMAT_RVDAS		11
+#define MB_PR_NAV_FORMAT_NAVLAB		12  /* Kongsberg Navlab binary (navlab_smooth.bin) */
 
 #define MB_PR_SENSORDEPTH_FORMAT_TD			1
 #define MB_PR_SENSORDEPTH_FORMAT_YMDHMSD	2
@@ -735,6 +744,7 @@
 #define MB_PR_SENSORDEPTH_FORMAT_YJMSD		4
 #define MB_PR_SENSORDEPTH_FORMAT_FBT		9
 #define MB_PR_SENSORDEPTH_FORMAT_RVDAS		11
+#define MB_PR_SENSORDEPTH_FORMAT_NAVLAB		12  /* Kongsberg Navlab binary (navlab_smooth.bin) */
 
 #define MB_PR_ALTITUDE_FORMAT_TA			1
 #define MB_PR_ALTITUDE_FORMAT_YMDHMSA		2
@@ -747,6 +757,7 @@
 #define MB_PR_HEADING_FORMAT_YJMSH			4
 #define MB_PR_HEADING_FORMAT_FBT			9
 #define MB_PR_HEADING_FORMAT_RVDAS			11
+#define MB_PR_HEADING_FORMAT_NAVLAB			12  /* Kongsberg Navlab binary (navlab_smooth.bin) */
 
 #define MB_PR_ATTITUDE_FORMAT_TRPH			1
 #define MB_PR_ATTITUDE_FORMAT_YMDHMSRPH		2
@@ -754,6 +765,7 @@
 #define MB_PR_ATTITUDE_FORMAT_YJMSRPH		4
 #define MB_PR_ATTITUDE_FORMAT_FBT			9
 #define MB_PR_ATTITUDE_FORMAT_RVDAS			11
+#define MB_PR_ATTITUDE_FORMAT_NAVLAB		12  /* Kongsberg Navlab binary (navlab_smooth.bin) */
 
 #define MB_PR_SOUNDSPEED_FORMAT_TS			1
 #define MB_PR_SOUNDSPEED_FORMAT_YMDHMSS		2
@@ -801,15 +813,15 @@ struct mb_preprocess_struct {
   double *soundspeed_time_d;
   double *soundspeed_soundspeed;
 
-  int no_change_survey;
+  bool no_change_survey;
   int multibeam_sidescan_source;
-  int modify_soundspeed;
-  int recalculate_bathymetry;
-  int sounding_amplitude_filter;
+  bool modify_soundspeed;
+  bool recalculate_bathymetry;
+  bool sounding_amplitude_filter;
   double sounding_amplitude_threshold;
-  int sounding_altitude_filter;
+  bool sounding_altitude_filter;
   double sounding_target_altitude;
-  int ignore_water_column;
+  bool ignore_water_column;
   int head1_offsets;
   double head1_offsets_x;
   double head1_offsets_y;

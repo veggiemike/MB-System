@@ -21,7 +21,7 @@
  *
  *    See README.md file for copying and redistribution conditions.
  *--------------------------------------------------------------------*/
- /*
+/*
   *    The program MBgrd2gltf, including this source file, was created
   *    by a Capstone Project team at the California State University
   *    Monterey Bay (CSUMB) including Kyle Dowling, Julian Fortin,
@@ -34,14 +34,21 @@
 #ifndef MODEL_H
 #define MODEL_H
 
-  // local includes
+// local includes
 #include "geometry.h"
 #include "options.h"
+#include "bathymetry.h"
+
+#include <vector>
+#include <string>
 
 namespace mbgrd2gltf {
-	namespace model {
-		void write_gltf(const Geometry& geometry, const Options& options);
-	}
+namespace model {
+void write_gltf(const Geometry& geometry, const Options& options);
+void write_html(const Bathymetry& bathymetry, const Geometry& geometry, const Options& options, 
+                const std::string& command_line, const std::string& timestamp,
+                const std::vector<std::string>& log_messages);
 }
+} // namespace mbgrd2gltf
 
 #endif

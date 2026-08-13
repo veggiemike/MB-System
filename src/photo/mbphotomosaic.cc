@@ -57,6 +57,12 @@ extern "C"
 
 /* OpenCV include files */
 #include "opencv2/opencv.hpp"
+/* opencv2/opencv.hpp does not pull in the camera calibration API on all
+ * OpenCV versions (e.g. OpenCV 5's aggregator header omits the "geometry"
+ * module); calib3d.hpp is the header guaranteed to provide it on both
+ * OpenCV 4.x (as the real module header) and 5.x (as a compatibility
+ * header forwarding to geometry.hpp/calib.hpp/stereo.hpp). */
+#include "opencv2/calib3d.hpp"
 
 using namespace std;
 using namespace cv;
@@ -112,6 +118,7 @@ char usage_message[] = "mbphotomosaic \n"
                         "\t--output-png\n"
                         "\t--image-dimensions=width/height\n"
                         "\t--image-spacing=dx/dy[/units]\n"
+                        "\t--sensor-size=width/height[/cellsize]\n"
                         "\t--fov-fudgefactor=factor\n"
                         "\t--projection=projection_pars\n"
                         "\t--altitude=target/standoff_range\n"
@@ -163,6 +170,7 @@ struct mbpm_process_struct {
     int image_count;
     int image_camera;
     double image_quality;
+    bool image_rectified;
     double image_gain;
     double image_exposure;
     double time_d;
@@ -197,6 +205,7 @@ struct mbpm_control_struct {
 
     // Camera calibration model
     bool calibration_set;
+    int camera_type;
     Mat cameraMatrix[2];
     Mat distCoeffs[2];
     Mat R;
@@ -629,48 +638,86 @@ void load_calibration(int verbose, mb_path StereoCameraCalibrationFile, struct m
 {
     FileStorage fstorage;
 
-    /* read intrinsic and extrinsic stereo camera calibration parameters */
-    fstorage.open(StereoCameraCalibrationFile, FileStorage::READ);
-    if(fstorage.isOpened() ) {
-        fstorage["M1"] >> control->cameraMatrix[0];
-        fstorage["D1"] >> control->distCoeffs[0];
-        fstorage["M2"] >> control->cameraMatrix[1];
-        fstorage["D2"] >> control->distCoeffs[1];
-        fstorage["R"] >> control->R;
-        fstorage["T"] >> control->T;
-        fstorage["R1"] >> control->R1;
-        fstorage["R2"] >> control->R2;
-        fstorage["P1"] >> control->P1;
-        fstorage["P2"] >> control->P2;
-        fstorage["Q"] >> control->Q;
-        fstorage.release();
-        control->isVerticalStereo = fabs(control->P2.at<double>(1, 3)) > fabs(control->P2.at<double>(0, 3));
-        control->calibration_set = false;
+    /* if stereo camera read OpenCV style calibration yaml file for a stereo camera rig  */
+    if (control->camera_type == MB_SENSOR_TYPE_CAMERA_STEREO) {
+
+				/* read intrinsic and extrinsic stereo camera calibration parameters */
+				fstorage.open(StereoCameraCalibrationFile, FileStorage::READ);
+				if(fstorage.isOpened() ) {
+						fstorage["M1"] >> control->cameraMatrix[0];
+						fstorage["D1"] >> control->distCoeffs[0];
+						fstorage["M2"] >> control->cameraMatrix[1];
+						fstorage["D2"] >> control->distCoeffs[1];
+						fstorage["R"] >> control->R;
+						fstorage["T"] >> control->T;
+						fstorage["R1"] >> control->R1;
+						fstorage["R2"] >> control->R2;
+						fstorage["P1"] >> control->P1;
+						fstorage["P2"] >> control->P2;
+						fstorage["Q"] >> control->Q;
+						fstorage.release();
+						control->isVerticalStereo = fabs(control->P2.at<double>(1, 3)) > fabs(control->P2.at<double>(0, 3));
+						control->calibration_set = false;
+				}
+				else {
+						fprintf(stderr,"\nUnable to read camera calibration file %s\n",
+								StereoCameraCalibrationFile);
+						fprintf(stderr,"\nProgram <%s> Terminated\n", program_name);
+						mb_memory_clear(verbose, error);
+						exit(MB_ERROR_BAD_PARAMETER);
+				}
+		
+				/* print out calibration information */
+				if (verbose >= 0) {
+						cerr << endl;
+						cerr << "Stereo camera calibration model read from: " << StereoCameraCalibrationFile << endl;
+						cerr << "M1:" << endl << control->cameraMatrix[0] << endl << endl;
+						cerr << "D1:" << endl << control->distCoeffs[0] << endl << endl;
+						cerr << "M2:" << endl << control->cameraMatrix[1] << endl << endl;
+						cerr << "D2:" << endl << control->distCoeffs[1] << endl << endl;
+						cerr << "R:" << endl << control->R << endl << endl;
+						cerr << "T:" << endl << control->T << endl << endl;
+						cerr << "R1:" << endl << control->R1 << endl << endl;
+						cerr << "R2:" << endl << control->R2 << endl << endl;
+						cerr << "P1:" << endl << control->P1 << endl << endl;
+						cerr << "P2:" << endl << control->P2 << endl << endl;
+						cerr << "Q:" << endl << control->Q << endl << endl;
+				}
     }
+    
+    /* else read OpenCV style calibration yaml file for a mono camera  */
     else {
-        fprintf(stderr,"\nUnable to read camera calibration file %s\n",
-            StereoCameraCalibrationFile);
-        fprintf(stderr,"\nProgram <%s> Terminated\n", program_name);
-        mb_memory_clear(verbose, error);
-        exit(MB_ERROR_BAD_PARAMETER);
+
+				/* read intrinsic and extrinsic stereo camera calibration parameters */
+				fstorage.open(StereoCameraCalibrationFile, FileStorage::READ);
+				if(fstorage.isOpened() ) {
+						fstorage["M"] >> control->cameraMatrix[0];
+						fstorage["D"] >> control->distCoeffs[0];
+						fstorage["R"] >> control->R;
+						fstorage["T"] >> control->T;
+						fstorage.release();
+						control->isVerticalStereo = false;
+						control->calibration_set = false;
+				}
+				else {
+						fprintf(stderr,"\nUnable to read camera calibration file %s\n",
+								StereoCameraCalibrationFile);
+						fprintf(stderr,"\nProgram <%s> Terminated\n", program_name);
+						mb_memory_clear(verbose, error);
+						exit(MB_ERROR_BAD_PARAMETER);
+				}
+		
+				/* print out calibration information */
+				if (verbose >= 0) {
+						cerr << endl;
+						cerr << "Stereo camera calibration model read from: " << StereoCameraCalibrationFile << endl;
+						cerr << "M:" << endl << control->cameraMatrix[0] << endl << endl;
+						cerr << "D:" << endl << control->distCoeffs[0] << endl << endl;
+						cerr << "R:" << endl << control->R << endl << endl;
+						cerr << "T:" << endl << control->T << endl << endl;
+				}
     }
 
-    /* print out calibration information */
-    if (verbose >= 0) {
-        cerr << endl;
-        cerr << "Stereo camera calibration model read from: " << StereoCameraCalibrationFile << endl;
-        cerr << "M1:" << endl << control->cameraMatrix[0] << endl << endl;
-        cerr << "D1:" << endl << control->distCoeffs[0] << endl << endl;
-        cerr << "M2:" << endl << control->cameraMatrix[1] << endl << endl;
-        cerr << "D2:" << endl << control->distCoeffs[1] << endl << endl;
-        cerr << "R:" << endl << control->R << endl << endl;
-        cerr << "T:" << endl << control->T << endl << endl;
-        cerr << "R1:" << endl << control->R1 << endl << endl;
-        cerr << "R2:" << endl << control->R2 << endl << endl;
-        cerr << "P1:" << endl << control->P1 << endl << endl;
-        cerr << "P2:" << endl << control->P2 << endl << endl;
-        cerr << "Q:" << endl << control->Q << endl << endl;
-    }
 }
 /*--------------------------------------------------------------------*/
 void load_correction(int verbose, mb_path ImageCorrectionFile, struct mbpm_control_struct *control, int *error)
@@ -931,9 +978,14 @@ void process_image(int verbose, struct mbpm_process_struct *process,
     if (!imageProcess.empty()) {
 
         /* undistort the image */
-        undistort(imageProcess, imageUndistort, control->cameraMatrix[process->image_camera], control->distCoeffs[process->image_camera], noArray());
-        cvtColor(imageUndistort, imageUndistortYCrCb, COLOR_BGR2YCrCb);
+        if (!process->image_rectified) {
+        		undistort(imageProcess, imageUndistort, control->cameraMatrix[process->image_camera], control->distCoeffs[process->image_camera], noArray());
+        }
+        else {
+        		imageUndistort = imageProcess.clone();
+        }
         imageProcess.release();
+        cvtColor(imageUndistort, imageUndistortYCrCb, COLOR_BGR2YCrCb);
 
         /* Calculate the average intensity of the image */
         avgPixelIntensity = mean(imageUndistortYCrCb);
@@ -2669,6 +2721,7 @@ int main(int argc, char** argv)
      *    --output-png
      *    --image-dimensions=width/height
      *    --image-spacing=dx/dy[/units]
+     *    --sensor-size=width/height[/cellsize]
      *    --fov-fudgefactor=factor
      *    --projection=projection_pars
      *    --altitude=standoff_target/standoff_range
@@ -2723,6 +2776,7 @@ int main(int argc, char** argv)
         {"image-file",                  required_argument,      NULL,         0},
         {"image-dimensions",            required_argument,      NULL,         0},
         {"image-spacing",               required_argument,      NULL,         0},
+        {"sensor-size",             		required_argument,      NULL,         0},
         {"fov-fudgefactor",             required_argument,      NULL,         0},
         {"projection",                  required_argument,      NULL,         0},
         {"altitude",                    required_argument,      NULL,         0},
@@ -2886,6 +2940,22 @@ int main(int argc, char** argv)
                     if (n < 3)
                         strcpy(units, "meters");
                     }
+                }
+
+            /* sensor-size */
+            else if (strcmp("sensor-size", options[option_index].name) == 0)
+                {
+                double d1, d2, d3;
+                int n = sscanf (optarg,"%lf/%lf/%lf", &d1, &d2, &d3);
+                if (n >= 2) 
+                	{
+                	control.SensorWidthMm = d1;
+                	control.SensorHeightMm = d2;
+                	}
+                if (n == 3) 
+                	{
+                	control.SensorCellMm = d3;
+                	}
                 }
 
             /* fov-fudgefactor */
@@ -3274,6 +3344,9 @@ int main(int argc, char** argv)
         fprintf(stream,"%s     TopographyGridFile:               %s\n", first, TopographyGridFile);
         fprintf(stream,"%s     control.calibration_set:          %d\n", first, control.calibration_set);
         fprintf(stream,"%s     StereoCameraCalibrationFile:      %s\n", first, StereoCameraCalibrationFile);
+        fprintf(stream,"%s     control.SensorWidthMm:            %f\n", first, control.SensorWidthMm);
+        fprintf(stream,"%s     control.SensorHeightMm:           %f\n", first, control.SensorHeightMm);
+        fprintf(stream,"%s     control.SensorCellMm:             %f\n", first, control.SensorCellMm);
         fprintf(stream,"%s     control.fov_fudgefactor:          %f\n", first, control.fov_fudgefactor);
         if (control.corr_mode == MBPM_CORRECTION_BRIGHTNESS) {
             fprintf(stream,"%s     control.corr_mode:                %d MBPM_CORRECTION_BRIGHTNESS\n", first, control.corr_mode);
@@ -3702,12 +3775,13 @@ control.OutputBounds[0], control.OutputBounds[1], control.OutputBounds[2], contr
     npairs = 0;
     nimages = 0;
     int imageStatus = MB_IMAGESTATUS_NONE;
+    bool rectified = false;
     double image_quality = 0.0;
     mb_path dpath;
     unsigned int numThreadsSet = 0;
     fprintf(stream,"\nAbout to read ImageListFile: %s\n\n", ImageListFile);
 
-    while ((status = mb_imagelist_read(verbose, imagelist_ptr, &imageStatus,
+    while ((status = mb_imagelist_read(verbose, imagelist_ptr, &imageStatus, &rectified, 
                                 imageLeftFile, imageRightFile, dpath,
                                 &left_time_d, &right_time_d,
                                 &left_gain, &right_gain,
@@ -4164,7 +4238,11 @@ control.OutputBounds[0], control.OutputBounds[1], control.OutputBounds[2], contr
             nimages++;
           }
         } else if (imageStatus == MB_IMAGESTATUS_LEFT) {
-          if (use_camera_mode == MBPM_USE_LEFT) {
+          if (use_camera_mode == MBPM_USE_STEREO) {
+            image_camera = MBPM_CAMERA_LEFT;
+            currentimages = 1;
+            nimages++;
+          } else if (use_camera_mode == MBPM_USE_LEFT) {
             image_camera = MBPM_CAMERA_LEFT;
             currentimages = 1;
             nimages++;
@@ -4172,7 +4250,11 @@ control.OutputBounds[0], control.OutputBounds[1], control.OutputBounds[2], contr
             currentimages = 0;
           }
         } else if (imageStatus == MB_IMAGESTATUS_RIGHT) {
-          if (use_camera_mode == MBPM_USE_RIGHT) {
+          if (use_camera_mode == MBPM_USE_STEREO) {
+            image_camera = MBPM_CAMERA_RIGHT;
+            currentimages = 1;
+            nimages++;
+          } else if (use_camera_mode == MBPM_USE_RIGHT) {
             image_camera = MBPM_CAMERA_RIGHT;
             currentimages = 1;
             nimages++;
@@ -4264,6 +4346,20 @@ control.OutputBounds[0], control.OutputBounds[1], control.OutputBounds[2], contr
                         }
                     }
                 }
+                if (camera_sensor < 0) {
+                    for (int isensor=0;isensor<platform->num_sensors;isensor++) {
+                        if (platform->sensors[isensor].type == MB_SENSOR_TYPE_CAMERA_MONO) {
+                            camera_sensor = isensor;
+                        }
+                    }
+                }
+                if (camera_sensor < 0) {
+                    for (int isensor=0;isensor<platform->num_sensors;isensor++) {
+                        if (platform->sensors[isensor].type == MB_SENSOR_TYPE_CAMERA_VIDEO) {
+                            camera_sensor = isensor;
+                        }
+                    }
+                }
                 if (camera_sensor >= 0)
                     sensor_camera = &(platform->sensors[camera_sensor]);
 
@@ -4281,6 +4377,7 @@ control.OutputBounds[0], control.OutputBounds[1], control.OutputBounds[2], contr
 
             /* if newly specified load camera calibration model */
             if (calibration_specified) {
+            		control.camera_type = platform->sensors[camera_sensor].type;
                 load_calibration(verbose, StereoCameraCalibrationFile, &control, &error);
                 calibration_initialized = true;
                 calibration_specified = false;
@@ -4534,6 +4631,7 @@ control.OutputBounds[0], control.OutputBounds[1], control.OutputBounds[2], contr
                 processPars[numThreadsSet].image_count = nimages - currentimages + iimage;
                 processPars[numThreadsSet].image_camera = image_camera;
                 processPars[numThreadsSet].image_quality = image_quality;
+                processPars[numThreadsSet].image_rectified = rectified;
                 processPars[numThreadsSet].image_gain = image_gain;
                 processPars[numThreadsSet].image_exposure = image_exposure;
                 processPars[numThreadsSet].time_d = time_d;
@@ -4777,7 +4875,6 @@ control.OutputBounds[0], control.OutputBounds[1], control.OutputBounds[2], contr
 
     /* release correction tables */
     if (control.corr_tables_loaded) {
-fprintf(stderr, "%s:%d:%s: About to release correction table Mats\n", __FILE__, __LINE__, __FUNCTION__);
         control.corr_bounds.release();
         control.corr_table_y[0].release();
         control.corr_table_y[1].release();
@@ -4792,25 +4889,21 @@ fprintf(stderr, "%s:%d:%s: About to release correction table Mats\n", __FILE__, 
 
     /* deallocate platform */
     if (platform != NULL) {
-fprintf(stderr, "%s:%d:%s: About to deallocate platform model\n", __FILE__, __LINE__, __FUNCTION__);
         status = mb_platform_deall(verbose, (void **)&platform, &error);
     }
 
     /* deallocate topography grid array if necessary */
     if (control.use_topography) {
-fprintf(stderr, "%s:%d:%s: About to deallocate topography grid\n", __FILE__, __LINE__, __FUNCTION__);
         status = mb_topogrid_deall(verbose, &control.topogrid_ptr, &error);
     }
 
     /* deallocate projection */
     if (control.use_projection) {
-fprintf(stderr, "%s:%d:%s: About to deallocate projection\n", __FILE__, __LINE__, __FUNCTION__);
         int proj_status = mb_proj_free(verbose, &(control.pjptr), &error);
     }
 
     /* deallocate navigation arrays if necessary */
     if (navigation_specified && nnav > 0) {
-fprintf(stderr, "%s:%d:%s: About to deallocate navigation arrays\n", __FILE__, __LINE__, __FUNCTION__);
         status = mb_freed(verbose,__FILE__,__LINE__,(void **)&ntime,&error);
         status = mb_freed(verbose,__FILE__,__LINE__,(void **)&nlon,&error);
         status = mb_freed(verbose,__FILE__,__LINE__,(void **)&nlat,&error);
@@ -4824,7 +4917,6 @@ fprintf(stderr, "%s:%d:%s: About to deallocate navigation arrays\n", __FILE__, _
 
     /* deallocate tide arrays if necessary */
     if (ntide > 0) {
-fprintf(stderr, "%s:%d:%s: About to deallocate tide arrays\n", __FILE__, __LINE__, __FUNCTION__);
         status = mb_freed(verbose,__FILE__,__LINE__,(void **)&ttime,&error);
         status = mb_freed(verbose,__FILE__,__LINE__,(void **)&ttide,&error);
         ntide = 0;
@@ -4832,7 +4924,6 @@ fprintf(stderr, "%s:%d:%s: About to deallocate tide arrays\n", __FILE__, __LINE_
 
     /* deallocate image quality arrays if necessary */
     if (nquality > 0) {
-fprintf(stderr, "%s:%d:%s: About to deallocate image quality arrays\n", __FILE__, __LINE__, __FUNCTION__);
         status = mb_freed(verbose,__FILE__,__LINE__,(void **)&qtime,&error);
         status = mb_freed(verbose,__FILE__,__LINE__,(void **)&qquality,&error);
         nquality = 0;

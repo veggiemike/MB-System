@@ -17,10 +17,11 @@ set(manpages
     mbeditviz.1
     mbextractsegy.1
     mbfilter.1
+    mbfnv2navlab.1
     mbformat.1
     mbgetesf.1
     mbgpstide.1
-	mbgrd2gltf.1
+    mbgrd2gltf.1
     mbgrd2obj.1
     mbgrdtiff.1
     mbgrdviz.1
@@ -28,10 +29,10 @@ set(manpages
     mbhistogram.1
     mbimagelist.1
     mbinfo.1
+    mbnavlab2fnv.1
     mblevitus.1
     mblist.1
     mbm_arc2grd.1
-    mbm_bpr
     mbm_bpr.1
     mbm_copy.1
     mbm_fmtvel.1
@@ -52,10 +53,14 @@ set(manpages
     mbm_plot.1
     mbm_route2mission.1
     mbm_stat.1
+    mbm_tmap.1
     mbm_utm.1
     mbm_xbt.1
     mbm_xyplot.1
+    mbmakedatalist.1
     mbmakeplatform.1
+    mbmapscale.1
+    mbmesh.1
     mbminirovnav.1
     mbmosaic.1
     mbnavadjust.1
@@ -65,7 +70,6 @@ set(manpages
     mbotps.1
     mbpreprocess.1
     mbprocess.1
-    mbps.1
     mbrolltimelag.1
     mbroutetime.1
     mbsegygrid.1
@@ -77,9 +81,11 @@ set(manpages
     mbsvplist.1
     mbsvpselect.1
     mbswath.1
+    mbswath2las.1
     mbsystem.1
     mbtiff2png.1
     mbtime.1
+    mbusbl2fnv.1
     mbvelocitytool.1
     mbvoxelclean.1)
 
@@ -98,7 +104,12 @@ if(buildDeprecated)
         mbswplspreprocess.1)
 endif()
 
-install(FILES ${manpages} ${deprecated} DESTINATION ${CMAKE_INSTALL_MANPAGES}/man1)
+if(buildTRN)
+    set(trn
+        mbtrnpp.1)
+endif()
+
+install(FILES ${manpages} ${deprecated} ${trn} DESTINATION ${CMAKE_INSTALL_MANPAGES}/man1)
 
 message(STATUS "Installed man pages to ${CMAKE_INSTALL_MANPAGES}/man1")
 

@@ -569,10 +569,10 @@ int mbview_plotprofile(size_t instance) {
 		zcenter = 0.5 * (data->profile.zmax + data->profile.zmin);
 		top = 0.5 * (right - left) * view->praspect_ratio;
 		bottom = -top;
-		zmin = zcenter - 0.5 * view->praspect_ratio * data->profile.length / data->profile_exageration;
-		zmax = zcenter + 0.5 * view->praspect_ratio * data->profile.length / data->profile_exageration;
-		yzmin = scale * data->profile_exageration * (zmin - zcenter);
-		yzmax = scale * data->profile_exageration * (zmax - zcenter);
+		zmin = zcenter - 0.5 * view->praspect_ratio * data->profile.length / data->profile_exaggeration;
+		zmax = zcenter + 0.5 * view->praspect_ratio * data->profile.length / data->profile_exaggeration;
+		yzmin = scale * data->profile_exaggeration * (zmin - zcenter);
+		yzmax = scale * data->profile_exaggeration * (zmax - zcenter);
 		clip = false;
 
 /* set projection to 2D */
@@ -612,7 +612,7 @@ int mbview_plotprofile(size_t instance) {
 					          colortable_object_blue[MBV_COLOR_RED]);
 				}
 				x = scale * data->profile.points[i].distance;
-				y = scale * data->profile_exageration * (data->profile.points[i].zdata - zcenter);
+				y = scale * data->profile_exaggeration * (data->profile.points[i].zdata - zcenter);
 				if (y < yzmin) {
 					clip = true;
 					y = yzmin;
@@ -624,7 +624,7 @@ int mbview_plotprofile(size_t instance) {
 				glVertex3f(x, yzmin, MBV_OPENGL_ZPROFILE1);
 				glVertex3f(x, y, MBV_OPENGL_ZPROFILE1);
 				x = scale * data->profile.points[i + 1].distance;
-				y = scale * data->profile_exageration * (data->profile.points[i + 1].zdata - zcenter);
+				y = scale * data->profile_exaggeration * (data->profile.points[i + 1].zdata - zcenter);
 				if (y < yzmin) {
 					clip = true;
 					y = yzmin;
@@ -720,12 +720,12 @@ int mbview_profile_text(size_t instance) {
 
 	/* update profile info */
 	if (data->profile.npoints > 0 && data->profile.source != MBV_PROFILE_NONE) {
-		sprintf(value_text, ":::t\"Profile Source: %s\":t\" Length: %.2f m\":t\" Vertical Range: \":t\" %.2f to %.2f m\"",
+		snprintf(value_text, sizeof(value_text), ":::t\"Profile Source: %s\":t\" Length: %.2f m\":t\" Vertical Range: \":t\" %.2f to %.2f m\"",
 		        data->profile.source_name, data->profile.points[data->profile.npoints - 1].distance, data->profile.zmin,
 		        data->profile.zmax);
 	}
 	else {
-		sprintf(value_text, ":::t\"Profile Source: None\":t\"No Profile\"");
+		snprintf(value_text, sizeof(value_text), ":::t\"Profile Source: None\":t\"No Profile\"");
 	}
 	set_mbview_label_multiline_string(view->mb3dview.mbview_profile_label_info, value_text);
 

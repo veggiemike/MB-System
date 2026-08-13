@@ -100,7 +100,7 @@ XFontStruct *fontStruct;
 
 int status;
 
-static char message_str[2048];
+static char message_str[MB_DESCRIPTION_LENGTH];
 static mb_path input_file;
 int selected = 0; /* indicates an input file is selected */
 
@@ -108,12 +108,6 @@ void *can_xgid; /* XG graphics id */
 Cursor myCursor;
 XColor closest[2];
 XColor exact[2];
-
-/* Set the colors used for this program here. */
-#define NCOLORS 7
-XColor colors[NCOLORS];
-unsigned int mpixel_values[NCOLORS];
-XColor db_color;
 
 /* Global mbvelocitytool definitions */
 bool expose_plot_ok = false;
@@ -142,7 +136,7 @@ static int borders[4] = {0, 1019, 0, 550};
 void do_fileselection_list(Widget w, XtPointer client_data, XtPointer call_data);
 void set_label_string(Widget, String);
 void set_label_multiline_string(Widget, String);
-void get_text_string(Widget, String);
+void get_text_string(Widget, String, size_t);
 void do_set_controls();
 
 /*--------------------------------------------------------------------*/
@@ -405,11 +399,10 @@ void do_mbvelocity_init(int argc, char **argv) {
 	expose_plot_ok = False;
 
 	/* get additional widgets */
-	fileSelectionList = (Widget)XmFileSelectionBoxGetChild(fileSelectionBox, XmDIALOG_LIST);
-	fileSelectionText = (Widget)XmFileSelectionBoxGetChild(fileSelectionBox, XmDIALOG_TEXT);
+  fileSelectionList = (Widget)XtNameToWidget(fileSelectionBox, "*ItemsList");
+  fileSelectionText = (Widget)XtNameToWidget(fileSelectionBox, "Text");
 	XtAddCallback(fileSelectionList, XmNbrowseSelectionCallback, do_fileselection_list, NULL);
-
-	XtUnmanageChild((Widget)XmFileSelectionBoxGetChild(fileSelectionBox, XmDIALOG_HELP_BUTTON));
+  XtUnmanageChild((Widget)XtNameToWidget(fileSelectionBox, "Help"));
 
 	/* Setup the entire screen. */
 	display = XtDisplay(drawingArea);
@@ -437,29 +430,85 @@ void do_mbvelocity_init(int argc, char **argv) {
 	XSelectInput(display, can_xid, EV_MASK);
 
 	/* Load the colors that will be used in this program. */
-	status = XLookupColor(display, colormap, "white", &db_color, &colors[0]);
-	if ((status = XAllocColor(display, colormap, &colors[0])) == 0)
-		fprintf(stderr, "Failure to allocate color: white\n");
-	status = XLookupColor(display, colormap, "black", &db_color, &colors[1]);
-	if ((status = XAllocColor(display, colormap, &colors[1])) == 0)
-		fprintf(stderr, "Failure to allocate color: black\n");
-	status = XLookupColor(display, colormap, "red", &db_color, &colors[2]);
-	if ((status = XAllocColor(display, colormap, &colors[2])) == 0)
-		fprintf(stderr, "Failure to allocate color: red\n");
-	status = XLookupColor(display, colormap, "green", &db_color, &colors[3]);
-	if ((status = XAllocColor(display, colormap, &colors[3])) == 0)
-		fprintf(stderr, "Failure to allocate color: green\n");
-	status = XLookupColor(display, colormap, "blue", &db_color, &colors[4]);
-	if ((status = XAllocColor(display, colormap, &colors[4])) == 0)
-		fprintf(stderr, "Failure to allocate color: blue\n");
-	status = XLookupColor(display, colormap, "coral", &db_color, &colors[5]);
-	if ((status = XAllocColor(display, colormap, &colors[5])) == 0)
-		fprintf(stderr, "Failure to allocate color: coral\n");
-	status = XLookupColor(display, colormap, "lightgrey", &db_color, &colors[6]);
-	if ((status = XAllocColor(display, colormap, &colors[6])) == 0)
-		fprintf(stderr, "Failure to allocate color: lightgrey\n");
-	for (i = 0; i < NCOLORS; i++) {
-		mpixel_values[i] = colors[i].pixel;
+	unsigned int mpixel_values[MB_NDrawingColors];
+	XColor db_color, screen_color;
+	for (int icolor = 0; icolor < MB_NDrawingColors; icolor++) {
+		if (icolor == MB_COLOR_WHITE) {
+			status = XLookupColor(display, colormap, "white", &db_color, &screen_color);
+			if ((status = XAllocColor(display, colormap, &screen_color)) == 0)
+				fprintf(stderr, "Failure to allocate color: white\n");
+			mpixel_values[icolor] = screen_color.pixel;
+		}
+		else if (icolor == MB_COLOR_BLACK) {
+			status = XLookupColor(display, colormap, "black", &db_color, &screen_color);
+			mpixel_values[icolor] = screen_color.pixel;
+			if ((status = XAllocColor(display, colormap, &screen_color)) == 0)
+				fprintf(stderr, "Failure to allocate color: black\n");
+			mpixel_values[icolor] = screen_color.pixel;
+		}
+		else if (icolor == MB_COLOR_RED) {
+			status = XLookupColor(display, colormap, "red", &db_color, &screen_color);
+			mpixel_values[icolor] = screen_color.pixel;
+			if ((status = XAllocColor(display, colormap, &screen_color)) == 0)
+				fprintf(stderr, "Failure to allocate color: red\n");
+			mpixel_values[icolor] = screen_color.pixel;
+		}
+		else if (icolor == MB_COLOR_ORANGE) {
+			status = XLookupColor(display, colormap, "orange", &db_color, &screen_color);
+			mpixel_values[icolor] = screen_color.pixel;
+			if ((status = XAllocColor(display, colormap, &screen_color)) == 0)
+				fprintf(stderr, "Failure to allocate color: orange\n");
+			mpixel_values[icolor] = screen_color.pixel;
+		}
+		else if (icolor == MB_COLOR_YELLOW) {
+			status = XLookupColor(display, colormap, "yellow", &db_color, &screen_color);
+			mpixel_values[icolor] = screen_color.pixel;
+			if ((status = XAllocColor(display, colormap, &screen_color)) == 0)
+				fprintf(stderr, "Failure to allocate color: yellow\n");
+			mpixel_values[icolor] = screen_color.pixel;
+		}
+		else if (icolor == MB_COLOR_GREEN) {
+			status = XLookupColor(display, colormap, "green", &db_color, &screen_color);
+			mpixel_values[icolor] = screen_color.pixel;
+			if ((status = XAllocColor(display, colormap, &screen_color)) == 0)
+				fprintf(stderr, "Failure to allocate color: green\n");
+			mpixel_values[icolor] = screen_color.pixel;
+		}
+		else if (icolor == MB_COLOR_BLUEGREEN) {
+			status = XLookupColor(display, colormap, "bluegreen", &db_color, &screen_color);
+			mpixel_values[icolor] = screen_color.pixel;
+			if ((status = XAllocColor(display, colormap, &screen_color)) == 0)
+				fprintf(stderr, "Failure to allocate color: bluegreen\n");
+			mpixel_values[icolor] = screen_color.pixel;
+		}
+		else if (icolor == MB_COLOR_BLUE) {
+			status = XLookupColor(display, colormap, "blue", &db_color, &screen_color);
+			mpixel_values[icolor] = screen_color.pixel;
+			if ((status = XAllocColor(display, colormap, &screen_color)) == 0)
+				fprintf(stderr, "Failure to allocate color: blue\n");
+			mpixel_values[icolor] = screen_color.pixel;
+		}
+		else if (icolor == MB_COLOR_PURPLE) {
+			status = XLookupColor(display, colormap, "purple", &db_color, &screen_color);
+			mpixel_values[icolor] = screen_color.pixel;
+			if ((status = XAllocColor(display, colormap, &screen_color)) == 0)
+				fprintf(stderr, "Failure to allocate color: purple\n");
+			mpixel_values[icolor] = screen_color.pixel;
+		}
+		else if (icolor == MB_COLOR_CORAL) {
+			status = XLookupColor(display, colormap, "coral", &db_color, &screen_color);
+			mpixel_values[icolor] = screen_color.pixel;
+			if ((status = XAllocColor(display, colormap, &screen_color)) == 0)
+				fprintf(stderr, "Failure to allocate color: coral\n");
+			mpixel_values[icolor] = screen_color.pixel;
+		}
+		else if (icolor == MB_COLOR_LIGHTGREY) {
+			status = XLookupColor(display, colormap, "lightgrey", &db_color, &screen_color);
+			mpixel_values[icolor] = screen_color.pixel;
+			if ((status = XAllocColor(display, colormap, &screen_color)) == 0)
+				fprintf(stderr, "Failure to allocate color: lightgrey\n");
+			mpixel_values[icolor] = screen_color.pixel;
+		}
 	}
 
 	/* Setup initial cursor. This will be changed when changing "MODE". */
@@ -472,14 +521,14 @@ void do_mbvelocity_init(int argc, char **argv) {
 	/* initialize graphics */
 	xg_init(display, can_xid, borders, xgfont, &can_xgid);
 
-	status = mbvt_set_graphics(can_xgid, borders, NCOLORS, mpixel_values);
+	status = mbvt_set_graphics(can_xgid, borders, MB_NDrawingColors, mpixel_values);
 
 	/* initialize some labels */
-	strcpy(message_str, "No display SVPs loaded...");
+	strncpy(message_str, "No display SVPs loaded...", MB_DESCRIPTION_LENGTH);
 	set_label_string(label_status_display, message_str);
-	strcpy(message_str, "No editable SVP loaded...");
+	strncpy(message_str, "No editable SVP loaded...", MB_DESCRIPTION_LENGTH);
 	set_label_string(label_status_edit, message_str);
-	strcpy(message_str, "No swath sonar data loaded...");
+	strncpy(message_str, "No swath sonar data loaded...", MB_DESCRIPTION_LENGTH);
 	set_label_string(label_status_mb, message_str);
 
 	/* initialize mbvelocitytool proper */
@@ -500,15 +549,15 @@ void do_set_controls() {
 	                &format_gui);
 
 	/* set about version label */
-	sprintf(message_str, ":::t\"MB-System Release %s\":t\"%s\"", MB_VERSION, MB_VERSION_DATE);
+	snprintf(message_str, MB_DESCRIPTION_LENGTH, ":::t\"MB-System Release %s\":t\"%s\"", MB_VERSION, MB_VERSION_DATE);
 	set_label_multiline_string(label_about_version, message_str);
 
 	if (ndisplay_gui < 1)
 		strcpy(message_str, "No display SVPs loaded...");
 	else if (ndisplay_gui == 1)
-		sprintf(message_str, "Loaded %d display SVP", ndisplay_gui);
+		snprintf(message_str, MB_DESCRIPTION_LENGTH, "Loaded %d display SVP", ndisplay_gui);
 	else
-		sprintf(message_str, "Loaded %d display SVPs", ndisplay_gui);
+		snprintf(message_str, MB_DESCRIPTION_LENGTH, "Loaded %d display SVPs", ndisplay_gui);
 	set_label_string(label_status_display, message_str);
 
 	/* set pushbuttons */
@@ -550,7 +599,7 @@ void do_set_controls() {
 		XmToggleButtonSetState(toggleButton_mode_null, TRUE, TRUE);
 
 	/* set value of format text item */
-	sprintf(message_str, "%2.2d", format_gui);
+	snprintf(message_str, MB_DESCRIPTION_LENGTH, "%2.2d", format_gui);
 	XmTextFieldSetString(textField_mbformat, message_str);
 }
 
@@ -681,7 +730,7 @@ void do_fileselection_list(Widget w, XtPointer client_data, XtPointer call_data)
 	int form;
 
 	/* get selected text */
-	get_text_string(fileSelectionText, selection_text);
+	get_text_string(fileSelectionText, selection_text, sizeof(selection_text));
 
 	/* get output file */
 	if ((int)strlen(selection_text) > 0) {
@@ -689,7 +738,7 @@ void do_fileselection_list(Widget w, XtPointer client_data, XtPointer call_data)
 		form = format_gui;
 		if ((status = mbvt_get_format(selection_text, &form)) == MB_SUCCESS) {
 			format_gui = form;
-			sprintf(message_str, "%d", format_gui);
+			snprintf(message_str, MB_DESCRIPTION_LENGTH, "%d", format_gui);
 			XmTextFieldSetString(textField_mbformat, message_str);
 		}
 	}
@@ -706,15 +755,18 @@ void do_open(Widget w, XtPointer client_data, XtPointer call_data) {
 	int selected;
 	int status = 0;
 	char format_text[10];
-	char *input_file_ptr;
 
 	/* read the input file name */
-	if (!XmStringGetLtoR(acs->value, XmSTRING_DEFAULT_CHARSET, &input_file_ptr)) {
+	// char *input_file_ptr;
+	// XmStringGetLtoR(acs->value, XmSTRING_DEFAULT_CHARSET, &input_file_ptr);
+	char *input_file_ptr = (char *)XmStringUnparse(acs->value, NULL, XmCHARSET_TEXT, XmCHARSET_TEXT, NULL, 0, XmOUTPUT_ALL);
+	if (input_file_ptr == NULL) {
 		selected = 0;
 	}
 	else {
 		selected = 1;
-		strncpy(input_file, input_file_ptr, 128);
+		strncpy(input_file, input_file_ptr, MB_PATH_MAXLINE - 1);
+		input_file[MB_PATH_MAXLINE - 1] = '\0';
 		XtFree(input_file_ptr);
 	}
 
@@ -726,7 +778,7 @@ void do_open(Widget w, XtPointer client_data, XtPointer call_data) {
 
 			/* reset status message */
 			if (status == 1) {
-				sprintf(message_str, "Loaded display SVP from: %s", input_file);
+				snprintf(message_str, MB_DESCRIPTION_LENGTH, "Loaded display SVP from: %s", input_file);
 				set_label_string(label_status_display, message_str);
 			}
 		}
@@ -737,7 +789,7 @@ void do_open(Widget w, XtPointer client_data, XtPointer call_data) {
 			/* reset status message */
 			if (status == 1) {
 				edit_gui = 1;
-				sprintf(message_str, "Loaded editable SVP from: %s", input_file);
+				snprintf(message_str, MB_DESCRIPTION_LENGTH, "Loaded editable SVP from: %s", input_file);
 				set_label_string(label_status_edit, message_str);
 			}
 		}
@@ -747,7 +799,7 @@ void do_open(Widget w, XtPointer client_data, XtPointer call_data) {
 
 			/* reset status message */
 			if (status == 1) {
-				sprintf(message_str, "Saved editable SVP to: %s", input_file);
+				snprintf(message_str, MB_DESCRIPTION_LENGTH, "Saved editable SVP to: %s", input_file);
 				set_label_string(label_status_edit, message_str);
 			}
 		}
@@ -756,7 +808,7 @@ void do_open(Widget w, XtPointer client_data, XtPointer call_data) {
 			expose_plot_ok = False;
 
 			/* get format id value */
-			get_text_string(textField_mbformat, format_text);
+			get_text_string(textField_mbformat, format_text, sizeof(format_text));
 			sscanf(format_text, "%d", &format_gui);
 
 			/* open file */
@@ -764,11 +816,11 @@ void do_open(Widget w, XtPointer client_data, XtPointer call_data) {
 
 			/* reset status message */
 			if (status == 1) {
-				sprintf(message_str, "Read %d pings from swath file: %s", nload, input_file);
+				snprintf(message_str, MB_DESCRIPTION_LENGTH, "Read %d pings from swath file: %s", nload, input_file);
 				set_label_string(label_status_mb, message_str);
 			}
 			if (status == 1 && edit_gui != 1) {
-				sprintf(message_str, "Loaded default editable SVP");
+				snprintf(message_str, MB_DESCRIPTION_LENGTH, "Loaded default editable SVP");
 				set_label_string(label_status_edit, message_str);
 			}
 
@@ -807,11 +859,11 @@ void do_open_commandline(char *wfile, char *sfile, char *file, int format) {
 
 		/* reset status message */
 		if (status == 1) {
-			sprintf(message_str, "Read %d pings from swath file: %s", nload, input_file);
+			snprintf(message_str, MB_DESCRIPTION_LENGTH, "Read %d pings from swath file: %s", nload, input_file);
 			set_label_string(label_status_mb, message_str);
 		}
 		if (status == 1 && edit_gui != 1) {
-			sprintf(message_str, "Loaded default editable SVP");
+			snprintf(message_str, MB_DESCRIPTION_LENGTH, "Loaded default editable SVP");
 			set_label_string(label_status_edit, message_str);
 		}
 	}
@@ -822,7 +874,7 @@ void do_open_commandline(char *wfile, char *sfile, char *file, int format) {
 
 		/* reset status message */
 		if (status == 1) {
-			sprintf(message_str, "Loaded editable SVP from: %s", wfile);
+			snprintf(message_str, MB_DESCRIPTION_LENGTH, "Loaded editable SVP from: %s", wfile);
 			set_label_string(label_status_edit, message_str);
 		}
 	}
@@ -832,7 +884,7 @@ void do_open_commandline(char *wfile, char *sfile, char *file, int format) {
 
 		/* reset status message */
 		if (status == 1) {
-			sprintf(message_str, "Loaded display SVP from: %s", wfile);
+			snprintf(message_str, MB_DESCRIPTION_LENGTH, "Loaded display SVP from: %s", wfile);
 			set_label_string(label_status_display, message_str);
 		}
 	}
@@ -859,7 +911,7 @@ void do_new_profile(Widget w, XtPointer client_data, XtPointer call_data) {
 	/* get new edit velocity profile */
 	mbvt_new_edit_profile();
 
-	sprintf(message_str, "Loaded default editable SVP");
+	snprintf(message_str, MB_DESCRIPTION_LENGTH, "Loaded default editable SVP");
 	set_label_string(label_status_edit, message_str);
 
 	/* replot everything */
@@ -999,8 +1051,8 @@ void do_save_swath_svp(Widget w, XtPointer client_data, XtPointer call_data) {
 
 		/* reset status message */
 		if (status == 1) {
-			strcpy(message_str, "Saved Editable Sound Velocity Profile: ");
-			strcat(message_str, input_file);
+			strncpy(message_str, "Saved Editable Sound Velocity Profile: ", MB_DESCRIPTION_LENGTH);
+			strncat(message_str, input_file, MB_DESCRIPTION_LENGTH);
 			set_label_string(label_status_edit, message_str);
 		}
 	}
@@ -1027,8 +1079,8 @@ void do_save_residuals(Widget w, XtPointer client_data, XtPointer call_data) {
 
 		/* reset status message */
 		if (status == 1) {
-			strcpy(message_str, "Saved Residuals as Beam Offsets: ");
-			strcat(message_str, input_file);
+			strncpy(message_str, "Saved Residuals as Beam Offsets: ", MB_DESCRIPTION_LENGTH);
+			strncat(message_str, input_file, MB_DESCRIPTION_LENGTH);
 			set_label_string(label_status_edit, message_str);
 		}
 	}
@@ -1138,27 +1190,8 @@ int do_message_on(char *message) {
 
 	set_label_string(label_message, message);
 	XtManageChild(bulletinBoard_message);
-
-	/* force the label to be visible */
-	for (diashell = label_message; !XtIsShell(diashell); diashell = XtParent(diashell))
-		;
-	for (topshell = diashell; !XtIsTopLevelShell(topshell); topshell = XtParent(topshell))
-		;
-	if (XtIsRealized(diashell) && XtIsRealized(topshell)) {
-		diawindow = XtWindow(diashell);
-		topwindow = XtWindow(topshell);
-
-		/* wait for the dialog to be mapped */
-		while (XGetWindowAttributes(display, diawindow, &xwa) && xwa.map_state != IsViewable) {
-			if (XGetWindowAttributes(display, topwindow, &xwa) && xwa.map_state != IsViewable)
-				break;
-
-			XtAppNextEvent(app_context, &event);
-			XtDispatchEvent(&event);
-		}
-	}
-
-	XmUpdateDisplay(topshell);
+	XSync(XtDisplay(bulletinBoard_message), 0);
+	XmUpdateDisplay(bulletinBoard_message);
 
 	return (1);
 }
@@ -1220,11 +1253,12 @@ void set_label_multiline_string(Widget w, String str) {
 /* Get text item string cleanly, no memory leak */
 /*--------------------------------------------------------------------*/
 
-void get_text_string(Widget w, String str) {
+void get_text_string(Widget w, String str, size_t len) {
 	char *str_tmp;
 
 	str_tmp = (char *)XmTextGetString(w);
-	strcpy(str, str_tmp);
+	strncpy(str, str_tmp, len - 1);
+	str[len - 1] = '\0';
 	XtFree(str_tmp);
 }
 /*--------------------------------------------------------------------*/
