@@ -96,10 +96,10 @@ bin_PROGRAMS = mbconfig$(EXEEXT) mbabsorption$(EXEEXT) \
 	mbdumpesf$(EXEEXT) mbextractsegy$(EXEEXT) mbfilter$(EXEEXT) \
 	mbformat$(EXEEXT) mbgetesf$(EXEEXT) mbgpstide$(EXEEXT) \
 	mbgrid$(EXEEXT) mbhistogram$(EXEEXT) mbinfo$(EXEEXT) \
-	mblevitus$(EXEEXT) mblist$(EXEEXT) mbmakeplatform$(EXEEXT) \
-	mbminirovnav$(EXEEXT) mbmosaic$(EXEEXT) mbnavlist$(EXEEXT) \
-	mbpreprocess$(EXEEXT) mbprocess$(EXEEXT) \
-	mbrolltimelag$(EXEEXT) mbroutetime$(EXEEXT) \
+	mblevitus$(EXEEXT) mblist$(EXEEXT) mbmakedatalist$(EXEEXT) \
+	mbmakeplatform$(EXEEXT) mbminirovnav$(EXEEXT) \
+	mbmosaic$(EXEEXT) mbnavlist$(EXEEXT) mbpreprocess$(EXEEXT) \
+	mbprocess$(EXEEXT) mbrolltimelag$(EXEEXT) mbroutetime$(EXEEXT) \
 	mbsegygrid$(EXEEXT) mbsegyinfo$(EXEEXT) mbsegylist$(EXEEXT) \
 	mbset$(EXEEXT) mbsslayout$(EXEEXT) mbsvplist$(EXEEXT) \
 	$(am__EXEEXT_1) mbswath2las$(EXEEXT) mbtime$(EXEEXT) \
@@ -195,6 +195,9 @@ mblevitus_LDADD = $(LDADD)
 am_mblist_OBJECTS = mblist.$(OBJEXT)
 mblist_OBJECTS = $(am_mblist_OBJECTS)
 mblist_LDADD = $(LDADD)
+mbmakedatalist_SOURCES = mbmakedatalist.c
+mbmakedatalist_OBJECTS = mbmakedatalist.$(OBJEXT)
+mbmakedatalist_LDADD = $(LDADD)
 am_mbmakeplatform_OBJECTS = mbmakeplatform.$(OBJEXT)
 mbmakeplatform_OBJECTS = $(am_mbmakeplatform_OBJECTS)
 mbmakeplatform_LDADD = $(LDADD)
@@ -286,17 +289,35 @@ am__depfiles_remade = ./$(DEPDIR)/mbabsorption.Po \
 	./$(DEPDIR)/mbgpstide.Po ./$(DEPDIR)/mbgrid.Po \
 	./$(DEPDIR)/mbhistogram.Po ./$(DEPDIR)/mbinfo.Po \
 	./$(DEPDIR)/mblevitus.Po ./$(DEPDIR)/mblist.Po \
-	./$(DEPDIR)/mbmakeplatform.Po ./$(DEPDIR)/mbminirovnav.Po \
-	./$(DEPDIR)/mbmosaic.Po ./$(DEPDIR)/mbnavlist.Po \
-	./$(DEPDIR)/mbpreprocess.Po ./$(DEPDIR)/mbprocess.Po \
-	./$(DEPDIR)/mbrolltimelag.Po ./$(DEPDIR)/mbroutetime.Po \
-	./$(DEPDIR)/mbsegygrid.Po ./$(DEPDIR)/mbsegyinfo.Po \
-	./$(DEPDIR)/mbsegylist.Po ./$(DEPDIR)/mbsegypsd.Po \
-	./$(DEPDIR)/mbset.Po ./$(DEPDIR)/mbsslayout.Po \
-	./$(DEPDIR)/mbsvplist.Po ./$(DEPDIR)/mbsvpselect.Po \
-	./$(DEPDIR)/mbswath2las.Po ./$(DEPDIR)/mbtime.Po \
-	./$(DEPDIR)/mbvoxelclean.Po
+	./$(DEPDIR)/mbmakedatalist.Po ./$(DEPDIR)/mbmakeplatform.Po \
+	./$(DEPDIR)/mbminirovnav.Po ./$(DEPDIR)/mbmosaic.Po \
+	./$(DEPDIR)/mbnavlist.Po ./$(DEPDIR)/mbpreprocess.Po \
+	./$(DEPDIR)/mbprocess.Po ./$(DEPDIR)/mbrolltimelag.Po \
+	./$(DEPDIR)/mbroutetime.Po ./$(DEPDIR)/mbsegygrid.Po \
+	./$(DEPDIR)/mbsegyinfo.Po ./$(DEPDIR)/mbsegylist.Po \
+	./$(DEPDIR)/mbsegypsd.Po ./$(DEPDIR)/mbset.Po \
+	./$(DEPDIR)/mbsslayout.Po ./$(DEPDIR)/mbsvplist.Po \
+	./$(DEPDIR)/mbsvpselect.Po ./$(DEPDIR)/mbswath2las.Po \
+	./$(DEPDIR)/mbtime.Po ./$(DEPDIR)/mbvoxelclean.Po
 am__mv = mv -f
+COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
+	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+LTCOMPILE = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) \
+	$(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) \
+	$(AM_CFLAGS) $(CFLAGS)
+AM_V_CC = $(am__v_CC_@AM_V@)
+am__v_CC_ = $(am__v_CC_@AM_DEFAULT_V@)
+am__v_CC_0 = @echo "  CC      " $@;
+am__v_CC_1 = 
+CCLD = $(CC)
+LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+	$(AM_LDFLAGS) $(LDFLAGS) -o $@
+AM_V_CCLD = $(am__v_CCLD_@AM_V@)
+am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
+am__v_CCLD_0 = @echo "  CCLD    " $@;
+am__v_CCLD_1 = 
 CXXCOMPILE = $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS)
 LTCXXCOMPILE = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
@@ -323,7 +344,7 @@ SOURCES = $(mbabsorption_SOURCES) $(mbareaclean_SOURCES) \
 	$(mbextractsegy_SOURCES) $(mbfilter_SOURCES) \
 	$(mbformat_SOURCES) $(mbgetesf_SOURCES) $(mbgpstide_SOURCES) \
 	$(mbgrid_SOURCES) $(mbhistogram_SOURCES) $(mbinfo_SOURCES) \
-	$(mblevitus_SOURCES) $(mblist_SOURCES) \
+	$(mblevitus_SOURCES) $(mblist_SOURCES) mbmakedatalist.c \
 	$(mbmakeplatform_SOURCES) $(mbminirovnav_SOURCES) \
 	$(mbmosaic_SOURCES) $(mbnavlist_SOURCES) \
 	$(mbpreprocess_SOURCES) $(mbprocess_SOURCES) \
@@ -399,6 +420,7 @@ CCDEPMODE = @CCDEPMODE@
 CFLAGS = @CFLAGS@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
+CPUCOUNT = @CPUCOUNT@
 CSCOPE = @CSCOPE@
 CTAGS = @CTAGS@
 CXX = @CXX@
@@ -433,6 +455,7 @@ INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+JOBCOUNT = @JOBCOUNT@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBM = @LIBM@
@@ -664,7 +687,7 @@ all: $(BUILT_SOURCES)
 	$(MAKE) $(AM_MAKEFLAGS) all-am
 
 .SUFFIXES:
-.SUFFIXES: .cc .lo .o .obj
+.SUFFIXES: .c .cc .lo .o .obj
 $(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am  $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
@@ -828,6 +851,10 @@ mblist$(EXEEXT): $(mblist_OBJECTS) $(mblist_DEPENDENCIES) $(EXTRA_mblist_DEPENDE
 	@rm -f mblist$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(mblist_OBJECTS) $(mblist_LDADD) $(LIBS)
 
+mbmakedatalist$(EXEEXT): $(mbmakedatalist_OBJECTS) $(mbmakedatalist_DEPENDENCIES) $(EXTRA_mbmakedatalist_DEPENDENCIES) 
+	@rm -f mbmakedatalist$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(mbmakedatalist_OBJECTS) $(mbmakedatalist_LDADD) $(LIBS)
+
 mbmakeplatform$(EXEEXT): $(mbmakeplatform_OBJECTS) $(mbmakeplatform_DEPENDENCIES) $(EXTRA_mbmakeplatform_DEPENDENCIES) 
 	@rm -f mbmakeplatform$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(mbmakeplatform_OBJECTS) $(mbmakeplatform_LDADD) $(LIBS)
@@ -931,6 +958,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mbinfo.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mblevitus.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mblist.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mbmakedatalist.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mbmakeplatform.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mbminirovnav.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mbmosaic.Po@am__quote@ # am--include-marker
@@ -956,6 +984,30 @@ $(am__depfiles_remade):
 	@echo '# dummy' >$@-t && $(am__mv) $@-t $@
 
 am--depfiles: $(am__depfiles_remade)
+
+.c.o:
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
+@am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $< &&\
+@am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ $<
+
+.c.obj:
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.obj$$||'`;\
+@am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ `$(CYGPATH_W) '$<'` &&\
+@am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
+
+.c.lo:
+@am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.lo$$||'`;\
+@am__fastdepCC_TRUE@	$(LTCOMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $< &&\
+@am__fastdepCC_TRUE@	$(am__mv) $$depbase.Tpo $$depbase.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
 
 .cc.o:
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -1128,6 +1180,7 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/mbinfo.Po
 	-rm -f ./$(DEPDIR)/mblevitus.Po
 	-rm -f ./$(DEPDIR)/mblist.Po
+	-rm -f ./$(DEPDIR)/mbmakedatalist.Po
 	-rm -f ./$(DEPDIR)/mbmakeplatform.Po
 	-rm -f ./$(DEPDIR)/mbminirovnav.Po
 	-rm -f ./$(DEPDIR)/mbmosaic.Po
@@ -1213,6 +1266,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/mbinfo.Po
 	-rm -f ./$(DEPDIR)/mblevitus.Po
 	-rm -f ./$(DEPDIR)/mblist.Po
+	-rm -f ./$(DEPDIR)/mbmakedatalist.Po
 	-rm -f ./$(DEPDIR)/mbmakeplatform.Po
 	-rm -f ./$(DEPDIR)/mbminirovnav.Po
 	-rm -f ./$(DEPDIR)/mbmosaic.Po

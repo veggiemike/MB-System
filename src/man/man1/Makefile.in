@@ -171,6 +171,7 @@ CCDEPMODE = @CCDEPMODE@
 CFLAGS = @CFLAGS@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
+CPUCOUNT = @CPUCOUNT@
 CSCOPE = @CSCOPE@
 CTAGS = @CTAGS@
 CXX = @CXX@
@@ -205,6 +206,7 @@ INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+JOBCOUNT = @JOBCOUNT@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBM = @LIBM@
@@ -377,6 +379,7 @@ top_srcdir = @top_srcdir@
 @BUILD_DEPRECATED_TRUE@	mbrollbias.1 \
 @BUILD_DEPRECATED_TRUE@	mbstripnan.1 \
 @BUILD_DEPRECATED_TRUE@	mbswplspreprocess.1
+
 @BUILD_MBTRNUTILS_TRUE@MAN_MBTRN = \
 @BUILD_MBTRNUTILS_TRUE@	mbtrnpp.1
 
@@ -397,11 +400,13 @@ man_MANS = \
 	mbeditviz.1 \
 	mbextractsegy.1 \
 	mbfilter.1 \
+	mbfnv2navlab.1 \
 	mbformat.1 \
 	mbgetesf.1 \
 	mbgpstide.1 \
 	mbmesh.1 \
 	mbgrd2obj.1 \
+	mbgrd2gltf.1 \
 	mbgrdtiff.1 \
 	mbgrdviz.1 \
 	mbgrid.1 \
@@ -430,20 +435,24 @@ man_MANS = \
 	mbm_plot.1 \
 	mbm_route2mission.1 \
 	mbm_stat.1 \
+	mbm_tmap.1 \
 	mbm_utm.1 \
 	mbm_xbt.1 \
 	mbm_xyplot.1 \
+	mbmesh.1 \
 	mbmosaic.1 \
+	mbmakedatalist.1 \
 	mbmakeplatform.1 \
+	mbmapscale.1 \
 	mbminirovnav.1 \
 	mbnavadjust.1 \
 	mbnavadjustmerge.1 \
 	mbnavedit.1 \
+	mbnavlab2fnv.1 \
 	mbnavlist.1 \
 	mbotps.1 \
 	mbpreprocess.1 \
 	mbprocess.1 \
-	mbps.1 \
 	mbrolltimelag.1 \
 	mbroutetime.1 \
 	mbsegygrid.1 \
@@ -455,9 +464,11 @@ man_MANS = \
 	mbsvplist.1 \
 	mbsvpselect.1 \
 	mbswath.1 \
+	mbswath2las.1 \
 	mbsystem.1 \
 	mbtiff2png.1 \
 	mbtime.1 \
+	mbusbl2fnv.1 \
 	mbvelocitytool.1 \
 	mbvoxelclean.1 \
 	$(MAN_DEPRECATED) \

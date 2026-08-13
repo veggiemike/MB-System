@@ -157,10 +157,9 @@ am__define_uniq_tagged_files = \
     if test -f "$$i"; then echo $$i; else echo $(srcdir)/$$i; fi; \
   done | $(am__uniquify_input)`
 DIST_SUBDIRS = gsf surf bsio mbtrnframe mbtrnav mbtrn mbbitpack mbio \
-	mbaux utilities mbtrnutils gmt otps mbgrd2gltf macros share \
-	man html mbedit mbnavedit mbvelocitytool mbview mbgrdviz \
-	mbeditviz mbnavadjust photo qt-mbgrdviz qt-mbgrdviz-2 \
-	qt-guilib qt-mbgrdviz-3 deprecated
+	mbaux utilities mbtrnutils gmt otps mbgrd2gltf mbmesh macros \
+	share man html mbedit mbnavedit mbvelocitytool mbview mbgrdviz \
+	mbeditviz mbnavadjust photo deprecated
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
@@ -177,6 +176,7 @@ CCDEPMODE = @CCDEPMODE@
 CFLAGS = @CFLAGS@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
+CPUCOUNT = @CPUCOUNT@
 CSCOPE = @CSCOPE@
 CTAGS = @CTAGS@
 CXX = @CXX@
@@ -211,6 +211,7 @@ INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+JOBCOUNT = @JOBCOUNT@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBM = @LIBM@
@@ -380,12 +381,15 @@ top_srcdir = @top_srcdir@
 @BUILD_MBTNAV_TRUE@XBUILD_SUB_MBTNAV = mbtrnav
 @BUILD_MBTRNUTILS_TRUE@XBUILD_SUB_MBTRNBIN = mbtrnutils
 @BUILD_OPENCVTOOLS_TRUE@XBUILD_SUB_OPENCVTOOLS = photo
-@BUILD_QTTOOLS_TRUE@XBUILD_SUB_QTTOOLS = qt-mbgrdviz qt-mbgrdviz-2 qt-guilib qt-mbgrdviz-3
+
+#if BUILD_QTTOOLS
+#XBUILD_SUB_QTTOOLS = qt-mbgrdviz qt-mbgrdviz-2 qt-guilib qt-mbgrdviz-3
+#endif
 @BUILD_DEPRECATED_TRUE@XBUILD_SUB_DEPRECATED = deprecated
 SUBDIRS = $(am__append_1) surf bsio $(XBUILD_SUB_MBTFRAME) \
 	$(XBUILD_SUB_MBTNAV) $(XBUILD_SUB_MBTRN) mbbitpack mbio mbaux \
-	utilities $(XBUILD_SUB_MBTRNBIN) gmt otps mbgrd2gltf macros \
-	share man html $(XBUILD_SUB_MOTIF) $(XBUILD_SUB_GL) \
+	utilities $(XBUILD_SUB_MBTRNBIN) gmt otps mbgrd2gltf mbmesh \
+	macros share man html $(XBUILD_SUB_MOTIF) $(XBUILD_SUB_GL) \
 	$(XBUILD_SUB_OPENCVTOOLS) $(XBUILD_SUB_QTTOOLS) \
 	$(XBUILD_SUB_DEPRECATED)
 CLEANFILES = 
