@@ -22,9 +22,9 @@ if BUILD_OPENCVTOOLS
 XBUILD_SUB_OPENCVTOOLS = photo
 endif
 
-if BUILD_QTTOOLS
-XBUILD_SUB_QTTOOLS = qt-mbgrdviz qt-mbgrdviz-2 qt-guilib qt-mbgrdviz-3
-endif
+#if BUILD_QTTOOLS
+#XBUILD_SUB_QTTOOLS = qt-mbgrdviz qt-mbgrdviz-2 qt-guilib qt-mbgrdviz-3
+#endif
 
 if BUILD_DEPRECATED
 XBUILD_SUB_DEPRECATED = deprecated

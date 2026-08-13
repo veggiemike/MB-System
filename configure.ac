@@ -1567,14 +1567,14 @@ if test "$build_opencvtools" = "yes" ; then
           src/photo/Makefile \
           ])
 fi
-if test "$build_qttools" = "yes" ; then
-    AC_CONFIG_FILES([\
-          src/qt-guilib/Makefile \
-          src/qt-mbgrdviz/Makefile \
-          src/qt-mbgrdviz-2/Makefile \
-          src/qt-mbgrdviz-3/Makefile \
-          ])
-fi
+#if test "$build_qttools" = "yes" ; then
+#    AC_CONFIG_FILES([\
+#          src/qt-guilib/Makefile \
+#          src/qt-mbgrdviz/Makefile \
+#          src/qt-mbgrdviz-2/Makefile \
+#          src/qt-mbgrdviz-3/Makefile \
+#          ])
+#fi
 dnl if test "$build_pcltools" = "yes" ; then
 dnl fi
 if test "$build_test" = "yes" ; then
