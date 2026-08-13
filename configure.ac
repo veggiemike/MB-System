@@ -25,7 +25,7 @@ dnl-----------------------------------------------------------------------------
 dnl--------------------------------------------------------------------
 
 dnl Initialize and set version and version date
-AC_INIT([mbsystem],[5.8.2],[http://listserver.mbari.org/sympa/arc/mbsystem],[mbsystem],[http://www.mbari.org/data/mbsystem/])
+AC_INIT([mbsystem],[5.8.3beta16],[http://listserver.mbari.org/sympa/arc/mbsystem],[mbsystem],[http://www.mbari.org/data/mbsystem/])
 
 AS_ECHO([" "])
 AS_ECHO(["------------------------------------------------------------------------------"])
@@ -1592,6 +1592,11 @@ if test "$build_test" = "yes" ; then
             ])
     fi
 fi
+
+CPUCOUNT=$(grep ^vendor_id /proc/cpuinfo | wc -l)
+JOBCOUNT=$((CPUCOUNT+1))
+AC_SUBST(CPUCOUNT)
+AC_SUBST(JOBCOUNT)
 
 AC_OUTPUT
 

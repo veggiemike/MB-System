@@ -17,6 +17,12 @@ distclean-local:
 # i know this isn't the right way to do this... but it's how i've been
 # occasionally making .pkg files to install, now documented/automated
 # to make life easier.
+#
+# FIXME: even though the autotools build system seems to be
+#        unmaintained (and currently borked), we're still going to try
+#        and use it wrap around the cmake build system for our custom
+#        dpkg target.
+#
 DEBREV=2
 DEBVERSION=$(PACKAGE_VERSION)-$(DEBREV)
 DEBNAME=$(PACKAGE_TARNAME)_$(DEBVERSION)
@@ -35,13 +41,14 @@ dpkg: $(DEBFILE)
 $(DEBFILE): $(DEBCTRL)
 	rm -f $(DEBCTRL_DEPS)
 	dpkg-deb --build --root-owner-group $(DPKGDIR)
-	rm -rf $(DPKGDIR)
+	rm -rf $(DPKGDIR) build
 
 $(DPKGDIR):
-	./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var
-	$(MAKE) clean
-	$(MAKE) all
-	$(MAKE) DESTDIR=$@ install-strip
+	rm -rf build
+	mkdir build
+	cd build && cmake --install-prefix=/usr .. && \
+	  $(MAKE) -j$(JOBCOUNT) && \
+	  $(MAKE) DESTDIR=$@ install/strip
 
 $(DEBDIR): $(DPKGDIR)
 	$(MKDIR_P) $@
